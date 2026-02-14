@@ -13,8 +13,6 @@ st.set_page_config(page_title="Configuración Master", page_icon="⚙️", layou
 
 # --- 🔒 SEGURIDAD ACTIVADA ---
 utils.validar_login()
-# -----------------------------
-
 supabase = utils.supabase
 
 # ==========================================
@@ -43,17 +41,10 @@ def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
     pdf = PDFEtiquetas()
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
-    
-    ancho_etiqueta = 25.0  # mm
-    alto_etiqueta = 35.0   # mm
-    margen_izq = 10
-    margen_sup = 15
-    separacion = 2 
+    ancho_etiqueta, alto_etiqueta = 25.0, 35.0   
+    margen_izq, margen_sup, separacion = 10, 15, 2 
     cols_por_fila = 7 
-    
-    x = margen_izq
-    y = margen_sup
-    col_count = 0
+    x, y, col_count = margen_izq, margen_sup, 0
     
     pdf.set_font('Arial', 'B', 12)
     pdf.cell(0, 8, f"Catálogo {tipo} (2.5x3.5cm)", 0, 1, 'C')
@@ -61,238 +52,189 @@ def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
     y = pdf.get_y()
     
     for index, row in df_items.iterrows():
-        sku = str(row['codigo'])
-        desc = str(row['descripcion'])[:40] 
-        
+        sku, desc = str(row['codigo']), str(row['descripcion'])[:40] 
         pdf.set_draw_color(180, 180, 180)
         pdf.rect(x, y, ancho_etiqueta, alto_etiqueta)
-        
         qr = qrcode.QRCode(box_size=10, border=1)
-        qr.add_data(sku)
-        qr.make(fit=True)
+        qr.add_data(sku); qr.make(fit=True)
         img_qr = qr.make_image(fill_color="black", back_color="white")
-        temp_qr_path = f"temp_qr_{index}.png"
-        img_qr.save(temp_qr_path)
-        
+        temp_qr_path = f"temp_qr_{index}.png"; img_qr.save(temp_qr_path)
         qr_size = 16 
-        pos_qr_x = x + (ancho_etiqueta - qr_size) / 2
-        pos_qr_y = y + 2
-        pdf.image(temp_qr_path, x=pos_qr_x, y=pos_qr_y, w=qr_size, h=qr_size)
-        
-        pdf.set_xy(x, pos_qr_y + qr_size + 1)
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font('Arial', 'B', 7) 
+        pdf.image(temp_qr_path, x=x+(ancho_etiqueta-qr_size)/2, y=y+2, w=qr_size, h=qr_size)
+        pdf.set_xy(x, y+qr_size+3); pdf.set_font('Arial', 'B', 7) 
         pdf.cell(ancho_etiqueta, 3, sku, 0, 1, 'C')
-        
-        pdf.set_xy(x + 1, pos_qr_y + qr_size + 4)
-        pdf.set_font('Arial', '', 5) 
-        pdf.multi_cell(ancho_etiqueta - 2, 2.5, desc, align='C')
-        
+        pdf.set_xy(x+1, y+qr_size+6); pdf.set_font('Arial', '', 5) 
+        pdf.multi_cell(ancho_etiqueta-2, 2.5, desc, align='C')
         if os.path.exists(temp_qr_path): os.remove(temp_qr_path)
-            
         col_count += 1
-        if col_count < cols_por_fila:
-            x += ancho_etiqueta + separacion
+        if col_count < cols_por_fila: x += ancho_etiqueta + separacion
         else:
-            col_count = 0
-            x = margen_izq
+            col_count, x = 0, margen_izq
             y += alto_etiqueta + separacion
-            if y + alto_etiqueta > 285:
-                pdf.add_page()
-                y = margen_sup
-
+            if y + alto_etiqueta > 285: pdf.add_page(); y = margen_sup
     return pdf.output(dest='S').encode('latin-1')
 
 # ==========================================
 # MENÚ PRINCIPAL
 # ==========================================
 st.sidebar.title("🔧 Configuración")
-opcion = st.sidebar.radio(
-    "Selecciona Módulo:",
-    ["Personal", "Insumos", "Herramientas", "Clientes", "Proveedores", "📂 Catálogos & Etiquetas QR"]
-)
+opcion = st.sidebar.radio("Módulo:", ["Personal", "Insumos", "Herramientas", "Clientes", "Proveedores", "📂 Catálogos QR"])
 
 # ==========================================
 # 1. PERSONAL
 # ==========================================
 if opcion == "Personal":
-    st.markdown("### 👥 Gestión de Recursos Humanos")
+    st.markdown("### 👥 Personal")
     try:
-        response = utils.supabase.table("Personal").select("*").order("id").execute()
-        df = pd.DataFrame(response.data)
+        df = pd.DataFrame(supabase.table("Personal").select("*").order("id").execute().data)
         if not df.empty and "fecha_ingreso" in df.columns:
             df["fecha_ingreso"] = pd.to_datetime(df["fecha_ingreso"], errors='coerce').dt.date
-    except: df = pd.DataFrame()
-    if df.empty: df = pd.DataFrame(columns=["id", "nombre", "puesto", "activo"])
+    except: df = pd.DataFrame(columns=["id", "nombre", "puesto", "activo"])
     
-    t1, t2 = st.tabs(["➕ Alta Personal", "📋 Kardex"])
+    t1, t2 = st.tabs(["➕ Alta", "📋 Kardex"])
     with t1:
-        with st.form("alta_personal", clear_on_submit=True):
-            c1, c2 = st.columns(2); nombre = c1.text_input("Nombre Completo"); puesto = c2.selectbox("Puesto", ["Operador", "Supervisor", "Almacén", "Mantenimiento", "Administrativo"])
-            c3, c4 = st.columns(2); nacimiento = c3.text_input("Año Nacimiento"); domicilio = c4.text_input("Domicilio")
-            c5, c6 = st.columns(2); curp = c5.text_input("CURP"); rfc = c6.text_input("RFC")
-            fecha_ingreso = st.date_input("Fecha de Ingreso", value=datetime.date.today())
-            if st.form_submit_button("Guardar Empleado"):
-                if nombre:
-                    datos = {"nombre": nombre, "puesto": puesto, "anio_nacimiento": nacimiento, "domicilio": domicilio, "curp": curp, "rfc": rfc, "fecha_ingreso": fecha_ingreso.isoformat(), "activo": True}
-                    utils.supabase.table("Personal").insert(datos).execute()
-                    st.success(f"✅ Registrado."); time.sleep(1); st.rerun()
+        with st.form("a_p", clear_on_submit=True):
+            c1, c2 = st.columns(2); nom = c1.text_input("Nombre"); pue = c2.selectbox("Puesto", ["Operador", "Supervisor", "Almacén", "Mantenimiento", "Administrativo"])
+            if st.form_submit_button("Guardar"):
+                supabase.table("Personal").insert({"nombre": nom, "puesto": pue, "activo": True}).execute()
+                st.success(f"✅ Personal '{nom}' guardado con éxito."); time.sleep(1); st.rerun()
     with t2:
-        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+        ed = st.data_editor(df, num_rows="dynamic", use_container_width=True)
         if st.button("💾 Actualizar Personal"):
-            for i, r in edited_df.iterrows():
+            for i, r in ed.iterrows():
                 d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                if pd.notna(r['id']): utils.supabase.table("Personal").update(d).eq("id", r['id']).execute()
-                else: utils.supabase.table("Personal").insert(d).execute()
-            st.success("✅ Actualizado"); time.sleep(1); st.rerun()
+                if pd.notna(r['id']): supabase.table("Personal").update(d).eq("id", r['id']).execute()
+                else: supabase.table("Personal").insert(d).execute()
+            st.toast("✅ Base de personal actualizada"); st.success("Procedimiento completado."); time.sleep(1); st.rerun()
 
 # ==========================================
-# 2. INSUMOS (CON PROTECCIÓN DE COLUMNAS)
+# 2. INSUMOS (SOLUCIÓN A LOS ERRORES)
 # ==========================================
 elif opcion == "Insumos":
-    lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
-    st.markdown("### 📦 Gestión de Almacén e Insumos")
-    try:
-        response = utils.supabase.table("Insumos").select("*").order("id").execute()
-        df = pd.DataFrame(response.data)
+    st.markdown("### 📦 Insumos")
+    try: df = pd.DataFrame(supabase.table("Insumos").select("*").order("id").execute().data)
     except: df = pd.DataFrame()
     
-    t1, t2 = st.tabs(["➕ Alta Manual", "📋 Inventario Maestro"])
-    
+    t1, t2 = st.tabs(["➕ Alta Manual", "📋 Inventario"])
     with t1:
-        with st.form("alta_insumo"):
-            c1, c2 = st.columns([1, 3]); cod = c1.text_input("Código / SKU"); nom = c2.text_input("Descripción")
-            c3, c4, c5 = st.columns(3); uni = c3.selectbox("Unidad", lista_unidades); cant = c4.number_input("Cantidad", min_value=0.0); mini = c5.number_input("Min", value=5.0)
-            ubi = st.text_input("Ubicación")
-            
-            if st.form_submit_button("Guardar Insumo"):
+        with st.form("a_i", clear_on_submit=True):
+            c1, c2 = st.columns([1, 3]); cod = c1.text_input("SKU"); nom = c2.text_input("Descripción")
+            c3, c4 = st.columns(2); cant = c4.number_input("Cantidad", min_value=0.0); ubi = st.text_input("Ubicación")
+            if st.form_submit_button("Guardar"):
                 if cod and nom:
-                    datos = {"codigo": cod, "Descripcion": nom, "Insumo": nom, "Unidad": uni, "Cantidad": cant, "stock_minimo": mini}
-                    if "ubicacion" in df.columns or df.empty: datos["ubicacion"] = ubi
+                    # Mapeo blindado para evitar el APIError
+                    d = {"codigo": cod, "Descripcion": nom, "Insumo": nom, "Cantidad": cant, "ubicacion": ubi}
                     try:
-                        utils.supabase.table("Insumos").insert(datos).execute()
-                        st.success("✅ Guardado correctamente"); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Error: {e}. ¿Creaste la columna en Supabase?")
-                else: st.warning("Código y Descripción obligatorios.")
+                        supabase.table("Insumos").insert(d).execute()
+                        st.success(f"✅ Insumo {cod} guardado correctamente."); time.sleep(1); st.rerun()
+                    except Exception as e: st.error(f"Error: {e}")
     with t2:
         if not df.empty:
-            cols_base = ["id", "codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo"]
-            if "ubicacion" in df.columns: cols_base.append("ubicacion")
-            edited = st.data_editor(df[cols_base], num_rows="dynamic", use_container_width=True)
+            cols = ["id", "codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo", "ubicacion"]
+            for c in cols: 
+                if c not in df.columns: df[c] = None
+            ed = st.data_editor(df[cols], num_rows="dynamic", use_container_width=True)
             if st.button("💾 Guardar Cambios"):
-                for i, r in edited.iterrows():
-                    d = {"codigo": r["codigo"], "Descripcion": r["Descripcion"], "Insumo": r["Descripcion"], "Cantidad": r["Cantidad"], "Unidad": r["Unidad"], "stock_minimo": r["stock_minimo"]}
-                    if "ubicacion" in r: d["ubicacion"] = r["ubicacion"]
-                    if pd.notna(r["id"]): utils.supabase.table("Insumos").update(d).eq("id", r["id"]).execute()
-                    else: utils.supabase.table("Insumos").insert(d).execute()
-                st.success("✅ Actualizado"); time.sleep(1); st.rerun()
+                errores = 0
+                for i, r in ed.iterrows():
+                    d = {"codigo": r["codigo"], "Descripcion": r["Descripcion"], "Insumo": r["Descripcion"], "Cantidad": r["Cantidad"], "Unidad": r["Unidad"], "stock_minimo": r["stock_minimo"], "ubicacion": r["ubicacion"]}
+                    try:
+                        if pd.notna(r["id"]): supabase.table("Insumos").update(d).eq("id", r["id"]).execute()
+                        else: supabase.table("Insumos").insert(d).execute()
+                    except: errores += 1
+                if errores == 0:
+                    st.success("✅ Procedimiento completado: Todos los registros guardados.")
+                    st.toast("Inventario actualizado")
+                else: st.warning(f"Procedimiento terminado con {errores} filas omitidas por error de formato.")
+                time.sleep(1); st.rerun()
 
 # ==========================================
-# 3. HERRAMIENTAS (MODO PRÉSTAMO/ACTIVOS)
+# 3. HERRAMIENTAS
 # ==========================================
 elif opcion == "Herramientas":
-    st.markdown("### 🛠️ Gestión de Herramientas (Activos)")
-    try:
-        response = utils.supabase.table("Herramientas").select("*").order("id").execute()
-        df = pd.DataFrame(response.data)
+    st.markdown("### 🛠️ Herramientas")
+    try: df = pd.DataFrame(supabase.table("Herramientas").select("*").order("id").execute().data)
     except: df = pd.DataFrame()
-    
-    t1, t2 = st.tabs(["➕ Alta de Herramienta", "📋 Inventario de Activos"])
+    t1, t2 = st.tabs(["➕ Alta", "📋 Lista"])
     with t1:
-        with st.form("alta_herramienta_form", clear_on_submit=True):
-            c1, c2 = st.columns([1, 2]); sku_h = c1.text_input("Código SKU"); nombre_h = c2.text_input("Nombre Herramienta")
-            desc_h = st.text_area("Descripción"); c3, c4, c5 = st.columns(3)
-            marca_h = c3.text_input("Marca"); estado_h = c4.selectbox("Estado", ["NUEVO", "BUEN ESTADO", "REGULAR", "BAJA"]); ubicacion_h = c5.text_input("Ubicación")
+        with st.form("a_h", clear_on_submit=True):
+            sku = st.text_input("SKU"); nom = st.text_input("Nombre")
             if st.form_submit_button("Guardar"):
-                if sku_h and nombre_h:
-                    utils.supabase.table("Herramientas").insert({"codigo": sku_h, "Herramienta": nombre_h, "descripcion": desc_h, "marca": marca_h, "Estado": estado_h, "ubicacion": ubicacion_h, "Responsable": "BODEGA"}).execute()
-                    st.success("✅ Registrado."); time.sleep(1); st.rerun()
+                supabase.table("Herramientas").insert({"codigo": sku, "Herramienta": nom, "Responsable": "BODEGA"}).execute()
+                st.success("✅ Herramienta registrada."); time.sleep(1); st.rerun()
     with t2:
-        edited_h = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Actualizar Catálogo"):
-            for i, r in edited_h.iterrows():
+        ed = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+        if st.button("💾 Actualizar"):
+            for i, r in ed.iterrows():
                 d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                if pd.notna(r['id']): utils.supabase.table("Herramientas").update(d).eq("id", r['id']).execute()
-                else: d["Responsable"] = "BODEGA"; utils.supabase.table("Herramientas").insert(d).execute()
-            st.success("✅ Sincronizado"); time.sleep(1); st.rerun()
+                if pd.notna(r['id']): supabase.table("Herramientas").update(d).eq("id", r['id']).execute()
+                else: supabase.table("Herramientas").insert(d).execute()
+            st.success("✅ Procedimiento de actualización terminado."); st.rerun()
 
 # ==========================================
 # 4. CLIENTES
 # ==========================================
 elif opcion == "Clientes":
-    st.markdown("### 🏢 Gestión de Clientes")
-    try: df = pd.DataFrame(utils.supabase.table("Clientes").select("*").order("id").execute().data)
+    st.markdown("### 🏢 Clientes")
+    try: df = pd.DataFrame(supabase.table("Clientes").select("*").execute().data)
     except: df = pd.DataFrame()
-    t1, t2 = st.tabs(["➕ Alta Cliente", "📋 Lista de Clientes"])
-    with t1:
-        with st.form("alta_cliente_new", clear_on_submit=True):
-            c1, c2 = st.columns(2); nombre_cli = c1.text_input("Nombre / Empresa"); rfc_cli = c2.text_input("RFC")
-            direccion_cli = st.text_input("Dirección"); c3, c4 = st.columns(2)
-            colonia_cli = c3.text_input("Colonia"); cp_cli = c4.text_input("Código Postal")
-            if st.form_submit_button("Guardar Cliente"):
-                if nombre_cli:
-                    utils.supabase.table("Clientes").insert({"nombre": nombre_cli, "rfc": rfc_cli, "direccion": direccion_cli, "colonia": colonia_cli, "codigo_postal": cp_cli}).execute()
-                    st.success("✅ Registrado."); time.sleep(1); st.rerun()
-    with t2:
-        edited_c = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Actualizar Clientes"):
-            for i, r in edited_c.iterrows():
-                d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                if pd.notna(r['id']): utils.supabase.table("Clientes").update(d).eq("id", r['id']).execute()
-                else: utils.supabase.table("Clientes").insert(d).execute()
-            st.rerun()
+    with st.form("f_c", clear_on_submit=True):
+        c1, c2 = st.columns(2); n = c1.text_input("Nombre"); r = c2.text_input("RFC")
+        if st.form_submit_button("Añadir Cliente"):
+            supabase.table("Clientes").insert({"nombre": n, "rfc": r}).execute()
+            st.success("✅ Cliente añadido al sistema."); time.sleep(1); st.rerun()
+    ed = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+    if st.button("💾 Guardar Cambios"):
+        for i, r in ed.iterrows():
+            d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
+            if pd.notna(r['id']): supabase.table("Clientes").update(d).eq("id", r['id']).execute()
+            else: supabase.table("Clientes").insert(d).execute()
+        st.success("✅ Procedimiento completado."); st.rerun()
 
 # ==========================================
 # 5. PROVEEDORES
 # ==========================================
 elif opcion == "Proveedores":
-    st.markdown("### 🚚 Gestión de Proveedores")
-    try: df = pd.DataFrame(utils.supabase.table("Proveedores").select("*").order("id").execute().data)
+    st.markdown("### 🚚 Proveedores")
+    try: df = pd.DataFrame(supabase.table("Proveedores").select("*").execute().data)
     except: df = pd.DataFrame()
-    t1, t2 = st.tabs(["➕ Alta Proveedor", "📋 Lista de Proveedores"])
-    with t1:
-        with st.form("alta_prov_new", clear_on_submit=True):
-            c1, c2 = st.columns(2); nombre_prov = c1.text_input("Nombre / Empresa"); rfc_prov = c2.text_input("RFC")
-            domicilio_prov = st.text_input("Domicilio")
-            if st.form_submit_button("Guardar Proveedor"):
-                if nombre_prov:
-                    utils.supabase.table("Proveedores").insert({"nombre": nombre_prov, "empresa": nombre_prov, "rfc": rfc_prov, "domicilio": domicilio_prov}).execute()
-                    st.success("✅ Registrado."); time.sleep(1); st.rerun()
-    with t2:
-        edited_p = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Actualizar Proveedores"):
-            for i, r in edited_p.iterrows():
-                d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                d["empresa"] = d.get("nombre", "")
-                if pd.notna(r['id']): utils.supabase.table("Proveedores").update(d).eq("id", r['id']).execute()
-                else: utils.supabase.table("Proveedores").insert(d).execute()
-            st.rerun()
+    with st.form("f_p", clear_on_submit=True):
+        c1, c2 = st.columns(2); n = c1.text_input("Nombre"); r = c2.text_input("RFC")
+        if st.form_submit_button("Añadir Proveedor"):
+            supabase.table("Proveedores").insert({"nombre": n, "rfc": r}).execute()
+            st.success("✅ Proveedor registrado con éxito."); time.sleep(1); st.rerun()
+    ed = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+    if st.button("💾 Guardar Proveedores"):
+        for i, r in ed.iterrows():
+            d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
+            if pd.notna(r['id']): supabase.table("Proveedores").update(d).eq("id", r['id']).execute()
+            else: supabase.table("Proveedores").insert(d).execute()
+        st.success("✅ Procedimiento de guardado finalizado."); st.rerun()
 
 # ==========================================
-# 6. CATÁLOGOS & ETIQUETAS QR
+# 6. CATÁLOGOS QR
 # ==========================================
-elif "Etiquetas" in opcion:
-    st.markdown("### 📂 Catálogos y Etiquetas QR")
-    tab_ins, tab_her = st.tabs(["📦 Etiquetas Insumos", "🛠️ Etiquetas Herramientas"])
-    with tab_ins:
-        try:
-            res = utils.supabase.table("Insumos").select("*").order("id").execute(); df_ins = pd.DataFrame(res.data)
-            if not df_ins.empty:
-                df_ins.columns = df_ins.columns.str.lower()
-                df_ins["QR_Img"] = df_ins["codigo"].apply(get_qr_data_url); df_ins["Seleccionar"] = False
-                edited_ins = st.data_editor(df_ins[["Seleccionar", "QR_Img", "codigo", "descripcion"]], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
-                if st.button("🖨️ Generar PDF Insumos"):
-                    sel = edited_ins[edited_ins["Seleccionar"] == True]
-                    if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Insumos"); st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Insumos.pdf")
-        except: st.error("Error cargando datos")
-    with tab_her:
-        try:
-            res = utils.supabase.table("Herramientas").select("*").order("id").execute(); df_her = pd.DataFrame(res.data)
-            if not df_her.empty:
-                df_her["QR_Img"] = df_her["codigo"].apply(get_qr_data_url); df_her["Seleccionar"] = False
-                df_her_tag = df_her.rename(columns={"Herramienta": "descripcion"})
-                edited_her = st.data_editor(df_her_tag[["Seleccionar", "QR_Img", "codigo", "descripcion", "marca"]], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
-                if st.button("🖨️ Generar PDF Herramientas"):
-                    sel = edited_her[edited_her["Seleccionar"] == True]
-                    if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Herramientas"); st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Herramientas.pdf")
-        except: st.error("Error cargando datos")
+elif "Catálogos" in opcion:
+    st.markdown("### 📂 Etiquetas QR")
+    t1, t2 = st.tabs(["Insumos", "Herramientas"])
+    with t1:
+        res = supabase.table("Insumos").select("*").execute(); df_i = pd.DataFrame(res.data)
+        if not df_i.empty:
+            df_i["QR"] = df_i["codigo"].apply(get_qr_data_url); df_i["Sel"] = False
+            ed = st.data_editor(df_i[["Sel", "QR", "codigo", "Descripcion"]], column_config={"QR": st.column_config.ImageColumn()}, use_container_width=True)
+            if st.button("🖨️ Generar PDF Insumos"):
+                sel = ed[ed["Sel"] == True].rename(columns={"Descripcion": "descripcion"})
+                if not sel.empty: 
+                    st.download_button("📥 Descargar Etiquetas", generar_pdf_etiquetas_qr(sel, "Insumos"), "Etiquetas.pdf")
+                    st.success("✅ PDF de etiquetas generado correctamente.")
+    with t2:
+        res = supabase.table("Herramientas").select("*").execute(); df_h = pd.DataFrame(res.data)
+        if not df_h.empty:
+            df_h["QR"] = df_h["codigo"].apply(get_qr_data_url); df_h["Sel"] = False
+            df_h = df_h.rename(columns={"Herramienta": "descripcion"})
+            ed = st.data_editor(df_h[["Sel", "QR", "codigo", "descripcion"]], column_config={"QR": st.column_config.ImageColumn()}, use_container_width=True)
+            if st.button("🖨️ Generar PDF Herramientas"):
+                sel = ed[ed["Sel"] == True]
+                if not sel.empty: 
+                    st.download_button("📥 Descargar Etiquetas", generar_pdf_etiquetas_qr(sel, "Herramientas"), "Etiquetas.pdf")
+                    st.success("✅ Procedimiento terminado. PDF listo.")
