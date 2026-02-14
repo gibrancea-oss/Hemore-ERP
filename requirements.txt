@@ -5,3 +5,4 @@ qrcode
 supabase
 fpdf
 openpyxl
+qrcode[pil]
