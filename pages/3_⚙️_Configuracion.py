@@ -87,7 +87,7 @@ if opcion == "Personal":
                 try:
                     datos = {c: row[c] for c in cols_reales if c != 'id'}
                     if "fecha_ingreso" in datos and datos["fecha_ingreso"]: datos["fecha_ingreso"] = str(datos["fecha_ingreso"])
-                    if pd.notna(row["id"]): utils.supabase.table("Personal").update(datos).eq("id", int(row["id"])).execute()
+                    if pd.notna(row["id"]): utils.supabase.table("Personal").update(datos).eq("id", row["id"]).execute()
                     else: utils.supabase.table("Personal").insert(datos).execute()
                 except: pass
                 bar.progress((index+1)/total)
@@ -97,7 +97,7 @@ if opcion == "Personal":
             st.rerun()
 
 # ==========================================
-# 2. INSUMOS (SOLUCIÓN COPIAR-PEGAR)
+# 2. INSUMOS (VERSIÓN COPIAR-PEGAR INFALIBLE)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -115,7 +115,7 @@ elif opcion == "Insumos":
     if df.empty:
         df = pd.DataFrame(columns=["id", "codigo", "Descripcion", "Cantidad", "Unidad", "stock_minimo"])
 
-    t1, t2, t3, t4 = st.tabs(["➕ Alta Manual", "📋 Copiar desde Excel (Fácil)", "📋 Inventario Maestro", "🗑️ Eliminar"])
+    t1, t2, t3, t4 = st.tabs(["➕ Alta Manual", "📋 PEGAR DESDE EXCEL (RÁPIDO)", "📋 Inventario Maestro", "🗑️ Eliminar"])
 
     # 1. ALTA MANUAL
     with t1:
@@ -130,11 +130,9 @@ elif opcion == "Insumos":
             
             if st.form_submit_button("Guardar Insumo"):
                 if nuevo_nombre and nuevo_codigo:
-                    # Validación manual
                     existe = False
                     if not df.empty:
                         if nuevo_codigo.strip() in df["codigo"].astype(str).str.strip().values: existe = True
-                    
                     if not existe:
                         try:
                             datos_insert = {"codigo": nuevo_codigo, "Descripcion": nuevo_nombre, "Unidad": nueva_unidad, "Cantidad": nueva_cant, "stock_minimo": nuevo_min}
@@ -145,45 +143,53 @@ elif opcion == "Insumos":
                     else: st.error("⛔ El código ya existe.")
                 else: st.warning("Datos incompletos.")
 
-    # 2. CARGA POR COPIAR-PEGAR (NUEVO MÉTODO INFALIBLE)
+    # 2. CARGA MASIVA (MÉTODO COPIAR Y PEGAR)
     with t2:
         st.markdown("""
-        **Instrucciones (La forma más fácil):**
-        1. Abre tu Excel.
+        ### 📋 Instrucciones (La forma más fácil y segura):
+        1. Ve a tu Excel.
         2. Selecciona tus datos (incluyendo la fila de títulos: código, descripción, etc).
-        3. Copia con `Ctrl + C`.
-        4. Pega en el cuadro de abajo con `Ctrl + V`.
+        3. Presiona `Ctrl + C` (Copiar).
+        4. Presiona `Ctrl + V` (Pegar) en el recuadro de abajo.
+        5. Dale click al botón rojo.
         """)
         
-        texto_pegado = st.text_area("Pega aquí tus datos:", height=200, placeholder="codigo\tdescripcion\tunidad\tcantidad\nCOD-01\tTornillo\tPzas\t100")
+        texto_pegado = st.text_area("👇 Pega aquí tus datos:", height=200)
         
-        if st.button("🚀 Procesar Datos Pegados"):
+        if st.button("🚀 Procesar Datos Pegados", type="primary"):
             if texto_pegado:
                 try:
-                    # Intentamos leer asumiendo TAB (Excel normal) o COMAS
+                    # Intentamos leer como si fuera copiado de Excel (separado por tabulaciones)
                     try:
                         df_upload = pd.read_csv(io.StringIO(texto_pegado), sep='\t')
-                        if len(df_upload.columns) < 2: # Si falló, prueba comas
-                            df_upload = pd.read_csv(io.StringIO(texto_pegado), sep=',')
                     except:
+                        # Si falla, intentamos por comas (CSV)
                         df_upload = pd.read_csv(io.StringIO(texto_pegado), sep=',')
 
-                    # Limpieza de Encabezados
-                    df_upload.columns = df_upload.columns.str.lower().str.strip()
+                    # --- CORRECCIÓN DE ERRORES (LIMPIEZA DE COLUMNAS) ---
+                    # 1. Convertir todo a minúsculas
+                    df_upload.columns = df_upload.columns.str.lower()
+                    # 2. Quitar espacios invisibles (Ej: "codigo " -> "codigo")
+                    df_upload.columns = df_upload.columns.str.strip()
                     
-                    # Mapeo
+                    # 3. Mapeo de nombres para que coincidan con la Base de Datos
                     mapeo = {
-                        "unidad": "Unidad", "cantidad": "Cantidad",
-                        "descripcion": "Descripcion", "descripción": "Descripcion",
-                        "stock_minimo": "stock_minimo", "stock_minimo ": "stock_minimo", "minimo": "stock_minimo"
+                        "unidad": "Unidad", 
+                        "cantidad": "Cantidad",
+                        "descripcion": "Descripcion", 
+                        "descripción": "Descripcion",
+                        "stock_minimo": "stock_minimo", 
+                        "stock minimo": "stock_minimo", 
+                        "minimo": "stock_minimo"
                     }
                     for col in df_upload.columns:
                         if col in mapeo: df_upload.rename(columns={col: mapeo[col]}, inplace=True)
 
+                    # --- VALIDACIÓN ---
                     if "codigo" in df_upload.columns and "Descripcion" in df_upload.columns:
-                        progress = st.progress(0, text="Iniciando carga segura...")
+                        progress = st.progress(0, text="Iniciando carga...")
                         
-                        # Mapa de existentes
+                        # Mapa de existentes para saber si Actualizar o Insertar
                         mapa_ids = {}
                         if not df.empty:
                             for idx, row in df.iterrows():
@@ -196,17 +202,18 @@ elif opcion == "Insumos":
                         
                         for i, row in df_upload.iterrows():
                             try:
-                                # CONVERSIÓN DE TIPOS (LA CLAVE PARA EVITAR ERRORES)
+                                # Conversión segura de datos
                                 cod_val = str(row["codigo"]).strip()
                                 desc_val = str(row["Descripcion"]).strip()
                                 
-                                # Forzamos a que sean numeros de Python (no numpy)
+                                # Si faltan columnas opcionales, poner valores por defecto
                                 uni_val = str(row["Unidad"]) if "Unidad" in df_upload.columns else "Pzas"
                                 
-                                try: cant_val = float(row["Cantidad"]) 
+                                # Limpiar números (quitar $ o comas si las hay)
+                                try: cant_val = float(str(row["Cantidad"]).replace(',', '').replace('$', '')) 
                                 except: cant_val = 0.0
                                 
-                                try: min_val = float(row["stock_minimo"])
+                                try: min_val = float(str(row["stock_minimo"]).replace(',', '')) if "stock_minimo" in df_upload.columns else 5.0
                                 except: min_val = 5.0
 
                                 datos_row = {
@@ -218,12 +225,12 @@ elif opcion == "Insumos":
                                 }
 
                                 if cod_val in mapa_ids:
-                                    # UPDATE
-                                    id_real = int(mapa_ids[cod_val]) # Forzar int python
+                                    # UPDATE (Si ya existe)
+                                    id_real = int(mapa_ids[cod_val])
                                     utils.supabase.table("Insumos").update(datos_row).eq("id", id_real).execute()
                                     count_upd += 1
                                 else:
-                                    # INSERT
+                                    # INSERT (Si es nuevo)
                                     utils.supabase.table("Insumos").insert(datos_row).execute()
                                     count_ok += 1
                                     
@@ -233,21 +240,22 @@ elif opcion == "Insumos":
                             progress.progress((i+1)/total)
                         
                         progress.empty()
+                        
                         if not errores:
-                            st.success(f"✅ ¡Excelente! {count_ok} nuevos, {count_upd} actualizados.")
+                            st.success(f"✅ ¡Éxito Total! {count_ok} nuevos registros, {count_upd} actualizados.")
                             time.sleep(2); st.rerun()
                         else:
                             st.warning(f"⚠️ Proceso terminado. {count_ok} creados, {count_upd} actualizados.")
-                            st.error(f"Errores encontrados ({len(errores)}): {errores[:3]}...") # Mostrar primeros 3
+                            st.error(f"Se encontraron {len(errores)} errores. Verifica que no haya celdas vacías en los códigos.")
                     else:
-                        st.error("⛔ No encuentro las columnas 'codigo' y 'descripcion'. Verifica tu selección.")
+                        st.error("⛔ No encuentro las columnas **'codigo'** y **'descripcion'**. Revisa los títulos de tu Excel.")
+                        st.write("Columnas que leí:", list(df_upload.columns))
                 except Exception as e:
-                    st.error(f"Error leyendo el texto: {e}")
+                    st.error(f"Error procesando el texto: {e}")
             else:
-                st.warning("El cuadro de texto está vacío.")
+                st.info("El cuadro de texto está vacío. Copia tus celdas de Excel y pégalas arriba.")
 
     with t3:
-        # Inventario
         col_search, _ = st.columns([1, 1])
         busqueda = col_search.text_input("🔍 Buscar Insumo", placeholder="Escribe código o descripción...")
         df_display = df.copy()
@@ -324,7 +332,7 @@ elif opcion == "Herramientas":
         if st.button("Actualizar Herramientas"):
             for i, row in edited_df.iterrows():
                 d = {c: row[c] for c in cols if c!='id'}
-                if pd.notna(row.get('id')): utils.supabase.table("Herramientas").update(d).eq("id", int(row['id'])).execute()
+                if pd.notna(row.get('id')): utils.supabase.table("Herramientas").update(d).eq("id", row['id']).execute()
                 else: utils.supabase.table("Herramientas").insert(d).execute()
             st.success("Actualizado."); time.sleep(1); st.rerun()
 
@@ -355,7 +363,7 @@ elif opcion == "Clientes":
         if st.button("Actualizar Clientes"):
             for i, row in edited_df.iterrows():
                 d = {c: row[c] for c in cols if c!='id'}
-                if pd.notna(row.get('id')): utils.supabase.table("Clientes").update(d).eq("id", int(row['id'])).execute()
+                if pd.notna(row.get('id')): utils.supabase.table("Clientes").update(d).eq("id", row['id']).execute()
                 else: utils.supabase.table("Clientes").insert(d).execute()
             st.success("Actualizado."); time.sleep(1); st.rerun()
 
@@ -386,6 +394,6 @@ elif opcion == "Proveedores":
             for i, row in edited_df.iterrows():
                 d = {c: row[c] for c in cols if c!='id'}
                 d["empresa"] = d["nombre"]
-                if pd.notna(row.get('id')): utils.supabase.table("Proveedores").update(d).eq("id", int(row['id'])).execute()
+                if pd.notna(row.get('id')): utils.supabase.table("Proveedores").update(d).eq("id", row['id']).execute()
                 else: utils.supabase.table("Proveedores").insert(d).execute()
             st.success("Actualizado."); time.sleep(1); st.rerun()
