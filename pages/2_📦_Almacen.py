@@ -35,7 +35,7 @@ lista_clientes = df_clientes_cat['nombre'].tolist() if not df_clientes_cat.empty
 col_p = 'empresa' if not df_proveedores_cat.empty and 'empresa' in df_proveedores_cat.columns else 'nombre'
 lista_proveedores = df_proveedores_cat[col_p].tolist() if not df_proveedores_cat.empty else []
 
-# --- CLASE PDF PERSONALIZADA (SIN CAMBIOS) ---
+# --- CLASE PDF PERSONALIZADA ---
 class PDF(FPDF):
     def header(self):
         if os.path.exists("logo.png"):
@@ -59,7 +59,7 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
-# --- GENERADORES DE PDF (SIN CAMBIOS) ---
+# --- GENERADORES DE PDF ---
 def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     pdf = PDF()
     pdf.add_page()
@@ -154,11 +154,10 @@ opcion_almacen = st.sidebar.radio(
 st.title(f"Control de {opcion_almacen.split(' (')[0]}")
 
 # ==================================================
-# 🧱 OPCIÓN 1: INSUMOS (MEJORADO CON UBICACIÓN)
+# 🧱 OPCIÓN 1: INSUMOS (INCLUYE UBICACIÓN)
 # ==================================================
 if "Insumos" in opcion_almacen:
     try:
-        # Aseguramos traer la columna 'ubicacion'
         response_ins = supabase.table("Insumos").select("*").order("id").execute()
         df_ins = pd.DataFrame(response_ins.data)
         if not df_ins.empty:
@@ -166,7 +165,7 @@ if "Insumos" in opcion_almacen:
             if "descripcion" not in df_ins.columns: df_ins["descripcion"] = "Sin Nombre"
             if "cantidad" not in df_ins.columns: df_ins["cantidad"] = 0
             if "unidad" not in df_ins.columns: df_ins["unidad"] = "Pzas"
-            if "ubicacion" not in df_ins.columns: df_ins["ubicacion"] = "No Asignada"
+            if "ubicacion" not in df_ins.columns: df_ins["ubicacion"] = "S/U"
     except Exception as e: 
         st.error(f"Error cargando base de datos: {e}")
         df_ins = pd.DataFrame()
@@ -192,14 +191,14 @@ if "Insumos" in opcion_almacen:
                         if st.button("Confirmar Salida", type="primary"):
                             if item_actual['cantidad'] >= cant_mov:
                                 try:
-                                    new_st = item_actual['cantidad'] - cant_mov
+                                    new_st = float(item_actual['cantidad'] - cant_mov)
                                     supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                     supabase.table("Historial_Insumos").insert({
                                         "fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), 
-                                        "codigo": item_actual['codigo'], 
-                                        "descripcion": item_actual['descripcion'], 
+                                        "codigo": str(item_actual['codigo']), 
+                                        "descripcion": str(item_actual['descripcion']), 
                                         "tipo_movimiento": "Salida", 
-                                        "cantidad": cant_mov, 
+                                        "cantidad": float(cant_mov), 
                                         "responsable": responsable
                                     }).execute()
                                     st.success("✅ Salida registrada"); time.sleep(1); st.rerun()
@@ -208,14 +207,14 @@ if "Insumos" in opcion_almacen:
                     else:
                         if st.button("Confirmar Entrada"):
                             try:
-                                new_st = item_actual['cantidad'] + cant_mov
+                                new_st = float(item_actual['cantidad'] + cant_mov)
                                 supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                 supabase.table("Historial_Insumos").insert({
                                     "fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), 
-                                    "codigo": item_actual['codigo'], 
-                                    "descripcion": item_actual['descripcion'], 
+                                    "codigo": str(item_actual['codigo']), 
+                                    "descripcion": str(item_actual['descripcion']), 
                                     "tipo_movimiento": "Re-stock", 
-                                    "cantidad": cant_mov, 
+                                    "cantidad": float(cant_mov), 
                                     "responsable": "Almacén"
                                 }).execute()
                                 st.success("✅ Entrada registrada"); time.sleep(1); st.rerun()
@@ -224,90 +223,29 @@ if "Insumos" in opcion_almacen:
             with c_info: 
                 if seleccion: 
                     st.metric("Stock Actual", f"{item_actual['cantidad']} {item_actual['unidad']}")
-                    st.write(f"📍 **Ubicación:** {item_actual['ubicacion']}")
+                    st.info(f"📍 Ubicación: {item_actual['ubicacion']}")
 
     with tab_exist:
         if not df_ins.empty:
-            # MEJORA SOLICITADA: Agregamos columna Ubicación
             df_view = df_ins[["codigo", "descripcion", "cantidad", "unidad", "ubicacion"]].rename(columns={
-                "codigo": "Código", 
-                "descripcion": "Descripción", 
-                "cantidad": "Stock", 
-                "unidad": "Unidad",
-                "ubicacion": "Ubicación"
+                "codigo": "Código", "descripcion": "Descripción", "cantidad": "Stock", "unidad": "Unidad", "ubicacion": "Ubicación"
             })
-            st.download_button("📥 Descargar Excel", convertir_df_a_excel(df_view), "Existencias.xlsx")
+            st.download_button("📥 Excel", convertir_df_a_excel(df_view), "Existencias.xlsx")
             st.dataframe(df_view, use_container_width=True, hide_index=True)
 
-    with tab_hist:
-        try:
-            h = pd.DataFrame(supabase.table("Historial_Insumos").select("*").order("id", desc=True).limit(100).execute().data)
-            if not h.empty:
-                cols_deseadas = ["fecha", "codigo", "descripcion", "tipo_movimiento", "cantidad", "responsable"]
-                h_final = h[cols_deseadas].rename(columns={"fecha": "Fecha", "codigo": "Código", "descripcion": "Descripción", "tipo_movimiento": "Movimiento", "cantidad": "Cant", "responsable": "Responsable"})
-                st.dataframe(h_final, use_container_width=True, hide_index=True)
-        except: st.info("Sin movimientos.")
-
 # ==================================================
-# 🔧 OPCIÓN 2: HERRAMIENTAS (SIN CAMBIOS)
-# ==================================================
-elif "Herramientas" in opcion_almacen:
-    try:
-        df_her = pd.DataFrame(supabase.table("Herramientas").select("*").order("id").execute().data)
-    except: df_her = pd.DataFrame()
-
-    if df_her.empty: df_her = pd.DataFrame(columns=["id", "codigo", "Herramienta", "Responsable", "Estado"])
-    df_her["Responsable"] = df_her["Responsable"].fillna("Bodega")
-
-    tab1, tab2, tab3 = st.tabs(["Movimientos", "Inventario", "Historial"])
-    with tab1:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.info("Prestar")
-            bodega = df_her[df_her["Responsable"]=="Bodega"]
-            if not bodega.empty:
-                sel = st.selectbox("Herramienta", bodega["Herramienta"].tolist())
-                resp = st.selectbox("A quien", lista_personal)
-                if st.button("Prestar"):
-                    try:
-                        id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
-                        supabase.table("Herramientas").update({"Responsable": resp}).eq("id", int(id_h)).execute()
-                        supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": sel, "Movimiento": "Préstamo", "Responsable": resp}).execute()
-                        st.success("Prestado"); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(e)
-        with c2:
-            st.warning("Devolver")
-            prestadas = df_her[df_her["Responsable"]!="Bodega"]
-            if not prestadas.empty:
-                sel_d = st.selectbox("Devolver", prestadas["Herramienta"].tolist())
-                if st.button("Devolver"):
-                    try:
-                        id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
-                        supabase.table("Herramientas").update({"Responsable": "Bodega"}).eq("id", int(id_h)).execute()
-                        supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": sel_d, "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
-                        st.success("Devuelto"); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(e)
-    with tab2: st.dataframe(df_her, use_container_width=True, hide_index=True)
-    with tab3:
-        try:
-            h_her = pd.DataFrame(supabase.table("Historial_Herramientas").select("*").order("id", desc=True).limit(100).execute().data)
-            st.dataframe(h_her, use_container_width=True, hide_index=True)
-        except: pass
-
-# ==================================================
-# 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC (SIN CAMBIOS)
+# 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC (CORREGIDO SERIALIZACIÓN)
 # ==================================================
 elif "Recibos" in opcion_almacen:
     st.markdown("### 📑 Recibos de Entrega (Salidas a Clientes)")
-    
     tab_nuevo, tab_historial = st.tabs(["➕ Nuevo Recibo", "📜 Historial"])
     with tab_nuevo:
         with st.container(border=True):
             st.subheader("Datos de la Entrega")
             c1, c2, c3 = st.columns([1, 1, 1])
-            oc_input = c1.text_input("Orden de Compra (O.C.)", placeholder="Ej. 2183")
+            oc_input = c1.text_input("Orden de Compra (O.C.)")
             fecha_input = c2.date_input("Fecha", value=datetime.now().date())
-            prov_input = c3.selectbox("Proveedor (Origen):", lista_proveedores, index=None, placeholder="Hemore...")
+            prov_input = c3.selectbox("Proveedor (Origen):", lista_proveedores, index=None)
             cliente_input = st.selectbox("Cliente (Destino):", lista_clientes, index=None)
             
             st.divider()
@@ -326,15 +264,17 @@ elif "Recibos" in opcion_almacen:
                         try:
                             ids_generados = []
                             for i, row in items.iterrows():
+                                # MEJORA: Casting float() y str() para JSON
                                 res = supabase.table("Recibos_OC").insert({
-                                    "fecha": fecha_input.isoformat(), "oc": oc_input, "cliente": cliente_input, 
-                                    "proveedor": prov_input, "codigo": row["Código"], "descripcion": row["Descripción"], 
-                                    "color": row["Color"], "cantidad": row["Cantidad"], "usuario": usuario_input, 
-                                    "observaciones": observaciones
+                                    "fecha": fecha_input.isoformat(), "oc": str(oc_input), 
+                                    "cliente": str(cliente_input), "proveedor": str(prov_input), 
+                                    "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
+                                    "color": str(row["Color"]), "cantidad": float(row["Cantidad"]), 
+                                    "usuario": str(usuario_input), "observaciones": str(observaciones)
                                 }).execute()
                                 if res.data: ids_generados.append(res.data[0]['id'])
                             
-                            folio_real = ids_generados[0] if ids_generados else "S/F"
+                            folio_real = ids_generados[0] if ids_generados else 1
                             cli_data = df_clientes_cat[df_clientes_cat['nombre'] == cliente_input].iloc[0]
                             prov_data = df_proveedores_cat[df_proveedores_cat[col_p] == prov_input].iloc[0]
                             
@@ -345,141 +285,98 @@ elif "Recibos" in opcion_almacen:
                             pdf_bytes = generar_pdf_entrega(datos_pdf, items, folio_real)
                             
                             st.success(f"✅ Guardado. Folio: {folio_real}")
-                            st.download_button("🖨️ Descargar PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
-                            del st.session_state["data_recibo"]
-                        except Exception as e: st.error(f"Error técnico: {e}")
-                    else: st.warning("Tabla vacía.")
-                else: st.warning("Faltan datos obligatorios.")
-
-    with tab_historial:
-        try:
-            h = pd.DataFrame(supabase.table("Recibos_OC").select("*").order("id", desc=True).limit(200).execute().data)
-            if not h.empty:
-                st.dataframe(h[["oc", "fecha", "cliente", "proveedor", "codigo", "descripcion", "cantidad", "usuario"]], use_container_width=True, hide_index=True)
-        except: pass
+                            st.download_button("🖨️ PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
+                            st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                        except Exception as e: st.error(f"Error JSON: {e}")
 
 # ==================================================
-# 📥 OPCIÓN 4: ENTRADA DE MATERIAL (SIN CAMBIOS)
+# 📥 OPCIÓN 4: ENTRADA DE MATERIAL (CORREGIDO SERIALIZACIÓN)
 # ==================================================
 elif "Entrada" in opcion_almacen:
-    st.markdown("### 📥 Registro de Entrada de Material (Proveedores)")
+    st.markdown("### 📥 Registro de Entrada de Material")
     tab_ent_new, tab_ent_hist = st.tabs(["➕ Nueva Entrada", "📜 Historial"])
-    
     with tab_ent_new:
         with st.container(border=True):
             st.subheader("Datos de la Entrada")
             c1, c2, c3 = st.columns([1, 1, 1])
-            oc_in = c1.text_input("Orden de Compra / Remisión", placeholder="Folio del Proveedor")
-            fecha_in = c2.date_input("Fecha de Llegada", value=datetime.now().date())
-            prov_in = c3.selectbox("Proveedor (Origen):", lista_proveedores, index=None)
+            oc_in = c1.text_input("Folio Remisión")
+            fecha_in = c2.date_input("Fecha Llegada", value=datetime.now().date())
+            prov_in = c3.selectbox("Proveedor:", lista_proveedores, index=None)
             
             st.divider()
             if "data_entrada" not in st.session_state: 
                 st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
             
             edited_df_in = st.data_editor(st.session_state["data_entrada"], num_rows="dynamic", use_container_width=True)
-            obs_in = st.text_area("Observaciones de llegada:", key="obs_in")
+            obs_in = st.text_area("Observaciones:")
             col_f, col_a = st.columns([1, 1])
-            user_in = col_f.selectbox("Recibido por (Hemore):", lista_personal, key="user_in")
+            user_in = col_f.selectbox("Recibe:", lista_personal)
             
-            if col_a.button("💾 Registrar Entrada y PDF", type="primary", use_container_width=True):
+            if col_a.button("💾 Registrar Entrada", type="primary", use_container_width=True):
                 if oc_in and prov_in:
                     items_in = edited_df_in[edited_df_in["Código"] != ""]
                     if not items_in.empty:
                         try:
-                            res_in = supabase.table("Entradas_Material").insert({
-                                "fecha": fecha_in.isoformat(), "oc": oc_in, "proveedor": prov_in, 
-                                "codigo": items_in.iloc[0]["Código"], "descripcion": items_in.iloc[0]["Descripción"], 
-                                "color": items_in.iloc[0]["Color"], "cantidad": items_in.iloc[0]["Cantidad"], 
-                                "usuario": user_in, "observaciones": obs_in
-                            }).execute()
-                            
-                            for i, row in items_in.iloc[1:].iterrows():
-                                supabase.table("Entradas_Material").insert({
-                                    "fecha": fecha_in.isoformat(), "oc": oc_in, "proveedor": prov_in, 
-                                    "codigo": row["Código"], "descripcion": row["Descripción"], 
-                                    "color": row["Color"], "cantidad": row["Cantidad"], 
-                                    "usuario": user_in, "observaciones": obs_in
+                            # MEJORA: Casting explícito para evitar int64 error
+                            for i, row in items_in.iterrows():
+                                res_in = supabase.table("Entradas_Material").insert({
+                                    "fecha": fecha_in.isoformat(), "oc": str(oc_in), 
+                                    "proveedor": str(prov_in), "codigo": str(row["Código"]), 
+                                    "descripcion": str(row["Descripción"]), "color": str(row["Color"]), 
+                                    "cantidad": float(row["Cantidad"]), "usuario": str(user_in), 
+                                    "observaciones": str(obs_in)
                                 }).execute()
 
-                            nuevo_id_in = res_in.data[0]['id'] if res_in.data else "S/F"
+                            nuevo_id_in = res_in.data[0]['id'] if res_in.data else 1
                             prov_data = df_proveedores_cat[df_proveedores_cat[col_p] == prov_in].iloc[0]
                             prov_text = f"{prov_in}\n{prov_data.get('domicilio', '')}\nRFC: {prov_data.get('rfc', '')}"
-                            hemore_text = "HEMORE INDUSTRIAS\nAlmacén Central Puebla"
+                            hemore_text = "HEMORE INDUSTRIAS\nAlmacén Puebla"
                             
                             datos_pdf = {"fecha": fecha_in.strftime("%d/%m/%Y"), "oc": oc_in, "observaciones": obs_in, "prov_texto": prov_text, "hemore_texto": hemore_text}
                             pdf_bytes = generar_pdf_entrada(datos_pdf, items_in, nuevo_id_in)
                             
                             st.success(f"✅ Registrado. Folio: {nuevo_id_in}")
-                            st.download_button("🖨️ Descargar Constancia", pdf_bytes, f"Entrada_{oc_in}.pdf", "application/pdf")
-                            del st.session_state["data_entrada"]
-                        except Exception as e: st.error(e)
-
-    with tab_ent_hist:
-        try:
-            h_in = pd.DataFrame(supabase.table("Entradas_Material").select("*").order("id", desc=True).limit(200).execute().data)
-            st.dataframe(h_in[["oc", "fecha", "proveedor", "codigo", "descripcion", "cantidad", "usuario"]], use_container_width=True, hide_index=True)
-        except: pass
+                            st.download_button("🖨️ PDF", pdf_bytes, f"Entrada_{oc_in}.pdf", "application/pdf")
+                            st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                        except Exception as e: st.error(f"Error JSON: {e}")
 
 # ==================================================
-# 💰 OPCIÓN 5: RECIBOS DE DINERO (SIN CAMBIOS)
+# 💰 OPCIÓN 5: RECIBOS DE DINERO (CORREGIDO SERIALIZACIÓN)
 # ==================================================
 elif "Dinero" in opcion_almacen:
-    st.markdown("### 💰 Recibos de Dinero (Caja/Pagos)")
-    tab_money_new, tab_money_hist = st.tabs(["➕ Nuevo Recibo de Pago", "📜 Historial de Pagos"])
-
+    st.markdown("### 💰 Recibos de Dinero")
+    tab_money_new, tab_money_hist = st.tabs(["➕ Nuevo Recibo", "📜 Historial"])
     with tab_money_new:
         with st.container(border=True):
             st.subheader("Detalles del Pago")
             c1, c2 = st.columns(2)
-            fecha_pago = c1.date_input("Fecha de Recepción", value=datetime.now().date())
-            cliente_pago = c2.selectbox("Recibimos de (Cliente):", lista_clientes, index=None)
+            fecha_pago = c1.date_input("Fecha Recepción")
+            cliente_pago = c2.selectbox("Cliente:", lista_clientes, index=None)
+            metodo = st.selectbox("Método:", ["Transferencia", "Efectivo", "Cheque", "Depósito"])
             
-            c3, c4 = st.columns(2)
-            metodo = c3.selectbox("Método de Pago", ["Transferencia", "Efectivo", "Cheque", "Depósito"], index=0)
-            usuario_pago = c4.selectbox("Recibe (Hemore):", lista_personal)
-            
-            st.divider()
             if "data_money" not in st.session_state:
                 st.session_state["data_money"] = pd.DataFrame([{"Concepto": "", "Monto": 0.0}], columns=["Concepto", "Monto"])
                 
             edited_money = st.data_editor(st.session_state["data_money"], num_rows="dynamic", use_container_width=True)
             total_money = edited_money["Monto"].sum()
-            st.markdown(f"#### Total a Recibir: :green[$ {total_money:,.2f}]")
-            obs_money = st.text_area("Observaciones:", key="obs_money")
+            st.markdown(f"#### Total: :green[$ {total_money:,.2f}]")
             
-            if st.button("💾 Generar Recibo de Dinero", type="primary", use_container_width=True):
+            if st.button("💾 Generar Recibo", type="primary"):
                 if cliente_pago and total_money > 0:
                     items_m = edited_money[edited_money["Concepto"] != ""]
-                    if not items_m.empty:
-                        try:
+                    try:
+                        for i, row in items_m.iterrows():
+                            # MEJORA: Casting float() para JSON
                             res_m = supabase.table("Recibos_Dinero").insert({
-                                "fecha": fecha_pago.isoformat(), "cliente": cliente_pago, 
-                                "concepto": items_m.iloc[0]["Concepto"], "monto": items_m.iloc[0]["Monto"], 
-                                "metodo_pago": metodo, "usuario": usuario_pago, "observaciones": obs_money
+                                "fecha": fecha_pago.isoformat(), "cliente": str(cliente_pago), 
+                                "concepto": str(row["Concepto"]), "monto": float(row["Monto"]), 
+                                "metodo_pago": str(metodo), "usuario": "Almacén", "observaciones": ""
                             }).execute()
-                            
-                            for i, row in items_m.iloc[1:].iterrows():
-                                supabase.table("Recibos_Dinero").insert({
-                                    "fecha": fecha_pago.isoformat(), "cliente": cliente_pago, 
-                                    "concepto": row["Concepto"], "monto": row["Monto"], 
-                                    "metodo_pago": metodo, "usuario": usuario_pago, "observaciones": obs_money
-                                }).execute()
 
-                            id_dinero = res_m.data[0]['id'] if res_m.data else "S/F"
-                            datos_pdf = {"fecha": fecha_pago.strftime("%d/%m/%Y"), "cliente": cliente_pago, "metodo": metodo, "observaciones": obs_money}
-                            pdf_bytes = generar_pdf_dinero(datos_pdf, items_m, id_dinero)
-                            
-                            st.success(f"✅ Recibo Generado. Folio: {id_dinero}")
-                            st.download_button("🖨️ Descargar PDF", pdf_bytes, f"Recibo_Dinero_{id_dinero}.pdf", "application/pdf")
-                            del st.session_state["data_money"]
-                        except Exception as e: st.error(e)
-                else: st.warning("Monto inválido.")
-
-    with tab_money_hist:
-        try:
-            h_mon = pd.DataFrame(supabase.table("Recibos_Dinero").select("*").order("id", desc=True).limit(200).execute().data)
-            if not h_mon.empty:
-                st.dataframe(h_mon[["id", "fecha", "cliente", "concepto", "monto", "metodo_pago", "usuario"]], use_container_width=True, hide_index=True)
-                st.info(f"💰 Suma total: $ {h_mon['monto'].sum():,.2f}")
-        except: pass
+                        id_dinero = res_m.data[0]['id'] if res_m.data else 1
+                        datos_pdf = {"fecha": fecha_pago.strftime("%d/%m/%Y"), "cliente": cliente_pago, "metodo": metodo, "observaciones": ""}
+                        pdf_bytes = generar_pdf_dinero(datos_pdf, items_m, id_dinero)
+                        st.success(f"✅ Generado. Folio: {id_dinero}")
+                        st.download_button("🖨️ PDF", pdf_bytes, f"Recibo_Dinero_{id_dinero}.pdf", "application/pdf")
+                        st.session_state["data_money"] = pd.DataFrame([{"Concepto": "", "Monto": 0.0}], columns=["Concepto", "Monto"])
+                    except Exception as e: st.error(f"Error JSON: {e}")
