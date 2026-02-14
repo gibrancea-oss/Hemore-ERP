@@ -3,7 +3,6 @@ import pandas as pd
 import utils 
 import time
 import datetime
-import numpy as np
 
 st.set_page_config(page_title="Configuración Master", page_icon="⚙️", layout="wide")
 
@@ -87,7 +86,7 @@ if opcion == "Personal":
                 try:
                     datos = {c: row[c] for c in cols_reales if c != 'id'}
                     if "fecha_ingreso" in datos and datos["fecha_ingreso"]: datos["fecha_ingreso"] = str(datos["fecha_ingreso"])
-                    if pd.notna(row["id"]): utils.supabase.table("Personal").update(datos).eq("id", row["id"]).execute()
+                    if pd.notna(row["id"]): utils.supabase.table("Personal").update(datos).eq("id", int(row["id"])).execute()
                     else: utils.supabase.table("Personal").insert(datos).execute()
                 except: pass
                 bar.progress((index+1)/total)
@@ -97,7 +96,7 @@ if opcion == "Personal":
             st.rerun()
 
 # ==========================================
-# 2. INSUMOS (CARGA BLINDADA PARA TU ARCHIVO)
+# 2. INSUMOS (SOLUCIÓN CUADRÍCULA INTERACTIVA)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -115,7 +114,7 @@ elif opcion == "Insumos":
     if df.empty:
         df = pd.DataFrame(columns=["id", "codigo", "Descripcion", "Cantidad", "Unidad", "stock_minimo"])
 
-    t1, t2, t3, t4 = st.tabs(["➕ Alta Manual", "📥 Carga Masiva (Excel/CSV)", "📋 Inventario Maestro", "🗑️ Eliminar"])
+    t1, t2, t3, t4 = st.tabs(["➕ Alta Manual", "📋 PEGAR DESDE EXCEL (NUEVO)", "📋 Inventario Maestro", "🗑️ Eliminar"])
 
     # 1. ALTA MANUAL
     with t1:
@@ -130,11 +129,9 @@ elif opcion == "Insumos":
             
             if st.form_submit_button("Guardar Insumo"):
                 if nuevo_nombre and nuevo_codigo:
-                    # Validación manual simple
                     existe = False
                     if not df.empty:
                         if nuevo_codigo.strip() in df["codigo"].astype(str).str.strip().values: existe = True
-                    
                     if not existe:
                         try:
                             datos_insert = {"codigo": nuevo_codigo, "Descripcion": nuevo_nombre, "Unidad": nueva_unidad, "Cantidad": nueva_cant, "stock_minimo": nuevo_min}
@@ -145,124 +142,89 @@ elif opcion == "Insumos":
                     else: st.error("⛔ El código ya existe.")
                 else: st.warning("Datos incompletos.")
 
-    # 2. CARGA MASIVA (MODO BLINDADO)
+    # 2. CARGA MASIVA (MÉTODO GRID INTERACTIVO)
     with t2:
-        st.info("💡 Sube tu archivo **exportacion hemore.xlsx - Hoja1.csv**.")
-        uploaded_file = st.file_uploader("Archivo de Carga", type=["xlsx", "xls", "csv"])
+        st.markdown("""
+        ### 📋 Modo Pegado Directo (Sin errores de archivo)
+        1. Ve a tu Excel.
+        2. Copia **SOLO LOS DATOS** (No copies los títulos de colores, solo la información: `HEM-I-L-0001`, `DISCO...`, etc).
+        3. Dale click a la primera celda vacía de abajo y presiona `Ctrl + V`.
+        4. Revisa que se vean bien y presiona el botón rojo.
+        """)
         
-        if uploaded_file:
-            try:
-                # 1. Lectura con motor 'python' para tolerar errores de comillas
-                if uploaded_file.name.endswith('.csv'):
+        # Creamos un DataFrame vacío con las columnas correctas para recibir los datos
+        df_template = pd.DataFrame(columns=["codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo"])
+        
+        # Grid editable donde el usuario pega
+        edited_grid = st.data_editor(
+            df_template,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="grid_carga_masiva",
+            height=300
+        )
+        
+        if st.button("🚀 Guardar Datos Pegados", type="primary"):
+            if not edited_grid.empty:
+                progress = st.progress(0, text="Guardando...")
+                
+                # Mapa de existentes para evitar duplicados
+                mapa_ids = {}
+                if not df.empty:
+                    for idx, row in df.iterrows():
+                        mapa_ids[str(row['codigo']).strip()] = row['id']
+                
+                count_ok = 0
+                count_upd = 0
+                total = len(edited_grid)
+                
+                for i, row in edited_grid.iterrows():
                     try:
-                        df_upload = pd.read_csv(uploaded_file, encoding='utf-8', engine='python')
-                    except:
-                        uploaded_file.seek(0)
-                        df_upload = pd.read_csv(uploaded_file, encoding='latin-1', engine='python')
-                else:
-                    df_upload = pd.read_excel(uploaded_file)
-                
-                # 2. Limpieza de nombres de columna (Elimina espacios ocultos)
-                df_upload.columns = df_upload.columns.astype(str).str.lower().str.strip()
-                
-                # 3. Mapeo de columnas
-                mapeo = {
-                    "unidad": "Unidad", "cantidad": "Cantidad",
-                    "descripcion": "Descripcion", "descripción": "Descripcion",
-                    "stock_minimo": "stock_minimo", "minimo": "stock_minimo", "stock minimo": "stock_minimo"
-                }
-                for col_orig in df_upload.columns:
-                    if col_orig in mapeo: df_upload.rename(columns={col_orig: mapeo[col_orig]}, inplace=True)
-
-                # 4. LIMPIEZA DE DATOS (CRÍTICO)
-                # Reemplazar NaN (vacíos) con valores seguros
-                df_upload = df_upload.replace({np.nan: None})
-                
-                # Validar columnas requeridas
-                if "codigo" not in df_upload.columns or "Descripcion" not in df_upload.columns:
-                    st.error("⛔ Faltan columnas 'codigo' y 'descripcion'.")
-                    st.write("Columnas detectadas:", list(df_upload.columns))
-                else:
-                    st.write("Vista previa:")
-                    st.dataframe(df_upload.head())
-                    
-                    if st.button("🚀 Cargar Datos (Modo Seguro)"):
-                        progress_bar = st.progress(0, text="Analizando...")
-                        
-                        # Mapa de existentes
-                        mapa_ids = {}
-                        if not df.empty:
-                            for idx, row in df.iterrows():
-                                mapa_ids[str(row['codigo']).strip()] = row['id']
-                        
-                        success_count = 0
-                        update_count = 0
-                        errors = []
-                        total = len(df_upload)
-                        
-                        for i, row in df_upload.iterrows():
-                            try:
-                                # Si el código es nulo, saltar
-                                if row["codigo"] is None or str(row["codigo"]).strip() == "":
-                                    continue
-
-                                cod_row = str(row["codigo"]).strip()
-                                desc_row = str(row["Descripcion"]).strip()
-                                
-                                # Manejo de valores vacíos o nulos en opcionales
-                                uni_row = str(row["Unidad"]) if "Unidad" in df_upload.columns and row["Unidad"] is not None else "Pza"
-                                
-                                # Convertir números forzando a float python (0.0 si falla)
-                                try:
-                                    c_val = row["Cantidad"] if "Cantidad" in df_upload.columns else 0
-                                    cant_row = float(c_val) if c_val is not None else 0.0
-                                except: cant_row = 0.0
-                                
-                                try:
-                                    m_val = row["stock_minimo"] if "stock_minimo" in df_upload.columns else 5
-                                    min_row = float(m_val) if m_val is not None else 5.0
-                                except: min_row = 5.0
-                                
-                                datos_row = {
-                                    "codigo": cod_row,
-                                    "Descripcion": desc_row,
-                                    "Unidad": uni_row,
-                                    "Cantidad": cant_row,
-                                    "stock_minimo": min_row
-                                }
-
-                                if cod_row in mapa_ids:
-                                    # UPDATE
-                                    id_real = int(mapa_ids[cod_row])
-                                    utils.supabase.table("Insumos").update(datos_row).eq("id", id_real).execute()
-                                    update_count += 1
-                                else:
-                                    # INSERT
-                                    utils.supabase.table("Insumos").insert(datos_row).execute()
-                                    success_count += 1
-                                    
-                            except Exception as e:
-                                errors.append(f"Fila {i+1} ({cod_row if 'cod_row' in locals() else '?'}) Error: {e}")
+                        # Validar que no esté vacía la fila clave
+                        if not row["codigo"] or str(row["codigo"]).strip() == "":
+                            continue
                             
-                            progress_bar.progress((i + 1) / total)
+                        # Limpieza y Conversión
+                        cod_val = str(row["codigo"]).strip()
+                        desc_val = str(row["Descripcion"]).strip()
+                        uni_val = str(row["Unidad"]) if row["Unidad"] else "Pzas"
                         
-                        progress_bar.empty()
+                        try: cant_val = float(row["Cantidad"]) 
+                        except: cant_val = 0.0
                         
-                        st.success(f"✅ Terminado: {success_count} nuevos, {update_count} actualizados.")
-                        
-                        if errors:
-                            st.warning(f"⚠️ Hubo {len(errors)} errores en filas específicas.")
-                            with st.expander("Ver detalle de errores"):
-                                for err in errors[:10]: # Mostrar solo los primeros 10
-                                    st.write(err)
-                        
-                        time.sleep(3); st.rerun()
+                        try: min_val = float(row["stock_minimo"])
+                        except: min_val = 5.0
 
-            except Exception as e:
-                st.error(f"Error grave leyendo el archivo: {e}")
+                        datos_row = {
+                            "codigo": cod_val,
+                            "Descripcion": desc_val,
+                            "Unidad": uni_val,
+                            "Cantidad": cant_val,
+                            "stock_minimo": min_val
+                        }
+
+                        if cod_val in mapa_ids:
+                            # Actualizar
+                            id_real = int(mapa_ids[cod_val])
+                            utils.supabase.table("Insumos").update(datos_row).eq("id", id_real).execute()
+                            count_upd += 1
+                        else:
+                            # Insertar
+                            utils.supabase.table("Insumos").insert(datos_row).execute()
+                            count_ok += 1
+                            
+                    except Exception as e:
+                        pass # Si falla una fila, seguimos con la otra
+                    
+                    progress.progress((i+1)/total)
+                
+                progress.empty()
+                st.success(f"✅ Proceso terminado: {count_ok} nuevos, {count_upd} actualizados.")
+                time.sleep(2); st.rerun()
+            else:
+                st.warning("La tabla está vacía. Pega tus datos primero.")
 
     with t3:
-        # Inventario
         col_search, _ = st.columns([1, 1])
         busqueda = col_search.text_input("🔍 Buscar Insumo", placeholder="Escribe código o descripción...")
         df_display = df.copy()
