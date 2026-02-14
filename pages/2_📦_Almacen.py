@@ -336,76 +336,333 @@ elif "Entrada" in opcion_almacen:
                         st.success("✅ Entrada Registrada."); st.download_button("🖨️ PDF", pdf_bytes, f"Entrada_{oc_in}.pdf", "application/pdf")
 
 # ==================================================
-# 💰 OPCIÓN 5: RECIBOS DE DINERO (DATOS SOLICITADOS)
+# 💰 OPCIÓN 5: RECIBOS DE DINERO (SISTEMA NUEVO COMPLETO)
 # ==================================================
 elif "Dinero" in opcion_almacen:
+
     st.markdown("### 💰 Recibos de Dinero")
+
+    # ==========================================
+    # CARGAR PERSONAL (OPCIONAL)
+    # ==========================================
     try:
-        df_p = pd.DataFrame(supabase.table("Personal").select("nombre").eq("activo", True).execute().data)
-        lista_p = df_p['nombre'].tolist() if not df_p.empty else []
-    except: lista_p = []
+        df_personal = pd.DataFrame(
+            supabase.table("Personal")
+            .select("nombre")
+            .eq("activo", True)
+            .execute().data
+        )
 
-    tab_money_new, tab_money_hist = st.tabs(["➕ Nuevo Recibo", "📜 Historial"])
-    with tab_money_new:
+        lista_personal = (
+            df_personal["nombre"].tolist()
+            if not df_personal.empty
+            else []
+        )
+
+    except:
+
+        lista_personal = []
+
+
+    # ==========================================
+    # CREAR TABS
+    # ==========================================
+    tab_nuevo, tab_historial = st.tabs(
+        ["➕ Nuevo Recibo", "📜 Historial"]
+    )
+
+
+    # ==================================================
+    # TAB NUEVO RECIBO
+    # ==================================================
+    with tab_nuevo:
+
         with st.container(border=True):
-            st.subheader("Detalles del Pago")
-            c1, c2, c3 = st.columns(3)
-            folio_money = c1.text_input("Folio", placeholder="Ej. 001")
-            fecha_money = c2.date_input("Fecha", value=datetime.now().date())
-            cantidad_money = c3.number_input("Cantidad ($)", min_value=0.0, format="%.2f")
-            
-            c4, c5 = st.columns(2)
-            entrega_money = c4.text_input("Quién Entrega", placeholder="Nombre de la persona/empresa")
-            recibe_money = c5.selectbox("Quién Recibe", lista_p)
-            
-            descripcion_money = st.text_area("Descripción", placeholder="Escribe el concepto del pago...")
-            
-            if st.button("💾 Generar Recibo de Dinero", type="primary", use_container_width=True):
-                if entrega_money and cantidad_money > 0 and descripcion_money:
-                    try:
-                        # Inserción con conversión float para evitar error int64
-                        res_m = supabase.table("Recibos_Dinero").insert({
-                            "fecha": fecha_money.isoformat(),
-                            "folio_manual": str(folio_money),
-                            "quien_entrega": str(entrega_money),
-                            "quien_recibe": str(recibe_money),
-                            "monto": float(cantidad_money),
-                            "descripcion": str(descripcion_money)
-                        }).execute()
 
-                        # Capturar ID para el PDF si no hay folio manual
-                        id_final = folio_money if folio_money else (res_m.data[0]['id'] if res_m.data else "S/F")
-                        
-                        datos_pdf = {
-                            "fecha": fecha_money.strftime("%d/%m/%Y"),
-                            "entrega": entrega_money,
-                            "recibe": recibe_money,
-                            "monto": cantidad_money,
-                            "descripcion": descripcion_money
-                        }
-                        
-                        pdf_bytes = generar_pdf_dinero(datos_pdf, id_final)
-                        st.success(f"✅ Recibo {id_final} generado correctamente.")
-                        st.download_button("🖨️ Descargar Recibo PDF", pdf_bytes, f"Recibo_Dinero_{id_final}.pdf", "application/pdf")
-                    except Exception as e:
-                        st.error(f"Error al guardar: {e}")
-                else:
-                    st.warning("Por favor completa Quién Entrega, Cantidad y Descripción.")
+            st.subheader("Registro de Recibo de Dinero")
 
-    with tab_money_hist:
+            col1, col2, col3 = st.columns(3)
+
+            folio_input = col1.text_input(
+                "Folio",
+                placeholder="Ej. RD-001"
+            )
+
+            fecha_input = col2.date_input(
+                "Fecha",
+                value=datetime.now().date()
+            )
+
+            tipo_input = col3.selectbox(
+                "Tipo de Movimiento",
+                [
+                    "Dinero Recibido",
+                    "Dinero Entregado"
+                ]
+            )
+
+
+            col4, col5 = st.columns(2)
+
+            entrega_input = col4.text_input(
+                "Quién Entrega",
+                placeholder="Persona o empresa"
+            )
+
+            recibe_input = col5.text_input(
+                "Quién Recibe",
+                placeholder="Persona o empresa"
+            )
+
+
+            descripcion_input = st.text_area(
+                "Descripción",
+                placeholder="Concepto del movimiento"
+            )
+
+
+            # ==========================================
+            # BOTÓN GUARDAR
+            # ==========================================
+            if st.button(
+                "💾 Guardar y Generar PDF",
+                type="primary",
+                use_container_width=True
+            ):
+
+                # VALIDACIONES
+                if folio_input == "":
+                    st.warning("Debe ingresar un folio")
+                    st.stop()
+
+                if entrega_input == "":
+                    st.warning("Debe ingresar quién entrega")
+                    st.stop()
+
+                if recibe_input == "":
+                    st.warning("Debe ingresar quién recibe")
+                    st.stop()
+
+                if descripcion_input == "":
+                    st.warning("Debe ingresar descripción")
+                    st.stop()
+
+
+                try:
+
+                    # ==========================================
+                    # GUARDAR EN SUPABASE
+                    # ==========================================
+                    supabase.table("Recibos_Dinero").insert({
+
+                        "folio": str(folio_input),
+
+                        "fecha": fecha_input.isoformat(),
+
+                        "tipo": str(tipo_input),
+
+                        "quien_entrega": str(entrega_input),
+
+                        "quien_recibe": str(recibe_input),
+
+                        "descripcion": str(descripcion_input)
+
+                    }).execute()
+
+
+                    # ==========================================
+                    # CREAR PDF (USA AUTOMÁTICAMENTE logo.png)
+                    # ==========================================
+                    pdf = PDF()
+
+                    pdf.add_page()
+
+                    pdf.set_auto_page_break(
+                        auto=True,
+                        margin=45
+                    )
+
+
+                    # TITULO
+                    pdf.set_font(
+                        "Arial",
+                        "B",
+                        16
+                    )
+
+                    pdf.cell(
+                        0,
+                        10,
+                        "Recibo de Dinero",
+                        0,
+                        1,
+                        "C"
+                    )
+
+
+                    # FOLIO Y FECHA
+                    _bloque_folio_fecha(
+
+                        pdf,
+
+                        folio_input,
+
+                        fecha_input.strftime("%d/%m/%Y")
+
+                    )
+
+
+                    pdf.ln(15)
+
+
+                    # TIPO
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(50, 8, "Tipo:")
+
+                    pdf.set_font("Arial", "", 11)
+                    pdf.cell(0, 8, tipo_input, ln=True)
+
+
+                    # ENTREGA
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(50, 8, "Quién Entrega:")
+
+                    pdf.set_font("Arial", "", 11)
+                    pdf.cell(0, 8, entrega_input, ln=True)
+
+
+                    # RECIBE
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(50, 8, "Quién Recibe:")
+
+                    pdf.set_font("Arial", "", 11)
+                    pdf.cell(0, 8, recibe_input, ln=True)
+
+
+                    pdf.ln(5)
+
+
+                    # DESCRIPCIÓN
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 8, "Descripción:")
+
+                    pdf.ln()
+
+                    pdf.set_font("Arial", "", 11)
+
+                    pdf.multi_cell(
+                        0,
+                        8,
+                        descripcion_input,
+                        border=1
+                    )
+
+
+                    # GENERAR BYTES PDF
+                    pdf_bytes = pdf.output(
+                        dest="S"
+                    ).encode("latin-1")
+
+
+                    # MENSAJE
+                    st.success(
+                        f"✅ Recibo {folio_input} guardado correctamente"
+                    )
+
+
+                    # BOTÓN DESCARGA
+                    st.download_button(
+
+                        "🖨️ Descargar PDF",
+
+                        pdf_bytes,
+
+                        f"Recibo_Dinero_{folio_input}.pdf",
+
+                        "application/pdf"
+
+                    )
+
+
+                except Exception as e:
+
+                    st.error(
+                        f"Error al guardar: {e}"
+                    )
+
+
+
+    # ==================================================
+    # TAB HISTORIAL
+    # ==================================================
+    with tab_historial:
+
         try:
-            h_mon = pd.DataFrame(supabase.table("Recibos_Dinero").select("*").order("id", desc=True).limit(200).execute().data)
-            if not h_mon.empty:
-                # Mostrar columnas solicitadas
-                h_view = h_mon.rename(columns={
-                    "folio_manual": "Folio",
-                    "fecha": "Fecha",
-                    "quien_entrega": "Entrega",
-                    "quien_recibe": "Recibe",
-                    "monto": "Cantidad",
-                    "descripcion": "Descripción"
-                })
-                st.dataframe(h_view[["Folio", "Fecha", "Entrega", "Recibe", "Cantidad", "Descripción"]], use_container_width=True, hide_index=True)
-                st.info(f"💰 Total acumulado en vista: $ {h_view['Cantidad'].sum():,.2f}")
-        except:
-            st.info("No hay recibos de dinero registrados.")
+
+            df_historial = pd.DataFrame(
+
+                supabase.table("Recibos_Dinero")
+
+                .select("*")
+
+                .order("id", desc=True)
+
+                .limit(200)
+
+                .execute().data
+
+            )
+
+
+            if not df_historial.empty:
+
+                df_view = df_historial.rename(
+
+                    columns={
+
+                        "folio": "Folio",
+
+                        "fecha": "Fecha",
+
+                        "tipo": "Tipo",
+
+                        "quien_entrega": "Entrega",
+
+                        "quien_recibe": "Recibe",
+
+                        "descripcion": "Descripción"
+
+                    }
+
+                )
+
+
+                st.dataframe(
+
+                    df_view[
+                        [
+                            "Folio",
+                            "Fecha",
+                            "Tipo",
+                            "Entrega",
+                            "Recibe",
+                            "Descripción"
+                        ]
+                    ],
+
+                    use_container_width=True,
+
+                    hide_index=True
+
+                )
+
+            else:
+
+                st.info("No hay recibos registrados")
+
+
+        except Exception as e:
+
+            st.error(
+                f"Error cargando historial: {e}"
+            )
