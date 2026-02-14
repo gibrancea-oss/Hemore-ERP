@@ -113,7 +113,7 @@ if opcion == "Personal":
             st.rerun()
 
 # ==========================================
-# 2. INSUMOS (CON CARGA MASIVA)
+# 2. INSUMOS (CON CARGA MASIVA Y BORRADO)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -142,8 +142,8 @@ elif opcion == "Insumos":
     if df.empty:
         df = pd.DataFrame(columns=["id", "codigo", "Descripcion", "Cantidad", "Unidad", "stock_minimo"])
 
-    # --- PESTAÑAS: ALTA MANUAL | CARGA MASIVA (NUEVO) | INVENTARIO ---
-    t1, t2, t3 = st.tabs(["➕ Alta Manual", "📥 Carga Masiva Excel", "📋 Inventario Maestro"])
+    # --- PESTAÑAS: ALTA | MASIVA | INVENTARIO | BORRAR (NUEVO) ---
+    t1, t2, t3, t4 = st.tabs(["➕ Alta Manual", "📥 Carga Masiva Excel", "📋 Inventario Maestro", "🗑️ Borrar Insumo"])
 
     # 1. ALTA MANUAL
     with t1:
@@ -179,7 +179,7 @@ elif opcion == "Insumos":
                         except Exception as e: st.error(f"Error al guardar: {e}")
                 else: st.warning("Código y Descripción obligatorios.")
 
-    # 2. CARGA MASIVA (NUEVO)
+    # 2. CARGA MASIVA
     with t2:
         st.info("💡 Sube tu archivo Excel. Asegúrate de que las columnas se llamen: **codigo, descripcion, unidad, cantidad, stock_minimo**.")
         uploaded_file = st.file_uploader("Arrastra tu archivo Excel aquí", type=["xlsx", "xls"])
@@ -187,10 +187,8 @@ elif opcion == "Insumos":
         if uploaded_file:
             try:
                 df_upload = pd.read_excel(uploaded_file)
-                # Normalizar nombres de columnas a minúsculas para evitar errores
                 df_upload.columns = df_upload.columns.str.lower().str.strip()
                 
-                # Verificar columnas requeridas
                 required = ["codigo", "descripcion"]
                 missing = [col for col in required if col not in df_upload.columns]
                 
@@ -204,12 +202,10 @@ elif opcion == "Insumos":
                         progress_bar = st.progress(0, text="Procesando...")
                         success_count = 0
                         error_count = 0
-                        
                         total_rows = len(df_upload)
                         
                         for i, row in df_upload.iterrows():
                             try:
-                                # Preparar datos
                                 datos_row = {
                                     "codigo": str(row["codigo"]),
                                     "Descripcion": str(row["descripcion"]),
@@ -217,12 +213,10 @@ elif opcion == "Insumos":
                                     "Cantidad": row["cantidad"] if "cantidad" in df_upload.columns else 0,
                                     "stock_minimo": row["stock_minimo"] if "stock_minimo" in df_upload.columns else 5
                                 }
-                                # Insertar
                                 utils.supabase.table("Insumos").insert(datos_row).execute()
                                 success_count += 1
                             except Exception as e:
                                 error_count += 1
-                            
                             progress_bar.progress((i + 1) / total_rows)
                         
                         progress_bar.empty()
@@ -233,7 +227,6 @@ elif opcion == "Insumos":
                         
                         time.sleep(2)
                         st.rerun()
-                        
             except Exception as e:
                 st.error(f"Error leyendo el archivo: {e}")
 
@@ -284,6 +277,36 @@ elif opcion == "Insumos":
                 st.success("✅ Actualizado.")
                 time.sleep(1)
                 st.rerun()
+                
+    # 4. BORRAR INSUMO (NUEVA PESTAÑA)
+    with t4:
+        st.subheader("🗑️ Eliminar Insumo del Sistema")
+        st.warning("⚠️ **¡Atención!** Al borrar un insumo, desaparecerá del inventario permanentemente.")
+        
+        if not df.empty:
+            # Crear lista desplegable con todos los insumos actuales
+            lista_borrar = [f"{row['codigo']} | {row['Descripcion']}" for i, row in df.iterrows()]
+            insumo_a_borrar = st.selectbox("Selecciona el insumo a eliminar:", lista_borrar, index=None, placeholder="Busca por código o nombre...")
+            
+            if st.button("🚨 Confirmar Eliminación", type="primary"):
+                if insumo_a_borrar:
+                    # Extraer el código exacto de la selección
+                    codigo_borrar = insumo_a_borrar.split(" | ")[0]
+                    # Buscar el ID real en la base de datos
+                    id_borrar = df[df["codigo"] == codigo_borrar].iloc[0]["id"]
+                    
+                    try:
+                        # Ejecutar borrado en Supabase
+                        utils.supabase.table("Insumos").delete().eq("id", int(id_borrar)).execute()
+                        st.success(f"✅ Insumo '{insumo_a_borrar}' eliminado correctamente.")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al eliminar: {e}")
+                else:
+                    st.info("Selecciona un insumo primero.")
+        else:
+            st.info("No hay insumos en el sistema para borrar.")
 
 # ==========================================
 # 3. HERRAMIENTAS
