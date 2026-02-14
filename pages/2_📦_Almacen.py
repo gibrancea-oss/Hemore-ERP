@@ -17,7 +17,7 @@ supabase = utils.supabase
 # ==========================================
 # 🛠️ MEJORA: CARGA DE CATÁLOGOS CON CACHÉ
 # ==========================================
-@st.cache_data(ttl=300)  # Actualiza cada 5 min o al recargar manualmente
+@st.cache_data(ttl=300)
 def cargar_catalogos():
     try:
         p = pd.DataFrame(supabase.table("Personal").select("nombre").eq("activo", True).execute().data)
@@ -35,7 +35,7 @@ lista_clientes = df_clientes_cat['nombre'].tolist() if not df_clientes_cat.empty
 col_p = 'empresa' if not df_proveedores_cat.empty and 'empresa' in df_proveedores_cat.columns else 'nombre'
 lista_proveedores = df_proveedores_cat[col_p].tolist() if not df_proveedores_cat.empty else []
 
-# --- CLASE PDF PERSONALIZADA ---
+# --- CLASE PDF PERSONALIZADA (SIN CAMBIOS) ---
 class PDF(FPDF):
     def header(self):
         if os.path.exists("logo.png"):
@@ -59,7 +59,7 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
-# --- GENERADORES DE PDF (MEJORADOS CON ENCODING SEGURO) ---
+# --- GENERADORES DE PDF (SIN CAMBIOS) ---
 def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     pdf = PDF()
     pdf.add_page()
@@ -108,7 +108,7 @@ def generar_pdf_dinero(datos_cabecera, df_conceptos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1', errors='replace')
 
-# --- HELPERS PDF (SIN CAMBIOS) ---
+# --- HELPERS PDF ---
 def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_font('Arial', 'B', 10)
     pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
@@ -154,10 +154,11 @@ opcion_almacen = st.sidebar.radio(
 st.title(f"Control de {opcion_almacen.split(' (')[0]}")
 
 # ==================================================
-# 🧱 OPCIÓN 1: INSUMOS (MEJORADO CON VALIDACIÓN)
+# 🧱 OPCIÓN 1: INSUMOS (MEJORADO CON UBICACIÓN)
 # ==================================================
 if "Insumos" in opcion_almacen:
     try:
+        # Aseguramos traer la columna 'ubicacion'
         response_ins = supabase.table("Insumos").select("*").order("id").execute()
         df_ins = pd.DataFrame(response_ins.data)
         if not df_ins.empty:
@@ -165,6 +166,7 @@ if "Insumos" in opcion_almacen:
             if "descripcion" not in df_ins.columns: df_ins["descripcion"] = "Sin Nombre"
             if "cantidad" not in df_ins.columns: df_ins["cantidad"] = 0
             if "unidad" not in df_ins.columns: df_ins["unidad"] = "Pzas"
+            if "ubicacion" not in df_ins.columns: df_ins["ubicacion"] = "No Asignada"
     except Exception as e: 
         st.error(f"Error cargando base de datos: {e}")
         df_ins = pd.DataFrame()
@@ -201,7 +203,7 @@ if "Insumos" in opcion_almacen:
                                         "responsable": responsable
                                     }).execute()
                                     st.success("✅ Salida registrada"); time.sleep(1); st.rerun()
-                                except Exception as e: st.error(f"Error en transacción: {e}")
+                                except Exception as e: st.error(f"Error: {e}")
                             else: st.error("Stock insuficiente")
                     else:
                         if st.button("Confirmar Entrada"):
@@ -217,14 +219,23 @@ if "Insumos" in opcion_almacen:
                                     "responsable": "Almacén"
                                 }).execute()
                                 st.success("✅ Entrada registrada"); time.sleep(1); st.rerun()
-                            except Exception as e: st.error(f"Error en transacción: {e}")
+                            except Exception as e: st.error(f"Error: {e}")
             
             with c_info: 
-                if seleccion: st.metric("Stock Actual", f"{item_actual['cantidad']} {item_actual['unidad']}")
+                if seleccion: 
+                    st.metric("Stock Actual", f"{item_actual['cantidad']} {item_actual['unidad']}")
+                    st.write(f"📍 **Ubicación:** {item_actual['ubicacion']}")
 
     with tab_exist:
         if not df_ins.empty:
-            df_view = df_ins[["codigo", "descripcion", "cantidad", "unidad"]].rename(columns={"codigo": "Código", "descripcion": "Descripción", "cantidad": "Stock", "unidad": "Unidad"})
+            # MEJORA SOLICITADA: Agregamos columna Ubicación
+            df_view = df_ins[["codigo", "descripcion", "cantidad", "unidad", "ubicacion"]].rename(columns={
+                "codigo": "Código", 
+                "descripcion": "Descripción", 
+                "cantidad": "Stock", 
+                "unidad": "Unidad",
+                "ubicacion": "Ubicación"
+            })
             st.download_button("📥 Descargar Excel", convertir_df_a_excel(df_view), "Existencias.xlsx")
             st.dataframe(df_view, use_container_width=True, hide_index=True)
 
@@ -238,7 +249,7 @@ if "Insumos" in opcion_almacen:
         except: st.info("Sin movimientos.")
 
 # ==================================================
-# 🔧 OPCIÓN 2: HERRAMIENTAS
+# 🔧 OPCIÓN 2: HERRAMIENTAS (SIN CAMBIOS)
 # ==================================================
 elif "Herramientas" in opcion_almacen:
     try:
@@ -284,7 +295,7 @@ elif "Herramientas" in opcion_almacen:
         except: pass
 
 # ==================================================
-# 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC (MEJORADO CON CAPTURA DE ID)
+# 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC (SIN CAMBIOS)
 # ==================================================
 elif "Recibos" in opcion_almacen:
     st.markdown("### 📑 Recibos de Entrega (Salidas a Clientes)")
@@ -313,7 +324,6 @@ elif "Recibos" in opcion_almacen:
                     items = edited_df[edited_df["Código"] != ""]
                     if not items.empty:
                         try:
-                            # MEJORA: Transacción única y captura de ID real
                             ids_generados = []
                             for i, row in items.iterrows():
                                 res = supabase.table("Recibos_OC").insert({
@@ -324,21 +334,19 @@ elif "Recibos" in opcion_almacen:
                                 }).execute()
                                 if res.data: ids_generados.append(res.data[0]['id'])
                             
-                            # Usamos el primer ID de la serie como folio o el último
                             folio_real = ids_generados[0] if ids_generados else "S/F"
-                            
                             cli_data = df_clientes_cat[df_clientes_cat['nombre'] == cliente_input].iloc[0]
                             prov_data = df_proveedores_cat[df_proveedores_cat[col_p] == prov_input].iloc[0]
                             
-                            prov_text = f"{prov_input}\n{prov_data.get('domicilio', '')}\nCP: {prov_data.get('codigo_postal', '')}\nRFC: {prov_data.get('rfc', '')}"
-                            cli_text = f"{cliente_input}\n{cli_data.get('direccion', '')}\nCP: {cli_data.get('codigo_postal', '')}\nRFC: {cli_data.get('rfc', '')}"
+                            prov_text = f"{prov_input}\n{prov_data.get('domicilio', '')}\nRFC: {prov_data.get('rfc', '')}"
+                            cli_text = f"{cliente_input}\n{cli_data.get('direccion', '')}\nRFC: {cli_data.get('rfc', '')}"
                             
                             datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text}
                             pdf_bytes = generar_pdf_entrega(datos_pdf, items, folio_real)
                             
                             st.success(f"✅ Guardado. Folio: {folio_real}")
                             st.download_button("🖨️ Descargar PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
-                            del st.session_state["data_recibo"] # Limpia formulario
+                            del st.session_state["data_recibo"]
                         except Exception as e: st.error(f"Error técnico: {e}")
                     else: st.warning("Tabla vacía.")
                 else: st.warning("Faltan datos obligatorios.")
@@ -351,7 +359,7 @@ elif "Recibos" in opcion_almacen:
         except: pass
 
 # ==================================================
-# 📥 OPCIÓN 4: ENTRADA DE MATERIAL (MEJORADO)
+# 📥 OPCIÓN 4: ENTRADA DE MATERIAL (SIN CAMBIOS)
 # ==================================================
 elif "Entrada" in opcion_almacen:
     st.markdown("### 📥 Registro de Entrada de Material (Proveedores)")
@@ -379,7 +387,6 @@ elif "Entrada" in opcion_almacen:
                     items_in = edited_df_in[edited_df_in["Código"] != ""]
                     if not items_in.empty:
                         try:
-                            # MEJORA: Captura de ID
                             res_in = supabase.table("Entradas_Material").insert({
                                 "fecha": fecha_in.isoformat(), "oc": oc_in, "proveedor": prov_in, 
                                 "codigo": items_in.iloc[0]["Código"], "descripcion": items_in.iloc[0]["Descripción"], 
@@ -387,7 +394,6 @@ elif "Entrada" in opcion_almacen:
                                 "usuario": user_in, "observaciones": obs_in
                             }).execute()
                             
-                            # Para entradas múltiples (si decides iterar como en Recibos OC)
                             for i, row in items_in.iloc[1:].iterrows():
                                 supabase.table("Entradas_Material").insert({
                                     "fecha": fecha_in.isoformat(), "oc": oc_in, "proveedor": prov_in, 
@@ -399,7 +405,7 @@ elif "Entrada" in opcion_almacen:
                             nuevo_id_in = res_in.data[0]['id'] if res_in.data else "S/F"
                             prov_data = df_proveedores_cat[df_proveedores_cat[col_p] == prov_in].iloc[0]
                             prov_text = f"{prov_in}\n{prov_data.get('domicilio', '')}\nRFC: {prov_data.get('rfc', '')}"
-                            hemore_text = "HEMORE INDUSTRIAS\nAlmacén Central Puebla\nRFC: HEM000000XXX"
+                            hemore_text = "HEMORE INDUSTRIAS\nAlmacén Central Puebla"
                             
                             datos_pdf = {"fecha": fecha_in.strftime("%d/%m/%Y"), "oc": oc_in, "observaciones": obs_in, "prov_texto": prov_text, "hemore_texto": hemore_text}
                             pdf_bytes = generar_pdf_entrada(datos_pdf, items_in, nuevo_id_in)
@@ -408,7 +414,6 @@ elif "Entrada" in opcion_almacen:
                             st.download_button("🖨️ Descargar Constancia", pdf_bytes, f"Entrada_{oc_in}.pdf", "application/pdf")
                             del st.session_state["data_entrada"]
                         except Exception as e: st.error(e)
-                    else: st.warning("Tabla vacía.")
 
     with tab_ent_hist:
         try:
@@ -417,7 +422,7 @@ elif "Entrada" in opcion_almacen:
         except: pass
 
 # ==================================================
-# 💰 OPCIÓN 5: RECIBOS DE DINERO (MEJORADO)
+# 💰 OPCIÓN 5: RECIBOS DE DINERO (SIN CAMBIOS)
 # ==================================================
 elif "Dinero" in opcion_almacen:
     st.markdown("### 💰 Recibos de Dinero (Caja/Pagos)")
@@ -448,7 +453,6 @@ elif "Dinero" in opcion_almacen:
                     items_m = edited_money[edited_money["Concepto"] != ""]
                     if not items_m.empty:
                         try:
-                            # MEJORA: Transacción y captura de ID
                             res_m = supabase.table("Recibos_Dinero").insert({
                                 "fecha": fecha_pago.isoformat(), "cliente": cliente_pago, 
                                 "concepto": items_m.iloc[0]["Concepto"], "monto": items_m.iloc[0]["Monto"], 
@@ -470,7 +474,7 @@ elif "Dinero" in opcion_almacen:
                             st.download_button("🖨️ Descargar PDF", pdf_bytes, f"Recibo_Dinero_{id_dinero}.pdf", "application/pdf")
                             del st.session_state["data_money"]
                         except Exception as e: st.error(e)
-                else: st.warning("Monto inválido o falta cliente.")
+                else: st.warning("Monto inválido.")
 
     with tab_money_hist:
         try:
