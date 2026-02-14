@@ -10,6 +10,8 @@ st.set_page_config(page_title="Configuración Master", page_icon="⚙️", layou
 utils.validar_login()
 # -----------------------------
 
+supabase = utils.supabase
+
 # ==========================================
 # MENÚ PRINCIPAL
 # ==========================================
@@ -20,7 +22,7 @@ opcion = st.sidebar.radio(
 )
 
 # ==========================================
-# 1. PERSONAL
+# 1. PERSONAL (INTACTO)
 # ==========================================
 if opcion == "Personal":
     st.markdown("### 👥 Gestión de Recursos Humanos")
@@ -94,12 +96,13 @@ if opcion == "Personal":
             st.rerun()
 
 # ==========================================
-# 2. INSUMOS (CARGA MASIVA CORREGIDA)
+# 2. INSUMOS (CORRECCIÓN DE CARGA)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
     st.markdown("### 📦 Gestión de Almacén e Insumos")
     
+    # Cargar datos actuales para comparar
     try:
         response = utils.supabase.table("Insumos").select("*").order("id").execute()
         df = pd.DataFrame(response.data)
@@ -125,93 +128,111 @@ elif opcion == "Insumos":
             
             if st.form_submit_button("Guardar Insumo"):
                 if nuevo_nombre and nuevo_codigo:
-                    try:
-                        datos_insert = {"codigo": nuevo_codigo, "Descripcion": nuevo_nombre, "Unidad": nueva_unidad, "Cantidad": nueva_cant, "stock_minimo": nuevo_min}
-                        # Upsert para evitar error de duplicados
-                        utils.supabase.table("Insumos").upsert(datos_insert, on_conflict="codigo").execute()
-                        st.success(f"✅ Insumo {nuevo_codigo} guardado/actualizado.")
-                        time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Error al guardar: {e}")
+                    # Validación manual
+                    existe = False
+                    if not df.empty:
+                        if nuevo_codigo.strip() in df["codigo"].astype(str).str.strip().values: existe = True
+                    
+                    if not existe:
+                        try:
+                            datos_insert = {"codigo": nuevo_codigo, "Descripcion": nuevo_nombre, "Unidad": nueva_unidad, "Cantidad": nueva_cant, "stock_minimo": nuevo_min}
+                            utils.supabase.table("Insumos").insert(datos_insert).execute()
+                            st.success(f"✅ Insumo {nuevo_codigo} agregado.")
+                            time.sleep(1); st.rerun()
+                        except Exception as e: st.error(f"Error: {e}")
+                    else: st.error("⛔ El código ya existe.")
                 else: st.warning("Datos incompletos.")
 
-    # --- PESTAÑA DE CARGA MASIVA MEJORADA ---
+    # --- CARGA MASIVA (CORREGIDA PARA TU ARCHIVO) ---
     with t2:
-        st.info("💡 Sube tu archivo. Si el código ya existe, se actualizarán sus datos.")
-        uploaded_file = st.file_uploader("Archivo Excel (.xlsx) o CSV (.csv)", type=["xlsx", "xls", "csv"])
+        st.info("💡 Sube tu archivo CSV. El sistema corregirá los espacios en los nombres de columna automáticamente.")
+        uploaded_file = st.file_uploader("Archivo de Carga", type=["xlsx", "xls", "csv"])
         
         if uploaded_file:
             try:
-                # 1. Leer archivo según tipo
+                # 1. Lectura flexible
                 if uploaded_file.name.endswith('.csv'):
-                    df_upload = pd.read_csv(uploaded_file)
+                    try:
+                        df_upload = pd.read_csv(uploaded_file, encoding='utf-8')
+                    except:
+                        uploaded_file.seek(0)
+                        df_upload = pd.read_csv(uploaded_file, encoding='latin-1')
                 else:
                     df_upload = pd.read_excel(uploaded_file)
                 
-                # 2. Limpiar nombres de columnas (quitar espacios y minúsculas)
+                # 2. LIMPIEZA PROFUNDA DE COLUMNAS (AQUÍ ESTÁ LA SOLUCIÓN)
+                # Quitamos espacios al inicio y final: "codigo " -> "codigo"
                 df_upload.columns = df_upload.columns.str.lower().str.strip()
                 
-                # 3. Mapeo inteligente de columnas
+                # Mapeo flexible
                 mapeo = {
-                    "unidad": "Unidad",
-                    "cantidad": "Cantidad",
-                    "descripcion": "Descripcion",
-                    "descripción": "Descripcion",
-                    "stock_minimo": "stock_minimo",
-                    "minimo": "stock_minimo"
+                    "unidad": "Unidad", "cantidad": "Cantidad",
+                    "descripcion": "Descripcion", "descripción": "Descripcion",
+                    "stock_minimo": "stock_minimo", "minimo": "stock_minimo", "stock minimo": "stock_minimo"
                 }
-                # Renombrar columnas del excel a las de la BD
-                for col_excel in df_upload.columns:
-                    if col_excel in mapeo:
-                        df_upload.rename(columns={col_excel: mapeo[col_excel]}, inplace=True)
+                for col_orig in df_upload.columns:
+                    if col_orig in mapeo: df_upload.rename(columns={col_orig: mapeo[col_orig]}, inplace=True)
 
-                # 4. Validar
+                # 3. Validar columnas
                 if "codigo" not in df_upload.columns or "Descripcion" not in df_upload.columns:
-                    st.error("⛔ El archivo debe tener al menos las columnas: **codigo** y **descripcion**")
-                    st.write("Columnas encontradas:", list(df_upload.columns))
+                    st.error("⛔ Error: No encuentro las columnas 'codigo' y 'descripcion'.")
+                    st.write("Columnas que leí de tu archivo:", list(df_upload.columns))
                 else:
-                    st.write("Vista previa (primeras 5 filas):")
+                    st.write("Vista previa:")
                     st.dataframe(df_upload.head())
                     
-                    if st.button("🚀 Cargar Datos"):
+                    if st.button("🚀 Iniciar Carga"):
                         progress_bar = st.progress(0, text="Procesando...")
+                        
+                        # Mapa para búsqueda rápida
+                        mapa_ids = {}
+                        if not df.empty:
+                            for idx, row in df.iterrows():
+                                mapa_ids[str(row['codigo']).strip()] = row['id']
+                        
                         success_count = 0
+                        update_count = 0
                         errors = []
+                        total = len(df_upload)
                         
                         for i, row in df_upload.iterrows():
                             try:
-                                # Construir objeto seguro
+                                cod_row = str(row["codigo"]).strip()
+                                desc_row = str(row["Descripcion"]).strip()
+                                
                                 datos_row = {
-                                    "codigo": str(row["codigo"]).strip(),
-                                    "Descripcion": str(row["Descripcion"]).strip(),
+                                    "codigo": cod_row,
+                                    "Descripcion": desc_row,
                                     "Unidad": row["Unidad"] if "Unidad" in df_upload.columns else "Pzas",
                                     "Cantidad": row["Cantidad"] if "Cantidad" in df_upload.columns else 0,
                                     "stock_minimo": row["stock_minimo"] if "stock_minimo" in df_upload.columns else 5
                                 }
-                                # UPSERT: Clave mágica para que no falle si ya existe
-                                utils.supabase.table("Insumos").upsert(datos_row, on_conflict="codigo").execute()
-                                success_count += 1
+
+                                if cod_row in mapa_ids:
+                                    # UPDATE
+                                    id_real = mapa_ids[cod_row]
+                                    utils.supabase.table("Insumos").update(datos_row).eq("id", int(id_real)).execute()
+                                    update_count += 1
+                                else:
+                                    # INSERT
+                                    utils.supabase.table("Insumos").insert(datos_row).execute()
+                                    success_count += 1
+                                    
                             except Exception as e:
-                                # Guardar el primer error para mostrarlo
-                                if len(errors) < 3: errors.append(str(e))
+                                errors.append(f"Fila {i+1}: {e}")
                             
-                            progress_bar.progress((i + 1) / len(df_upload))
+                            progress_bar.progress((i + 1) / total)
                         
                         progress_bar.empty()
-                        
-                        if len(errors) == 0:
-                            st.success(f"✅ ¡Éxito! {success_count} registros procesados correctamente.")
-                        else:
-                            st.warning(f"⚠️ Se cargaron {success_count} registros, pero hubo errores en otros.")
-                            st.error(f"Ejemplo de error: {errors[0]}") # Mostrar el error real
-                        
-                        time.sleep(2)
-                        st.rerun()
+                        st.success(f"✅ Proceso terminado: {success_count} nuevos, {update_count} actualizados.")
+                        if errors: st.error(f"Hubo {len(errors)} errores.")
+                        time.sleep(3); st.rerun()
 
             except Exception as e:
-                st.error(f"Error leyendo el archivo: {e}")
+                st.error(f"Error crítico: {e}")
 
     with t3:
-        # Inventario (Mismo código funcional)
+        # Inventario
         col_search, _ = st.columns([1, 1])
         busqueda = col_search.text_input("🔍 Buscar Insumo", placeholder="Escribe código o descripción...")
         df_display = df.copy()
@@ -230,10 +251,9 @@ elif opcion == "Insumos":
         }
         
         cols_ver = ["id", "codigo", "Descripcion", "Cantidad", "Unidad", "stock_minimo"]
-        # Asegurar columnas
         for c in cols_ver: 
             if c not in df_display.columns: df_display[c] = None
-
+            
         edited_df = st.data_editor(df_display[cols_ver], column_config=column_config, num_rows="dynamic", use_container_width=True, height=500, key="editor_insumos_v4")
 
         if st.button("💾 Guardar Cambios en Inventario"):
@@ -314,7 +334,6 @@ elif opcion == "Clientes":
                 st.success("Guardado."); time.sleep(1); st.rerun()
     with t2:
         cols = ["id", "nombre", "rfc", "direccion", "colonia", "codigo_postal"]
-        # Asegurar que existan columnas en df antes de editar
         for c in cols: 
             if c not in df.columns: df[c] = None
         edited_df = st.data_editor(df[cols], num_rows="dynamic", use_container_width=True)
