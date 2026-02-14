@@ -21,7 +21,6 @@ supabase = utils.supabase
 # FUNCIONES AUXILIARES (QR y PDF)
 # ==========================================
 
-# Generar QR en Base64 para mostrar en la tabla (Vista Previa)
 def get_qr_data_url(text):
     if not text: return None
     try:
@@ -36,39 +35,48 @@ def get_qr_data_url(text):
 
 class PDFEtiquetas(FPDF):
     def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
+        self.set_y(-10)
+        self.set_font('Arial', 'I', 6)
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
     pdf = PDFEtiquetas()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     
-    # Configuración de etiquetas (3 por fila)
-    ancho_etiqueta = 63 
-    alto_etiqueta = 45
-    margen_x = 10
-    margen_y = 15
+    # --- CONFIGURACIÓN DE TAMAÑO (2.5 cm x 3.5 cm) ---
+    ancho_etiqueta = 25.0  # mm
+    alto_etiqueta = 35.0   # mm
     
-    x = margen_x
-    y = margen_y
+    # Márgenes y espaciado
+    margen_izq = 10
+    margen_sup = 15
+    separacion = 2 # mm entre etiquetas
+    
+    # Cálculo de cuántas caben
+    # A4 ancho = 210mm. Espacio útil = 190mm. 
+    # (25 + 2) * 7 = 189mm. Caben 7 por fila.
+    cols_por_fila = 7 
+    
+    x = margen_izq
+    y = margen_sup
     col_count = 0
     
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, f"Catálogo de {tipo} - Etiquetas QR", 0, 1, 'C')
-    pdf.ln(5)
+    # Título del documento
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 8, f"Catálogo {tipo} (2.5x3.5cm)", 0, 1, 'C')
+    pdf.ln(2)
     y = pdf.get_y()
     
     for index, row in df_items.iterrows():
         sku = str(row['codigo'])
-        desc = str(row['descripcion'])[:50]
+        desc = str(row['descripcion'])[:40] # Cortar texto largo
         
-        # Borde
-        pdf.set_draw_color(200, 200, 200)
+        # 1. Dibujar Borde
+        pdf.set_draw_color(180, 180, 180)
         pdf.rect(x, y, ancho_etiqueta, alto_etiqueta)
         
-        # QR Alta Calidad para PDF
+        # 2. Generar QR
         qr = qrcode.QRCode(box_size=10, border=1)
         qr.add_data(sku)
         qr.make(fit=True)
@@ -76,32 +84,42 @@ def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
         temp_qr_path = f"temp_qr_{index}.png"
         img_qr.save(temp_qr_path)
         
-        # Imagen
-        pos_qr_x = x + (ancho_etiqueta - 25) / 2
-        pdf.image(temp_qr_path, x=pos_qr_x, y=y+3, w=25, h=25)
+        # 3. Insertar Imagen QR (Pequeña y centrada arriba)
+        qr_size = 16 # mm
+        pos_qr_x = x + (ancho_etiqueta - qr_size) / 2
+        pos_qr_y = y + 2
+        pdf.image(temp_qr_path, x=pos_qr_x, y=pos_qr_y, w=qr_size, h=qr_size)
         
-        # Textos
-        pdf.set_xy(x, y + 29)
+        # 4. Textos (SKU y Descripción - Fuente muy pequeña)
+        
+        # SKU
+        pdf.set_xy(x, pos_qr_y + qr_size + 1)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font('Arial', 'B', 10)
-        pdf.cell(ancho_etiqueta, 4, sku, 0, 1, 'C')
+        pdf.set_font('Arial', 'B', 7) # Fuente 7
+        pdf.cell(ancho_etiqueta, 3, sku, 0, 1, 'C')
         
-        pdf.set_xy(x+1, y + 34)
-        pdf.set_font('Arial', '', 7)
-        pdf.multi_cell(ancho_etiqueta-2, 3, desc, align='C')
+        # Descripción
+        pdf.set_xy(x + 1, pos_qr_y + qr_size + 4)
+        pdf.set_font('Arial', '', 5) # Fuente 5 (Micro)
+        pdf.multi_cell(ancho_etiqueta - 2, 2.5, desc, align='C')
         
+        # Limpieza
         if os.path.exists(temp_qr_path): os.remove(temp_qr_path)
             
+        # 5. Control de Filas y Columnas
         col_count += 1
-        if col_count < 3:
-            x += ancho_etiqueta + 2
+        if col_count < cols_por_fila:
+            x += ancho_etiqueta + separacion
         else:
+            # Salto de línea
             col_count = 0
-            x = margen_x
-            y += alto_etiqueta + 2
-            if y > 250:
+            x = margen_izq
+            y += alto_etiqueta + separacion
+            
+            # Nueva página si no cabe otra fila
+            if y + alto_etiqueta > 285:
                 pdf.add_page()
-                y = margen_y
+                y = margen_sup
 
     return pdf.output(dest='S').encode('latin-1')
 
@@ -115,7 +133,7 @@ opcion = st.sidebar.radio(
 )
 
 # ==========================================
-# 1. PERSONAL
+# 1. PERSONAL (INTACTO)
 # ==========================================
 if opcion == "Personal":
     st.markdown("### 👥 Gestión de Recursos Humanos")
@@ -175,7 +193,7 @@ if opcion == "Personal":
             bar.empty(); st.success("✅ Actualizado"); time.sleep(1); st.rerun()
 
 # ==========================================
-# 2. INSUMOS (CON CUADRÍCULA PEGADO)
+# 2. INSUMOS (INTACTO)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -204,7 +222,6 @@ elif opcion == "Insumos":
             nuevo_min = c5.number_input("Min", value=5.0)
             if st.form_submit_button("Guardar"):
                 if nuevo_nombre and nuevo_codigo:
-                    # Validar
                     existe = False
                     if not df.empty and nuevo_codigo.strip() in df["codigo"].astype(str).str.strip().values: existe = True
                     if not existe:
@@ -215,7 +232,6 @@ elif opcion == "Insumos":
 
     with t2:
         st.info("Copia tus datos de Excel y pégalos aquí:")
-        # Grid vacío para pegar
         df_template = pd.DataFrame(columns=["codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo"])
         edited_grid = st.data_editor(df_template, num_rows="dynamic", use_container_width=True, key="grid_carga")
         
@@ -223,7 +239,6 @@ elif opcion == "Insumos":
             if not edited_grid.empty:
                 prog = st.progress(0, text="Procesando...")
                 mapa_ids = {str(row['codigo']).strip(): row['id'] for i, row in df.iterrows()} if not df.empty else {}
-                
                 count_ok, count_upd = 0, 0
                 for i, row in edited_grid.iterrows():
                     try:
@@ -233,9 +248,7 @@ elif opcion == "Insumos":
                         uni = str(row["Unidad"]) if row["Unidad"] else "Pzas"
                         cant = float(row["Cantidad"]) if row["Cantidad"] else 0.0
                         mini = float(row["stock_minimo"]) if row["stock_minimo"] else 5.0
-                        
                         d = {"codigo": cod, "Descripcion": desc, "Unidad": uni, "Cantidad": cant, "stock_minimo": mini}
-                        
                         if cod in mapa_ids:
                             utils.supabase.table("Insumos").update(d).eq("id", int(mapa_ids[cod])).execute(); count_upd += 1
                         else:
@@ -245,17 +258,14 @@ elif opcion == "Insumos":
                 prog.empty(); st.success(f"✅ {count_ok} nuevos, {count_upd} actualizados."); time.sleep(2); st.rerun()
 
     with t3:
-        # Inventario
         search = st.text_input("🔍 Buscar:", key="search_inv_ins")
         df_view = df.copy()
         if search:
             mask = df_view["codigo"].astype(str).str.contains(search, case=False, na=False) | df_view["Descripcion"].astype(str).str.contains(search, case=False, na=False)
             df_view = df_view[mask]
-            
         cols_inv = ["id", "codigo", "Descripcion", "Cantidad", "Unidad", "stock_minimo"]
         for c in cols_inv: 
             if c not in df_view.columns: df_view[c] = None
-            
         edited_inv = st.data_editor(df_view[cols_inv], column_config={"id": st.column_config.NumberColumn(disabled=True)}, num_rows="dynamic", use_container_width=True)
         if st.button("💾 Guardar Cambios Inv."):
             for i, row in edited_inv.iterrows():
@@ -362,7 +372,7 @@ elif opcion == "Proveedores":
             st.success("Ok"); time.sleep(1); st.rerun()
 
 # ==========================================
-# 6. CATÁLOGOS & ETIQUETAS QR (NUEVO CON COLUMNA QR)
+# 6. CATÁLOGOS & ETIQUETAS QR (NUEVO TAMAÑO)
 # ==========================================
 elif "Etiquetas" in opcion:
     st.markdown("### 📂 Catálogos y Etiquetas QR")
@@ -378,11 +388,10 @@ elif "Etiquetas" in opcion:
                 df_ins.columns = df_ins.columns.str.lower()
                 if "descripcion" not in df_ins.columns: df_ins["descripcion"] = "Sin Desc"
                 
-                # GENERAR COLUMNA DE IMAGEN QR
                 df_ins["QR_Img"] = df_ins["codigo"].apply(get_qr_data_url)
                 df_ins["Seleccionar"] = False
                 
-                st.info("Selecciona para imprimir:")
+                st.info("Formato: 2.5cm x 3.5cm (7 etiquetas por fila)")
                 
                 filtro = st.text_input("🔎 Filtrar:", key="f_qr_ins")
                 if filtro:
@@ -393,7 +402,7 @@ elif "Etiquetas" in opcion:
                     df_ins[["Seleccionar", "QR_Img", "codigo", "descripcion", "unidad"]],
                     column_config={
                         "Seleccionar": st.column_config.CheckboxColumn("Print", width="small"),
-                        "QR_Img": st.column_config.ImageColumn("QR Vista Previa", width="small"),
+                        "QR_Img": st.column_config.ImageColumn("QR", width="small"),
                         "codigo": st.column_config.TextColumn("SKU", width="medium"),
                         "descripcion": st.column_config.TextColumn("Descripción", width="large")
                     },
@@ -421,7 +430,6 @@ elif "Etiquetas" in opcion:
                 if "herramienta" in df_her.columns and "descripcion" not in df_her.columns:
                     df_her["descripcion"] = df_her["herramienta"]
                 
-                # GENERAR QR
                 df_her["QR_Img"] = df_her["codigo"].apply(get_qr_data_url)
                 df_her["Seleccionar"] = False
                 
@@ -434,7 +442,7 @@ elif "Etiquetas" in opcion:
                     df_her[["Seleccionar", "QR_Img", "codigo", "herramienta", "marca"]],
                     column_config={
                         "Seleccionar": st.column_config.CheckboxColumn("Print", width="small"),
-                        "QR_Img": st.column_config.ImageColumn("QR Vista Previa", width="small"),
+                        "QR_Img": st.column_config.ImageColumn("QR", width="small"),
                         "codigo": st.column_config.TextColumn("SKU", width="medium"),
                         "herramienta": st.column_config.TextColumn("Herramienta", width="large")
                     },
