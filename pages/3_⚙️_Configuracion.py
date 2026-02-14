@@ -3,7 +3,7 @@ import pandas as pd
 import utils 
 import time
 import datetime
-import io
+import numpy as np
 
 st.set_page_config(page_title="Configuración Master", page_icon="⚙️", layout="wide")
 
@@ -97,7 +97,7 @@ if opcion == "Personal":
             st.rerun()
 
 # ==========================================
-# 2. INSUMOS (SOLUCIÓN ESPECÍFICA PARA TU ARCHIVO)
+# 2. INSUMOS (CARGA BLINDADA PARA TU ARCHIVO)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -130,9 +130,11 @@ elif opcion == "Insumos":
             
             if st.form_submit_button("Guardar Insumo"):
                 if nuevo_nombre and nuevo_codigo:
+                    # Validación manual simple
                     existe = False
                     if not df.empty:
                         if nuevo_codigo.strip() in df["codigo"].astype(str).str.strip().values: existe = True
+                    
                     if not existe:
                         try:
                             datos_insert = {"codigo": nuevo_codigo, "Descripcion": nuevo_nombre, "Unidad": nueva_unidad, "Cantidad": nueva_cant, "stock_minimo": nuevo_min}
@@ -143,58 +145,49 @@ elif opcion == "Insumos":
                     else: st.error("⛔ El código ya existe.")
                 else: st.warning("Datos incompletos.")
 
-    # 2. CARGA MASIVA (CORREGIDA PARA TU ARCHIVO ESPECÍFICO)
+    # 2. CARGA MASIVA (MODO BLINDADO)
     with t2:
-        st.info("💡 Sube tu archivo **exportacion hemore.xlsx - Hoja1.csv** (u otro CSV/Excel).")
+        st.info("💡 Sube tu archivo **exportacion hemore.xlsx - Hoja1.csv**.")
         uploaded_file = st.file_uploader("Archivo de Carga", type=["xlsx", "xls", "csv"])
         
         if uploaded_file:
             try:
-                # 1. Lectura Robusta (Manejo de comas y comillas)
+                # 1. Lectura con motor 'python' para tolerar errores de comillas
                 if uploaded_file.name.endswith('.csv'):
                     try:
-                        # quotechar='"' ayuda a leer descripciones como "CONECTOR 3/4"""
-                        df_upload = pd.read_csv(uploaded_file, encoding='utf-8', quotechar='"')
+                        df_upload = pd.read_csv(uploaded_file, encoding='utf-8', engine='python')
                     except:
                         uploaded_file.seek(0)
-                        df_upload = pd.read_csv(uploaded_file, encoding='latin-1', quotechar='"')
+                        df_upload = pd.read_csv(uploaded_file, encoding='latin-1', engine='python')
                 else:
                     df_upload = pd.read_excel(uploaded_file)
                 
-                # 2. LIMPIEZA DE COLUMNAS (ELIMINAR ESPACIOS INVISIBLES)
-                # Esto arregla el error de "codigo " vs "codigo"
+                # 2. Limpieza de nombres de columna (Elimina espacios ocultos)
                 df_upload.columns = df_upload.columns.astype(str).str.lower().str.strip()
                 
-                # Mapeo de columnas
+                # 3. Mapeo de columnas
                 mapeo = {
-                    "unidad": "Unidad", 
-                    "cantidad": "Cantidad",
-                    "descripcion": "Descripcion", 
-                    "descripción": "Descripcion",
-                    "stock_minimo": "stock_minimo", 
-                    "stock_minimo ": "stock_minimo",
-                    "stock minimo": "stock_minimo",
-                    "minimo": "stock_minimo"
+                    "unidad": "Unidad", "cantidad": "Cantidad",
+                    "descripcion": "Descripcion", "descripción": "Descripcion",
+                    "stock_minimo": "stock_minimo", "minimo": "stock_minimo", "stock minimo": "stock_minimo"
                 }
                 for col_orig in df_upload.columns:
                     if col_orig in mapeo: df_upload.rename(columns={col_orig: mapeo[col_orig]}, inplace=True)
 
-                # 3. FILTRADO DE FILAS VACÍAS (CRÍTICO)
-                # Si el código es nulo o vacío, borramos la fila
-                if "codigo" in df_upload.columns:
-                    df_upload = df_upload.dropna(subset=["codigo"])
-                    df_upload = df_upload[df_upload["codigo"].astype(str).str.strip() != ""]
-
-                # 4. Validar columnas mínimas
+                # 4. LIMPIEZA DE DATOS (CRÍTICO)
+                # Reemplazar NaN (vacíos) con valores seguros
+                df_upload = df_upload.replace({np.nan: None})
+                
+                # Validar columnas requeridas
                 if "codigo" not in df_upload.columns or "Descripcion" not in df_upload.columns:
-                    st.error("⛔ Error: No encuentro las columnas 'codigo' y 'descripcion'.")
-                    st.write("Columnas detectadas (limpias):", list(df_upload.columns))
+                    st.error("⛔ Faltan columnas 'codigo' y 'descripcion'.")
+                    st.write("Columnas detectadas:", list(df_upload.columns))
                 else:
                     st.write("Vista previa:")
                     st.dataframe(df_upload.head())
                     
-                    if st.button("🚀 Iniciar Carga"):
-                        progress_bar = st.progress(0, text="Procesando...")
+                    if st.button("🚀 Cargar Datos (Modo Seguro)"):
+                        progress_bar = st.progress(0, text="Analizando...")
                         
                         # Mapa de existentes
                         mapa_ids = {}
@@ -209,60 +202,67 @@ elif opcion == "Insumos":
                         
                         for i, row in df_upload.iterrows():
                             try:
-                                # LIMPIEZA DE DATOS (AQUÍ ESTABA EL ERROR)
+                                # Si el código es nulo, saltar
+                                if row["codigo"] is None or str(row["codigo"]).strip() == "":
+                                    continue
+
                                 cod_row = str(row["codigo"]).strip()
                                 desc_row = str(row["Descripcion"]).strip()
                                 
-                                # Si faltan columnas opcionales
-                                uni_row = str(row["Unidad"]) if "Unidad" in df_upload.columns else "Pzas"
-                                if uni_row == "nan": uni_row = "Pzas" # Fix si viene vacío
+                                # Manejo de valores vacíos o nulos en opcionales
+                                uni_row = str(row["Unidad"]) if "Unidad" in df_upload.columns and row["Unidad"] is not None else "Pza"
                                 
-                                # Convertir números de forma segura (sin que pandas int64 rompa la DB)
+                                # Convertir números forzando a float python (0.0 si falla)
                                 try:
-                                    cant_val = float(row["Cantidad"]) if "Cantidad" in df_upload.columns else 0.0
-                                except: cant_val = 0.0
+                                    c_val = row["Cantidad"] if "Cantidad" in df_upload.columns else 0
+                                    cant_row = float(c_val) if c_val is not None else 0.0
+                                except: cant_row = 0.0
                                 
                                 try:
-                                    min_val = float(row["stock_minimo"]) if "stock_minimo" in df_upload.columns else 5.0
-                                except: min_val = 5.0
+                                    m_val = row["stock_minimo"] if "stock_minimo" in df_upload.columns else 5
+                                    min_row = float(m_val) if m_val is not None else 5.0
+                                except: min_row = 5.0
                                 
                                 datos_row = {
                                     "codigo": cod_row,
                                     "Descripcion": desc_row,
                                     "Unidad": uni_row,
-                                    "Cantidad": cant_val,
-                                    "stock_minimo": min_val
+                                    "Cantidad": cant_row,
+                                    "stock_minimo": min_row
                                 }
 
                                 if cod_row in mapa_ids:
-                                    # Update
+                                    # UPDATE
                                     id_real = int(mapa_ids[cod_row])
                                     utils.supabase.table("Insumos").update(datos_row).eq("id", id_real).execute()
                                     update_count += 1
                                 else:
-                                    # Insert
+                                    # INSERT
                                     utils.supabase.table("Insumos").insert(datos_row).execute()
                                     success_count += 1
                                     
                             except Exception as e:
-                                errors.append(f"Fila {i+1} ({cod_row}): {e}")
+                                errors.append(f"Fila {i+1} ({cod_row if 'cod_row' in locals() else '?'}) Error: {e}")
                             
                             progress_bar.progress((i + 1) / total)
                         
                         progress_bar.empty()
                         
-                        if len(errors) == 0:
-                            st.success(f"✅ ¡Éxito! {success_count} nuevos, {update_count} actualizados.")
-                        else:
-                            st.warning(f"⚠️ Proceso terminado con {len(errors)} errores.")
-                            st.error(f"Primer error: {errors[0]}")
+                        st.success(f"✅ Terminado: {success_count} nuevos, {update_count} actualizados.")
+                        
+                        if errors:
+                            st.warning(f"⚠️ Hubo {len(errors)} errores en filas específicas.")
+                            with st.expander("Ver detalle de errores"):
+                                for err in errors[:10]: # Mostrar solo los primeros 10
+                                    st.write(err)
                         
                         time.sleep(3); st.rerun()
 
             except Exception as e:
-                st.error(f"Error crítico leyendo archivo: {e}")
+                st.error(f"Error grave leyendo el archivo: {e}")
 
     with t3:
+        # Inventario
         col_search, _ = st.columns([1, 1])
         busqueda = col_search.text_input("🔍 Buscar Insumo", placeholder="Escribe código o descripción...")
         df_display = df.copy()
