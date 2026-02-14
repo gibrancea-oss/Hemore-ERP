@@ -19,20 +19,16 @@ supabase = utils.supabase
 # --- CLASE PDF PERSONALIZADA ---
 class PDF(FPDF):
     def header(self):
-        # 1. LOGO
         if os.path.exists("logo.png"):
             self.image("logo.png", 10, 8, 33) 
         else:
             self.set_font('Arial', 'B', 20)
             self.cell(40, 10, 'HEMORE', 0, 0, 'L')
-        
-        # El título se define en cada función generadora para flexibilidad
         self.ln(1)
 
     def footer(self):
         self.set_y(-40)
         self.set_font('Arial', '', 8)
-        # Firmas
         self.cell(90, 0, '_______________________________', 0, 0, 'C')
         self.cell(10, 0, '', 0, 0)
         self.cell(90, 0, '_______________________________', 0, 1, 'C')
@@ -40,20 +36,16 @@ class PDF(FPDF):
         self.cell(90, 5, 'Entrega / Autoriza', 0, 0, 'C')
         self.cell(10, 5, '', 0, 0)
         self.cell(90, 5, 'Recibe / Caja', 0, 1, 'C')
-        
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 # --- GENERADORES DE PDF ---
-
 def generar_pdf_entrega(datos_cabecera, df_productos, folio):
-    # (Código existente para Entregas de Material)
     pdf = PDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
     pdf.set_xy(0, 10); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'Recibo de Entrega', 0, 1, 'C')
-    
     _bloque_folio_fecha(pdf, folio, datos_cabecera['fecha'])
     _bloque_cajas_prov_cli(pdf, "Proveedor (Origen)", datos_cabecera['prov_texto'], "Cliente (Destino)", datos_cabecera['cli_texto'])
     _dibujar_tabla_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
@@ -61,12 +53,10 @@ def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     return pdf.output(dest='S').encode('latin-1')
 
 def generar_pdf_entrada(datos_cabecera, df_productos, folio):
-    # (Código existente para Entradas de Material)
     pdf = PDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
     pdf.set_xy(0, 10); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'Constancia de Entrada', 0, 1, 'C')
-    
     _bloque_folio_fecha(pdf, folio, datos_cabecera['fecha'])
     _bloque_cajas_prov_cli(pdf, "Proveedor (Origen)", datos_cabecera['prov_texto'], "Receptor (Destino)", datos_cabecera['hemore_texto'])
     _dibujar_tabla_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
@@ -74,60 +64,32 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     return pdf.output(dest='S').encode('latin-1')
 
 def generar_pdf_dinero(datos_cabecera, df_conceptos, folio):
-    # (NUEVO: Para Recibos de Dinero)
     pdf = PDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
     pdf.set_xy(0, 10); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'Recibo de Dinero', 0, 1, 'C')
-    
     _bloque_folio_fecha(pdf, folio, datos_cabecera['fecha'])
-    
-    # Caja grande de información
     pdf.set_y(45)
-    pdf.set_fill_color(240, 240, 240)
-    pdf.set_font('Arial', 'B', 10)
+    pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 10)
     pdf.cell(0, 8, "  Información del Pago", 1, 1, 'L', True)
-    
-    pdf.set_font('Arial', '', 10)
-    # Recibimos de
-    pdf.cell(40, 8, "Recibimos de:", 0, 0)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.cell(0, 8, datos_cabecera['cliente'], 0, 1)
-    
-    # La cantidad de
-    pdf.set_font('Arial', '', 10)
-    pdf.cell(40, 8, "La cantidad de:", 0, 0)
-    pdf.set_font('Arial', 'B', 12)
-    # Calcular total para mostrarlo grande
+    pdf.set_font('Arial', '', 10); pdf.cell(40, 8, "Recibimos de:", 0, 0)
+    pdf.set_font('Arial', 'B', 10); pdf.cell(0, 8, datos_cabecera['cliente'], 0, 1)
+    pdf.set_font('Arial', '', 10); pdf.cell(40, 8, "La cantidad de:", 0, 0)
     total = df_conceptos["Monto"].sum()
-    pdf.cell(0, 8, f"$ {total:,.2f} MXN", 0, 1)
-    
-    # Método de Pago
-    pdf.set_font('Arial', '', 10)
-    pdf.cell(40, 8, "Método de Pago:", 0, 0)
-    pdf.cell(0, 8, datos_cabecera['metodo'], 0, 1)
-    pdf.ln(5)
-    
-    # Tabla de Conceptos (Diferente a la de productos)
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(200, 200, 200)
-    pdf.cell(140, 8, "Concepto / Descripción", 1, 0, 'C', True)
-    pdf.cell(50, 8, "Importe", 1, 1, 'C', True)
-    
+    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 8, f"$ {total:,.2f} MXN", 0, 1)
+    pdf.set_font('Arial', '', 10); pdf.cell(40, 8, "Método de Pago:", 0, 0)
+    pdf.cell(0, 8, datos_cabecera['metodo'], 0, 1); pdf.ln(5)
+    pdf.set_font('Arial', 'B', 9); pdf.set_fill_color(200, 200, 200)
+    pdf.cell(140, 8, "Concepto / Descripción", 1, 0, 'C', True); pdf.cell(50, 8, "Importe", 1, 1, 'C', True)
     pdf.set_font('Arial', '', 9)
     for index, row in df_conceptos.iterrows():
         pdf.cell(140, 8, str(row['Concepto']), 1, 0, 'L')
         pdf.cell(50, 8, f"$ {row['Monto']:,.2f}", 1, 1, 'R')
-        
-    # Total al final de la tabla
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(140, 8, "TOTAL RECIBIDO", 1, 0, 'R')
-    pdf.cell(50, 8, f"$ {total:,.2f}", 1, 1, 'R')
-
+    pdf.set_font('Arial', 'B', 9); pdf.cell(140, 8, "TOTAL RECIBIDO", 1, 0, 'R'); pdf.cell(50, 8, f"$ {total:,.2f}", 1, 1, 'R')
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- HELPERS PDF (Para no repetir código) ---
+# --- HELPERS PDF ---
 def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_font('Arial', 'B', 10)
     pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
@@ -156,20 +118,10 @@ def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
     pdf.write(5, texto if texto else "_"*110)
 
-# --- FUNCIONES DATOS ---
 def convertir_df_a_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output) as writer: df.to_excel(writer, index=False, sheet_name='Reporte')
     return output.getvalue()
-
-def aplicar_filtro_fechas(df, columna_fecha, filtro_seleccionado):
-    if df.empty: return df
-    df[columna_fecha] = pd.to_datetime(df[columna_fecha])
-    hoy = pd.Timestamp.now().normalize()
-    if filtro_seleccionado == "Hoy": df = df[df[columna_fecha].dt.date == hoy.date()]
-    elif filtro_seleccionado == "Ayer": 
-        ayer = hoy - timedelta(days=1); df = df[df[columna_fecha].dt.date == ayer.date()]
-    return df
 
 # ==========================================
 # MENÚ LATERAL
@@ -183,60 +135,94 @@ opcion_almacen = st.sidebar.radio(
 st.title(f"Control de {opcion_almacen.split(' (')[0]}")
 
 # ==================================================
-# 🧱 OPCIÓN 1: INSUMOS
+# 🧱 OPCIÓN 1: INSUMOS (HISTORIAL LIMPIO)
 # ==================================================
 if "Insumos" in opcion_almacen:
     try:
         response_ins = supabase.table("Insumos").select("*").order("id").execute()
         df_ins = pd.DataFrame(response_ins.data)
+        if not df_ins.empty:
+            df_ins.columns = df_ins.columns.str.lower()
+            if "descripcion" not in df_ins.columns: df_ins["descripcion"] = "Sin Nombre"
+            if "cantidad" not in df_ins.columns: df_ins["cantidad"] = 0
+            if "unidad" not in df_ins.columns: df_ins["unidad"] = "Pzas"
         df_personal = pd.DataFrame(supabase.table("Personal").select("nombre").eq("activo", True).execute().data)
         lista_personal = df_personal['nombre'].tolist() if not df_personal.empty else []
-    except: df_ins = pd.DataFrame(); lista_personal = []
+    except Exception as e: 
+        st.error(f"Error cargando base de datos: {e}")
+        df_ins = pd.DataFrame()
+        lista_personal = []
 
+    # 3 PESTAÑAS (REGRESAMOS EL HISTORIAL)
     tab_op, tab_exist, tab_hist = st.tabs(["📝 Registrar Movimientos", "📊 Existencias", "📜 Historial"])
+    
     with tab_op:
-        if df_ins.empty: st.warning("No hay insumos.")
+        if df_ins.empty: st.warning("No hay insumos registrados. Ve a Configuración para cargar datos.")
         else:
-            if "codigo" not in df_ins.columns: df_ins["codigo"] = df_ins["id"].astype(str)
-            if "Descripcion" not in df_ins.columns: df_ins["Descripcion"] = "Sin Nombre"
             tipo_operacion = st.radio("Acción:", ["📤 Entrega (Salida)", "📥 Re-Stock (Entrada)"], horizontal=True)
             c_form, c_info = st.columns([2, 1])
             with c_form:
-                lista_busqueda = [f"{row['codigo']} | {row['Descripcion']}" for i, row in df_ins.iterrows()]
+                lista_busqueda = [f"{row['codigo']} | {row['descripcion']}" for i, row in df_ins.iterrows()]
                 seleccion = st.selectbox("Buscar:", lista_busqueda)
-                codigo_sel = seleccion.split(" | ")[0]
-                item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
-                cant_mov = st.number_input("Cantidad", min_value=1.0, value=1.0)
-                if "Entrega" in tipo_operacion:
-                    responsable = st.selectbox("Entregar a:", lista_personal)
-                    if st.button("Confirmar Salida", type="primary"):
-                        if item_actual['Cantidad'] >= cant_mov:
-                            new_st = item_actual['Cantidad'] - cant_mov
+                
+                if seleccion:
+                    codigo_sel = seleccion.split(" | ")[0]
+                    item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
+                    cant_mov = st.number_input("Cantidad", min_value=1.0, value=1.0)
+                    
+                    if "Entrega" in tipo_operacion:
+                        responsable = st.selectbox("Entregar a:", lista_personal)
+                        if st.button("Confirmar Salida", type="primary"):
+                            if item_actual['cantidad'] >= cant_mov:
+                                new_st = item_actual['cantidad'] - cant_mov
+                                supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": item_actual['codigo'], "descripcion": item_actual['descripcion'], "tipo_movimiento": "Salida", "cantidad": cant_mov, "responsable": responsable}).execute()
+                                except: pass
+                                st.success("✅ Salida registrada"); time.sleep(1); st.rerun()
+                            else: st.error("Stock insuficiente")
+                    else:
+                        if st.button("Confirmar Entrada"):
+                            new_st = item_actual['cantidad'] + cant_mov
                             supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                            try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": item_actual['codigo'], "descripcion": item_actual['Descripcion'], "tipo_movimiento": "Salida", "cantidad": cant_mov, "responsable": responsable}).execute()
+                            try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": item_actual['codigo'], "descripcion": item_actual['descripcion'], "tipo_movimiento": "Re-stock", "cantidad": cant_mov, "responsable": "Almacén"}).execute()
                             except: pass
-                            st.success("✅ Salida registrada"); time.sleep(1); st.rerun()
-                        else: st.error("Stock insuficiente")
-                else:
-                    if st.button("Confirmar Entrada"):
-                        new_st = item_actual['Cantidad'] + cant_mov
-                        supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                        try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": item_actual['codigo'], "descripcion": item_actual['Descripcion'], "tipo_movimiento": "Re-stock", "cantidad": cant_mov, "responsable": "Almacén"}).execute()
-                        except: pass
-                        st.success("✅ Entrada registrada"); time.sleep(1); st.rerun()
-            with c_info: st.metric("Stock", item_actual['Cantidad'])
+                            st.success("✅ Entrada registrada"); time.sleep(1); st.rerun()
+            
+            with c_info: 
+                if seleccion: st.metric("Stock Actual", item_actual['cantidad'])
+
     with tab_exist:
         if not df_ins.empty:
             try:
-                excel_data = convertir_df_a_excel(df_ins[["codigo", "Descripcion", "Cantidad", "Unidad"]])
+                df_view = df_ins[["codigo", "descripcion", "cantidad", "unidad"]].rename(columns={"codigo": "Código", "descripcion": "Descripción", "cantidad": "Stock", "unidad": "Unidad"})
+                excel_data = convertir_df_a_excel(df_view)
                 st.download_button("📥 Descargar Existencias", excel_data, "Existencias.xlsx")
-            except: pass
-            st.dataframe(df_ins[["codigo", "Descripcion", "Cantidad", "Unidad"]], use_container_width=True)
+                st.dataframe(df_view, use_container_width=True)
+            except Exception as e: st.error(f"Error visualizando: {e}")
+        else: st.info("El inventario está vacío.")
+
     with tab_hist:
         try:
             h = pd.DataFrame(supabase.table("Historial_Insumos").select("*").order("id", desc=True).limit(100).execute().data)
-            st.dataframe(h, use_container_width=True)
-        except: pass
+            if not h.empty:
+                # --- LIMPIEZA DE COLUMNAS (AQUÍ ESTÁ LA MAGIA) ---
+                # Definimos solo las columnas que queremos ver (De Fecha hacia la derecha)
+                cols_deseadas = ["fecha", "codigo", "descripcion", "tipo_movimiento", "cantidad", "responsable"]
+                
+                # Filtramos para asegurarnos que existen en el dataframe
+                cols_reales = [c for c in cols_deseadas if c in h.columns]
+                
+                # Mostramos solo esas y renombramos bonito
+                h_final = h[cols_reales].rename(columns={
+                    "fecha": "Fecha", "codigo": "Código", "descripcion": "Descripción",
+                    "tipo_movimiento": "Movimiento", "cantidad": "Cant", "responsable": "Responsable"
+                })
+                
+                st.dataframe(h_final, use_container_width=True, hide_index=True)
+            else:
+                st.info("No hay movimientos registrados.")
+        except Exception as e: 
+            st.error(f"Error cargando historial: {e}")
 
 # ==================================================
 # 🔧 OPCIÓN 2: HERRAMIENTAS
@@ -411,7 +397,7 @@ elif "Entrada" in opcion_almacen:
         except: pass
 
 # ==================================================
-# 💰 OPCIÓN 5: RECIBOS DE DINERO (NUEVO)
+# 💰 OPCIÓN 5: RECIBOS DE DINERO
 # ==================================================
 elif "Dinero" in opcion_almacen:
     st.markdown("### 💰 Recibos de Dinero (Caja/Pagos)")
@@ -449,7 +435,6 @@ elif "Dinero" in opcion_almacen:
                 column_config={"Monto": st.column_config.NumberColumn(format="$ %.2f", min_value=0.0)}
             )
             
-            # Calcular Total Dinámico
             total_money = edited_money["Monto"].sum()
             st.markdown(f"#### Total a Recibir: :green[$ {total_money:,.2f}]")
             
@@ -459,7 +444,6 @@ elif "Dinero" in opcion_almacen:
                 if cliente_pago and total_money > 0:
                     items_m = edited_money[edited_money["Concepto"] != ""]
                     if not items_m.empty:
-                        # Guardar
                         for i, row in items_m.iterrows():
                             supabase.table("Recibos_Dinero").insert({
                                 "fecha": fecha_pago.isoformat(),
@@ -471,7 +455,6 @@ elif "Dinero" in opcion_almacen:
                                 "observaciones": obs_money
                             }).execute()
                         
-                        # PDF
                         try: last_id = supabase.table("Recibos_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
                         except: last_id = 1
                         
@@ -488,11 +471,7 @@ elif "Dinero" in opcion_almacen:
             if not h_mon.empty:
                 filtro_m = st.text_input("🔍 Buscar Recibo:", key="search_mon")
                 if filtro_m: h_mon = h_mon[h_mon.astype(str).apply(lambda x: x.str.contains(filtro_m, case=False)).any(axis=1)]
-                
-                # Agrupación visual (Opcional, o tabla plana)
                 st.dataframe(h_mon[["id", "fecha", "cliente", "concepto", "monto", "metodo_pago", "usuario"]], use_container_width=True, hide_index=True)
-                
-                # Totalizador simple del filtro
                 total_hist = h_mon["monto"].sum()
                 st.info(f"💰 Suma total en esta vista: $ {total_hist:,.2f}")
             else: st.info("No hay recibos de dinero.")
