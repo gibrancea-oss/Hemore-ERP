@@ -147,7 +147,7 @@ if opcion == "Personal":
             st.success("✅ Actualizado"); time.sleep(1); st.rerun()
 
 # ==========================================
-# 2. INSUMOS
+# 2. INSUMOS (ACTUALIZADO: Alta con Ubicación y Sin Excel)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -157,32 +157,37 @@ elif opcion == "Insumos":
         df = pd.DataFrame(response.data)
         if not df.empty and "codigo" not in df.columns: df["codigo"] = df["id"].astype(str)
     except: df = pd.DataFrame()
-    t1, t2, t3 = st.tabs(["➕ Alta Manual", "📋 PEGAR DESDE EXCEL", "📋 Inventario Maestro"])
+    
+    t1, t2 = st.tabs(["➕ Alta Manual", "📋 Inventario Maestro"])
+    
     with t1:
         with st.form("alta_insumo"):
             c1, c2 = st.columns([1, 3]); cod = c1.text_input("Código / SKU"); nom = c2.text_input("Descripción")
-            c3, c4, c5 = st.columns(3); uni = c3.selectbox("Unidad", lista_unidades); cant = c4.number_input("Cantidad", min_value=0.0); mini = c5.number_input("Min", value=5.0)
-            if st.form_submit_button("Guardar"):
-                utils.supabase.table("Insumos").insert({"codigo": cod, "Descripcion": nom, "Unidad": uni, "Cantidad": cant, "stock_minimo": mini}).execute()
-                st.success("Ok"); time.sleep(1); st.rerun()
+            c3, c4, c5 = st.columns(3); uni = c3.selectbox("Unidad", lista_unidades); cant = c4.number_input("Cantidad", min_value=0.0); mini = c5.number_input("Stock Mínimo", value=5.0)
+            ubi = st.text_input("Ubicación (Gaveta, Estante, etc.)")
+            
+            if st.form_submit_button("Guardar Insumo"):
+                if cod and nom:
+                    utils.supabase.table("Insumos").insert({"codigo": cod, "Descripcion": nom, "Unidad": uni, "Cantidad": cant, "stock_minimo": mini, "ubicacion": ubi}).execute()
+                    st.success("✅ Insumo guardado correctamente"); time.sleep(1); st.rerun()
+                else: st.warning("Código y Descripción son obligatorios.")
+    
     with t2:
-        df_template = pd.DataFrame(columns=["codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo"])
-        grid = st.data_editor(df_template, num_rows="dynamic", use_container_width=True)
-        if st.button("🚀 Guardar Pegado"):
-            for i, r in grid.iterrows():
-                if r['codigo']: utils.supabase.table("Insumos").insert({"codigo": r['codigo'], "Descripcion": r['Descripcion'], "Unidad": r['Unidad'], "Cantidad": r['Cantidad'], "stock_minimo": r['stock_minimo']}).execute()
-            st.success("Ok"); time.sleep(1); st.rerun()
-    with t3:
-        edited = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Guardar"):
+        # Aseguramos que la columna 'ubicacion' exista para el data_editor
+        if not df.empty and "ubicacion" not in df.columns: df["ubicacion"] = None
+        
+        columnas_ver = ["id", "codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo", "ubicacion"]
+        edited = st.data_editor(df[columnas_ver], num_rows="dynamic", use_container_width=True)
+        
+        if st.button("💾 Guardar Cambios en Inventario"):
             for i, r in edited.iterrows():
-                d = {"codigo": r["codigo"], "Descripcion": r["Descripcion"], "Cantidad": r["Cantidad"], "Unidad": r["Unidad"], "stock_minimo": r["stock_minimo"]}
+                d = {"codigo": r["codigo"], "Descripcion": r["Descripcion"], "Cantidad": r["Cantidad"], "Unidad": r["Unidad"], "stock_minimo": r["stock_minimo"], "ubicacion": r["ubicacion"]}
                 if pd.notna(r["id"]): utils.supabase.table("Insumos").update(d).eq("id", r["id"]).execute()
                 else: utils.supabase.table("Insumos").insert(d).execute()
-            st.success("Ok"); time.sleep(1); st.rerun()
+            st.success("✅ Cambios aplicados"); time.sleep(1); st.rerun()
 
 # ==========================================
-# 3. HERRAMIENTAS (NUEVO: MODO PRÉSTAMO/ACTIVOS)
+# 3. HERRAMIENTAS
 # ==========================================
 elif opcion == "Herramientas":
     st.markdown("### 🛠️ Gestión de Herramientas (Activos)")
@@ -226,7 +231,6 @@ elif opcion == "Herramientas":
             "Estado": st.column_config.SelectboxColumn("Estado", options=["NUEVO", "BUEN ESTADO", "REGULAR", "EN REPARACIÓN", "BAJA"]),
             "Responsable": st.column_config.TextColumn("En poder de:", disabled=True)
         }
-        # Asegurar columnas
         for col in ["id", "codigo", "Herramienta", "descripcion", "marca", "Estado", "ubicacion", "Responsable"]:
             if col not in df.columns: df[col] = None
 
@@ -259,7 +263,6 @@ elif opcion == "Clientes":
                     datos = {"nombre": nombre_cli, "rfc": rfc_cli, "direccion": direccion_cli, "colonia": colonia_cli, "codigo_postal": cp_cli}
                     utils.supabase.table("Clientes").insert(datos).execute()
                     st.success(f"✅ Registrado."); time.sleep(1); st.rerun()
-                else: st.warning("Nombre obligatorio.")
     with t2:
         columnas = ["id", "nombre", "rfc", "direccion", "colonia", "codigo_postal"]
         for c in columnas:
@@ -318,17 +321,16 @@ elif "Etiquetas" in opcion:
                 edited_ins = st.data_editor(df_ins[["Seleccionar", "QR_Img", "codigo", "descripcion"]], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
                 if st.button("🖨️ Generar PDF Insumos"):
                     sel = edited_ins[edited_ins["Seleccionar"] == True]
-                    if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Insumos"); st.download_button("📥 Descargar Etiquetas", pdf, "Etiquetas_Insumos.pdf")
-        except: st.error("Error cargando insumos")
+                    if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Insumos"); st.download_button("📥 Descargar", pdf, "Etiquetas.pdf")
+        except: st.error("Error")
     with tab_her:
         try:
             res = utils.supabase.table("Herramientas").select("*").order("id").execute(); df_her = pd.DataFrame(res.data)
             if not df_her.empty:
                 df_her["QR_Img"] = df_her["codigo"].apply(get_qr_data_url); df_her["Seleccionar"] = False
-                # Usamos nombre Herramienta como descripción para la etiqueta
                 df_her_tag = df_her.rename(columns={"Herramienta": "descripcion"})
                 edited_her = st.data_editor(df_her_tag[["Seleccionar", "QR_Img", "codigo", "descripcion", "marca"]], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
                 if st.button("🖨️ Generar PDF Herramientas"):
                     sel = edited_her[edited_her["Seleccionar"] == True]
-                    if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Herramientas"); st.download_button("📥 Descargar Etiquetas", pdf, "Etiquetas_Herramientas.pdf")
-        except: st.error("Error cargando herramientas")
+                    if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Herramientas"); st.download_button("📥 Descargar", pdf, "Etiquetas.pdf")
+        except: st.error("Error")
