@@ -146,10 +146,10 @@ class PDF(FPDF):
         self.set_y(-40)
         self.set_font('Arial', '', 8)
         
-        # Recuperamos el usuario registrado
-        nombre_usuario = ""
-        if self.info_reporte and 'usuario' in self.info_reporte:
-            nombre_usuario = str(self.info_reporte['usuario'])
+        # Recuperamos el nombre de quien entrega seleccionado en la lista
+        nombre_entrega = ""
+        if self.info_reporte and 'quien_entrega' in self.info_reporte:
+            nombre_entrega = str(self.info_reporte['quien_entrega'])
             
         self.cell(90, 0, '_______________________________', 0, 0, 'C')
         self.cell(10, 0, '', 0, 0)
@@ -159,7 +159,7 @@ class PDF(FPDF):
         
         # Fila de nombres (Solo izquierda para quien entrega)
         self.set_font('Arial', 'B', 8)
-        self.cell(90, 4, nombre_usuario[:45], 0, 0, 'C')
+        self.cell(90, 4, nombre_entrega[:45], 0, 0, 'C')
         self.cell(10, 4, '', 0, 0)
         self.cell(90, 4, '', 0, 1, 'C') # Vacío en la derecha
         
@@ -179,7 +179,7 @@ def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     pdf.info_reporte = {
         'tipo': 'entrega', 'titulo_doc': 'Recibo de Entrega', 'folio': folio, 'fecha': datos_cabecera['fecha'],
         't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Cliente", 'txt2': datos_cabecera['cli_texto'],
-        'usuario': datos_cabecera.get('usuario', '') # <-- Pasamos el usuario aquí
+        'quien_entrega': datos_cabecera.get('quien_entrega', '') # <-- Pasamos quien entrega aquí
     }
     pdf.add_page() 
     pdf.set_auto_page_break(auto=True, margin=45)
@@ -192,7 +192,7 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     pdf.info_reporte = {
         'tipo': 'entrada', 'titulo_doc': 'Constancia de Entrada', 'folio': folio, 'fecha': datos_cabecera['fecha'],
         't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Receptor", 'txt2': datos_cabecera['hemore_texto'],
-        'usuario': datos_cabecera.get('usuario', '') # <-- Pasamos el usuario aquí
+        'quien_entrega': datos_cabecera.get('quien_entrega', '') # <-- Pasamos quien entrega aquí
     }
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
@@ -603,7 +603,9 @@ elif opcion_almacen == "Recibos de Entrega OC":
             if "data_recibo" not in st.session_state: st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
             edited_df = st.data_editor(st.session_state["data_recibo"], num_rows="dynamic", use_container_width=True)
             observaciones = st.text_area("Observaciones:")
-            usuario_input = st.selectbox("Registrado por:", lista_personal)
+            
+            # ✨ MEJORA: CAMPO ESPECÍFICO DE QUIEN ENTREGA ✨
+            quien_entrega_input = st.selectbox("Quien entrega:", lista_personal)
             
             if st.button("💾 Guardar y PDF", type="primary"):
                 items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
@@ -636,7 +638,7 @@ elif opcion_almacen == "Recibos de Entrega OC":
                             "descripcion": str(row["Descripción"]), 
                             "color": str(row["Color"]), 
                             "cantidad": cant_f, 
-                            "usuario": str(usuario_input), 
+                            "usuario": str(quien_entrega_input), 
                             "observaciones": str(observaciones)
                         }
                         supabase.table("Recibos_OC").insert(data_to_insert).execute()
@@ -649,8 +651,8 @@ elif opcion_almacen == "Recibos de Entrega OC":
                         prov_text = _formatear_datos_contacto(prov_input, prov_data)
                         cli_text = _formatear_datos_contacto(cliente_input, cli_data)
                         
-                        # ✨ PASAMOS EL USUARIO AL DICCIONARIO PARA EL PDF ✨
-                        datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "usuario": usuario_input}
+                        # ✨ PASAMOS EL NOMBRE DE QUIEN ENTREGA AL DICCIONARIO PARA EL PDF ✨
+                        datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": quien_entrega_input}
                         pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
                         
                         st.success("✅ Guardado correctamente.")
@@ -672,11 +674,15 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 
                 idx_cli = lista_nombres_cli.index(row_info['cliente']) if row_info['cliente'] in lista_nombres_cli else None
                 idx_prov = lista_nombres_prov.index(row_info['proveedor']) if row_info['proveedor'] in lista_nombres_prov else None
+                idx_usr = lista_personal.index(row_info.get('usuario', '')) if row_info.get('usuario', '') in lista_personal else None
                 
-                c1, c2, c3 = st.columns(3)
+                # ✨ MEJORA: AÑADIDO CAMPO DE QUIEN ENTREGA EN LA EDICIÓN ✨
+                c1, c2, c3, c4 = st.columns(4)
                 n_fecha = c1.date_input("Fecha", value=fecha_dt, key="d_fecha")
                 n_cli = c2.selectbox("Cliente", lista_nombres_cli, index=idx_cli, key="d_cli")
                 n_prov = c3.selectbox("Proveedor", lista_nombres_prov, index=idx_prov, key="d_prov")
+                n_entrega = c4.selectbox("Quien entrega", lista_personal, index=idx_usr, key="d_usr")
+                
                 n_obs = st.text_area("Observaciones", value=row_info.get('observaciones', ''), key="d_obs")
                 
                 st.divider()
@@ -696,7 +702,7 @@ elif opcion_almacen == "Recibos de Entrega OC":
                         supabase.table("Recibos_OC").update({
                             "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
                             "observaciones": str(n_obs), "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
-                            "color": str(r["Color"]), "cantidad": cant_f
+                            "color": str(r["Color"]), "cantidad": cant_f, "usuario": str(n_entrega)
                         }).eq("id", r["id"]).execute()
                     st.success("Guardado."); time.sleep(0.5); st.rerun()
 
@@ -707,8 +713,7 @@ elif opcion_almacen == "Recibos de Entrega OC":
                         prov_text = _formatear_datos_contacto(n_prov, prov_data)
                         cli_text = _formatear_datos_contacto(n_cli, cli_data)
                         
-                        # ✨ PASAMOS EL USUARIO AL DICCIONARIO PARA EL PDF ✨
-                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text, "usuario": row_info.get('usuario', '')}
+                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": n_entrega}
                         pdf_bytes = generar_pdf_entrega(datos_pdf, edited_prods, row_info['id'])
                         col_p.download_button("🖨️ PDF", pdf_bytes, f"Recibo_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
                     except: col_p.error("Error PDF")
@@ -767,8 +772,10 @@ elif opcion_almacen == "Entrada de Material":
             
             if "data_entrada" not in st.session_state: st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
             edited_df_in = st.data_editor(st.session_state["data_entrada"], num_rows="dynamic", use_container_width=True)
-            obs_in = st.text_area("Observaciones:", key="obs_in")
-            user_in = st.selectbox("Recibido por:", lista_pers, key="user_in")
+            observaciones_in = st.text_area("Observaciones:", key="obs_in")
+            
+            # ✨ MEJORA: CAMPO ESPECÍFICO DE QUIEN ENTREGA ✨
+            quien_entrega_in = st.selectbox("Quien entrega:", lista_pers, key="user_in")
             
             if st.button("💾 Registrar Entrada", type="primary"):
                 if oc_in and prov_in and not edited_df_in.empty:
@@ -786,8 +793,8 @@ elif opcion_almacen == "Entrada de Material":
                             "descripcion": str(row["Descripción"]), 
                             "color": str(row["Color"]), 
                             "cantidad": cant_f_in, 
-                            "usuario": str(user_in), 
-                            "observaciones": str(obs_in)
+                            "usuario": str(quien_entrega_in), 
+                            "observaciones": str(observaciones_in)
                         }
                         supabase.table("Entradas_Material").insert(data_in).execute()
                     
@@ -806,12 +813,14 @@ elif opcion_almacen == "Entrada de Material":
                 except: fecha_dt = datetime.now().date()
                 
                 idx_prov = lista_provs.index(row_info['proveedor']) if row_info['proveedor'] in lista_provs else None
-                idx_usr = lista_pers.index(row_info['usuario']) if row_info['usuario'] in lista_pers else None
+                idx_usr = lista_pers.index(row_info.get('usuario', '')) if row_info.get('usuario', '') in lista_pers else None
 
+                # ✨ MEJORA: AÑADIDO CAMPO DE QUIEN ENTREGA EN LA EDICIÓN ✨
                 c1, c2, c3 = st.columns(3)
                 n_fecha = c1.date_input("Fecha", value=fecha_dt, key="e_fecha")
                 n_prov = c2.selectbox("Proveedor", lista_provs, index=idx_prov, key="e_prov")
-                n_usr = c3.selectbox("Recibido por", lista_pers, index=idx_usr, key="e_usr")
+                n_entrega = c3.selectbox("Quien entrega", lista_pers, index=idx_usr, key="e_usr")
+                
                 n_obs = st.text_area("Observaciones", value=row_info.get('observaciones', ''), key="e_obs")
                 
                 st.divider()
@@ -830,7 +839,7 @@ elif opcion_almacen == "Entrada de Material":
                         
                         supabase.table("Entradas_Material").update({
                             "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov),
-                            "observaciones": str(n_obs), "usuario": str(n_usr),
+                            "observaciones": str(n_obs), "usuario": str(n_entrega),
                             "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
                             "color": str(r["Color"]), "cantidad": cant_f
                         }).eq("id", r["id"]).execute()
@@ -842,8 +851,7 @@ elif opcion_almacen == "Entrada de Material":
                         prov_text = _formatear_datos_contacto(n_prov, prov_data)
                         hemore_text = "HEMORE INDUSTRIAS\nAlmacén Central" 
                         
-                        # ✨ PASAMOS EL USUARIO AL DICCIONARIO PARA EL PDF ✨
-                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "hemore_texto": hemore_text, "usuario": n_usr}
+                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "hemore_texto": hemore_text, "quien_entrega": n_entrega}
                         pdf_bytes = generar_pdf_entrada(datos_pdf, edited_prods, row_info['id'])
                         col_p.download_button("🖨️ Reimprimir PDF", pdf_bytes, f"Entrada_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
                     except: col_p.error("Error PDF")
