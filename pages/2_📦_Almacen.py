@@ -22,21 +22,50 @@ def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
     pdf.set_xy(140, 31); pdf.set_font('Arial', 'B', 10); pdf.cell(25, 6, "Fecha:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(fecha), 0, 1, 'L')
 
+# ✨ MEJORA: CAJAS DINÁMICAS QUE SE AJUSTAN AL TEXTO ✨
 def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
-    pdf.set_y(45); y_start = pdf.get_y()
+    pdf.set_y(45)
     pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 9)
-    pdf.cell(95, 6, f" {titulo1}", 1, 0, 'L', True); pdf.cell(95, 6, f" {titulo2}", 1, 1, 'L', True)
+    
+    # Dibujamos las cabeceras grises de las cajas
+    pdf.cell(95, 6, f" {titulo1}", 1, 0, 'L', True)
+    pdf.cell(95, 6, f" {titulo2}", 1, 1, 'L', True)
+    
+    y_cajas = pdf.get_y()
     pdf.set_font('Arial', '', 8)
-    pdf.cell(95, 35, "", 1, 0); pdf.cell(95, 35, "", 1, 0)
-    pdf.set_xy(12, y_start + 8); pdf.multi_cell(90, 4, str(texto1))
-    pdf.set_xy(107, y_start + 8); pdf.multi_cell(90, 4, str(texto2))
-    pdf.set_xy(10, y_start + 40)
+    
+    # Escribimos el primer bloque midiendo su altura
+    pdf.set_xy(12, y_cajas + 2)
+    pdf.multi_cell(91, 4, str(texto1))
+    h1 = pdf.get_y() - y_cajas
+    
+    # Escribimos el segundo bloque midiendo su altura
+    pdf.set_xy(107, y_cajas + 2)
+    pdf.multi_cell(91, 4, str(texto2))
+    h2 = pdf.get_y() - y_cajas
+    
+    # Determinamos la caja más alta y aplicamos un padding
+    alto_caja = max(h1, h2) + 4
+    if alto_caja < 25:
+        alto_caja = 25 # Altura mínima por estética
+        
+    # Dibujamos los contornos exteriores de las cajas en base a la altura calculada
+    pdf.rect(10, y_cajas, 95, alto_caja)
+    pdf.rect(105, y_cajas, 95, alto_caja)
+    
+    # Posicionamos el cursor debajo de las cajas dinámicas para que la tabla comience bien
+    pdf.set_xy(10, y_cajas + alto_caja + 8)
 
+# ✨ MEJORA: MAYÚSCULAS Y REEMPLAZO POR "CP" ✨
 def _formatear_datos_contacto(nombre_principal, dict_datos):
-    lineas = [str(nombre_principal)]
+    lineas = [str(nombre_principal).upper()]
     for col, val in dict_datos.items():
         if str(col).lower() not in ['id', 'created_at', 'nombre', 'empresa', 'activo'] and pd.notna(val) and str(val).strip() != "":
-            lineas.append(f"{str(col).capitalize()}: {val}")
+            nombre_col = str(col).upper()
+            if nombre_col == "CODIGO_POSTAL":
+                nombre_col = "CP"
+            # Aseguramos que tanto el título (colonia, dirección) como el valor (el dato) estén en mayúsculas
+            lineas.append(f"{nombre_col}: {str(val).upper()}")
     return "\n".join(lineas)
 
 # ✨ HELPER: NÚMERO A LETRAS (PARA DINERO) ✨
@@ -103,14 +132,15 @@ class PDF(FPDF):
             if 't1' in self.info_reporte:
                 _bloque_cajas_prov_cli(self, self.info_reporte['t1'], self.info_reporte['txt1'], self.info_reporte['t2'], self.info_reporte['txt2'])
             
-            self.set_y(90) 
-            self.set_font('Arial', 'B', 9); self.set_fill_color(200, 200, 200)
-            self.cell(25, 7, "O.C.", 1, 0, 'C', True)
-            self.cell(30, 7, "Codigo", 1, 0, 'C', True)
-            self.cell(95, 7, "Descripcion", 1, 0, 'C', True)
-            self.cell(20, 7, "Color", 1, 0, 'C', True)
-            self.cell(20, 7, "Cant", 1, 1, 'C', True)
-            self.ln() 
+            if self.info_reporte.get('tipo') != 'dinero':
+                # Ya no fijamos self.set_y(90) porque las cajas de arriba ahora dictan dónde empieza la tabla
+                self.set_font('Arial', 'B', 9); self.set_fill_color(200, 200, 200)
+                self.cell(25, 7, "O.C.", 1, 0, 'C', True)
+                self.cell(30, 7, "Codigo", 1, 0, 'C', True)
+                self.cell(95, 7, "Descripcion", 1, 0, 'C', True)
+                self.cell(20, 7, "Color", 1, 0, 'C', True)
+                self.cell(20, 7, "Cant", 1, 1, 'C', True)
+                self.ln() 
 
     def footer(self):
         self.set_y(-40)
@@ -177,7 +207,7 @@ def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
     pdf.write(5, str(texto) if texto else "_"*110)
 
-# ✨ GENERADOR PDF TICKET PARA DINERO (CUARTO DE CARTA) - MEJORADO ✨
+# ✨ GENERADOR PDF TICKET PARA DINERO (CUARTO DE CARTA) ✨
 def generar_pdf_ticket_dinero(datos, folio):
     pdf = FPDF(orientation='P', unit='mm', format=(108, 140))
     pdf.add_page()
@@ -191,24 +221,24 @@ def generar_pdf_ticket_dinero(datos, folio):
         pdf.cell(0, 10, 'HEMORE', 0, 1, 'L')
     
     # 2. Encabezado (Título) - Aumenté el espacio vertical
-    pdf.set_xy(10, 30) # Bajé un poco el título
+    pdf.set_xy(10, 30)
     pdf.set_font('Arial', 'B', 11)
     pdf.cell(0, 5, "COMPROBANTE DE MOVIMIENTO", 0, 1, 'C')
-    pdf.ln(5) # Más espacio después del título
+    pdf.ln(5)
     
     # 3. Checkboxes de Entrada / Salida
     pdf.set_font('Arial', 'B', 10)
     entrada_check = "[ X ] ENTRADA" if datos['tipo'] == "Entrada" else "[   ] ENTRADA"
     salida_check = "[ X ] SALIDA" if datos['tipo'] == "Salida" else "[   ] SALIDA"
     pdf.cell(0, 5, f"{entrada_check}        {salida_check}", 0, 1, 'C')
-    pdf.ln(6) # Más espacio después de los checkboxes
+    pdf.ln(6)
     
     # 4. Folio y Fecha
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 5, "Folio:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(30, 5, str(folio), 0, 0)
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 5, "Fecha:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['fecha']), 0, 1)
-    pdf.ln(6) # Más espacio después de Folio/Fecha
+    pdf.ln(6)
     
     # 5. Nombres
     pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Entrega:", 0, 0)
@@ -216,15 +246,15 @@ def generar_pdf_ticket_dinero(datos, folio):
     
     pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Recibe:", 0, 0)
     pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_recibe'])[:45], 0, 1)
-    pdf.ln(6) # Más espacio después de los nombres
+    pdf.ln(6)
     
     # 6. Cantidad
     pdf.set_font('Arial', 'B', 10); pdf.cell(20, 6, "Cantidad:", 0, 0)
     pdf.set_font('Arial', 'B', 12); pdf.cell(0, 6, f"$ {datos['monto']:,.2f} MXN", 0, 1)
     
     pdf.set_font('Arial', '', 7)
-    pdf.multi_cell(0, 4, f"({numero_a_letras(datos['monto'])})") # Un poco más de altura de línea para la letra
-    pdf.ln(6) # Más espacio después de la cantidad
+    pdf.multi_cell(0, 4, f"({numero_a_letras(datos['monto'])})")
+    pdf.ln(6)
     
     # 7. Detalle
     pdf.set_font('Arial', 'B', 9); pdf.cell(0, 5, "Detalle / Descripcion:", 0, 1)
@@ -239,7 +269,7 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.cell(12, 0, "", 0, 0)
     pdf.cell(38, 0, "_"*28, 0, 1, 'C')
     
-    pdf.ln(4) # Un poco más de espacio antes de los textos de firma
+    pdf.ln(4)
     pdf.cell(38, 3, "Firma de quien entrega", 0, 0, 'C')
     pdf.cell(12, 3, "", 0, 0)
     pdf.cell(38, 3, "Firma de quien recibe", 0, 1, 'C')
@@ -757,7 +787,7 @@ elif opcion_almacen == "Entrada de Material":
             st.error(f"Error cargando historial: {e}")
 
 # ==================================================
-# 💰 OPCIÓN 5: ENTRADAS Y SALIDAS DE DINERO (NUEVO)
+# 💰 OPCIÓN 5: ENTRADAS Y SALIDAS DE DINERO
 # ==================================================
 elif opcion_almacen == "Entradas y Salidas de Dinero":
     st.markdown("### 💰 Entradas y Salidas de Dinero")
