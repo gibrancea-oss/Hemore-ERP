@@ -170,57 +170,90 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
-# ✨ MEJORA: DIBUJO DE FILAS DINÁMICO (MÁXIMO 2 LÍNEAS, MISMO TAMAÑO DE LETRA) ✨
+
+# ✨ MEJORA: DIBUJO DE FILAS DINÁMICO (HASTA 3 LÍNEAS, SIN ACHICAR LA LETRA) ✨
 def _dibujar_filas_productos(pdf, oc, df_productos):
-    pdf.set_font('Arial', '', 8.0) # Tamaño de letra siempre fijo
+    pdf.set_font('Arial', '', 8.0) # Tamaño de letra totalmente fijo
     
     for index, row in df_productos.iterrows():
-        textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
+        raw_textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
         anchos = [25, 30, 95, 20, 20]
         alineaciones = ['C', 'C', 'L', 'C', 'C']
         
-        # 1. Calculamos si la fila necesita 1 o 2 líneas
+        # 1. TRUCO DE SEGURIDAD: Romper palabras gigantestas que no tienen espacios
+        # Esto soluciona que códigos larguísimos invadan otras columnas
+        textos_seguros = []
+        for i, txt in enumerate(raw_textos):
+            w_disp = anchos[i] - 2
+            palabras = txt.split()
+            palabras_seguras = []
+            for w in palabras:
+                if pdf.get_string_width(w) > w_disp:
+                    # Forzamos división si la palabra es más ancha que la celda
+                    tw = ""
+                    for char in w:
+                        if pdf.get_string_width(tw + char) > w_disp:
+                            palabras_seguras.append(tw)
+                            tw = char
+                        else:
+                            tw += char
+                    if tw: palabras_seguras.append(tw)
+                else:
+                    palabras_seguras.append(w)
+            textos_seguros.append(" ".join(palabras_seguras))
+            
+        # 2. Calcular cuántas líneas máximas ocupará esta fila (Mínimo 1, Máximo 3)
         max_lines = 1
-        for i, text in enumerate(textos):
-            w_disp = anchos[i] - 2 # Ancho disponible con padding
-            if pdf.get_string_width(text) > w_disp:
-                max_lines = 2 # Si algún texto es más largo que la celda, la fila entera se hace de 2 líneas
+        for i, text in enumerate(textos_seguros):
+            w_disp = anchos[i] - 2
+            w_text = pdf.get_string_width(text)
+            if w_text > w_disp * 2:
+                max_lines = max(max_lines, 3)
+            elif w_text > w_disp:
+                max_lines = max(max_lines, 2)
                 
-        row_height = 7 if max_lines == 1 else 11 # 7mm para 1 línea, 11mm para 2 líneas
+        # Alturas fijas: 7mm(1 línea), 11mm(2 líneas), 15mm(3 líneas)
+        row_height = 7 if max_lines == 1 else (11 if max_lines == 2 else 15)
         
-        # Salto de página preventivo si la fila no cabe al final de la hoja
-        if pdf.get_y() + row_height > 265:
+        # 3. Control seguro de salto de página (Evita el bug de las 25 hojas rotas)
+        if pdf.get_y() + row_height > 250:
             pdf.add_page()
             
         x_start = pdf.get_x()
         y_start = pdf.get_y()
         
-        # 2. Dibujamos las celdas
-        for i, text in enumerate(textos):
+        # 4. Dibujar las celdas
+        for i, text in enumerate(textos_seguros):
             w_disp = anchos[i] - 2
-            max_w = w_disp * 2 # El ancho máximo que soportan 2 líneas
+            max_w = w_disp * 3 # Ancho máximo para soportar 3 líneas
             
-            # Si el texto es tan largo que ocuparía 3 líneas, lo cortamos y ponemos "..."
+            # Cortar con puntos suspensivos si excede las 3 líneas
             if pdf.get_string_width(text) > max_w:
                 while pdf.get_string_width(text + "...") > max_w and len(text) > 0:
                     text = text[:-1]
                 text += "..."
+                
+            # Calcular cuántas líneas ocupa específicamente este texto para centrarlo
+            w_text = pdf.get_string_width(text)
+            if w_text <= w_disp: lines_this_cell = 1
+            elif w_text <= w_disp * 2: lines_this_cell = 2
+            else: lines_this_cell = 3
             
-            # Dibujamos el cuadro de la celda
+            # Dibujamos el cuadro exterior
             pdf.rect(x_start, y_start, anchos[i], row_height)
             
-            # Posicionamos y dibujamos el texto
-            if max_lines == 2 and pdf.get_string_width(text) <= w_disp:
-                # Centrado vertical si el texto es corto pero la celda es alta
-                pdf.set_xy(x_start + 1, y_start + 3.5)
-            else:
-                pdf.set_xy(x_start + 1, y_start + 1.5)
-                
+            # Calculo de offset vertical para que siempre se vea en el medio
+            offset_y = (row_height - (lines_this_cell * 4)) / 2
+            if offset_y < 1.5: offset_y = 1.5
+            
+            pdf.set_xy(x_start + 1, y_start + offset_y)
             pdf.multi_cell(w_disp, 4, text, border=0, align=alineaciones[i])
             
-            x_start += anchos[i] # Avanzamos a la siguiente columna
+            x_start += anchos[i]
             
-        pdf.set_xy(10, y_start + row_height) # Bajamos a la siguiente fila
+        # Posicionamos para la fila que sigue
+        pdf.set_xy(10, y_start + row_height)
+
 
 def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
