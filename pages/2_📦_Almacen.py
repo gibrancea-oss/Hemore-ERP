@@ -39,6 +39,45 @@ def _formatear_datos_contacto(nombre_principal, dict_datos):
             lineas.append(f"{str(col).capitalize()}: {val}")
     return "\n".join(lineas)
 
+# ✨ HELPER PARA CONVERTIR NÚMEROS A LETRAS ✨
+def numero_a_letras(numero):
+    unidades = ["", "UN ", "DOS ", "TRES ", "CUATRO ", "CINCO ", "SEIS ", "SIETE ", "OCHO ", "NUEVE ", "DIEZ ", "ONCE ", "DOCE ", "TRECE ", "CATORCE ", "QUINCE ", "DIECISEIS ", "DIECISIETE ", "DIECIOCHO ", "DIECINUEVE ", "VEINTE ", "VEINTIUN ", "VEINTIDOS ", "VEINTITRES ", "VEINTICUATRO ", "VEINTICINCO ", "VEINTISEIS ", "VEINTISIETE ", "VEINTIOCHO ", "VEINTINUEVE "]
+    decenas = ["", "DIEZ ", "VEINTE ", "TREINTA ", "CUARENTA ", "CINCUENTA ", "SESENTA ", "SETENTA ", "OCHENTA ", "NOVENTA "]
+    centenas = ["", "CIENTO ", "DOSCIENTOS ", "TRESCIENTOS ", "CUATROCIENTOS ", "QUINIENTOS ", "SEISCIENTOS ", "SETECIENTOS ", "OCHOCIENTOS ", "NOVECIENTOS "]
+
+    def convertir_grupo(n):
+        output = ""
+        if n == 100: return "CIEN "
+        output += centenas[n // 100]
+        n = n % 100
+        if n < 30: output += unidades[n]
+        else:
+            output += decenas[n // 10]
+            if n % 10 != 0: output += "Y " + unidades[n % 10]
+        return output
+
+    numero = float(numero)
+    entero = int(numero)
+    decimal = int(round((numero - entero) * 100))
+
+    if entero == 0: letras = "CERO "
+    else:
+        letras = ""
+        millones = entero // 1000000
+        entero = entero % 1000000
+        miles = entero // 1000
+        resto = entero % 1000
+
+        if millones == 1: letras += "UN MILLON "
+        elif millones > 1: letras += convertir_grupo(millones) + "MILLONES "
+
+        if miles == 1: letras += "MIL "
+        elif miles > 1: letras += convertir_grupo(miles) + "MIL "
+
+        letras += convertir_grupo(resto)
+
+    return f"{letras.strip()} PESOS {decimal:02d}/100 M.N."
+
 # --- CLASE PDF PERSONALIZADA ---
 class PDF(FPDF):
     def __init__(self, orientation='P', unit='mm', format='A4'):
@@ -61,7 +100,7 @@ class PDF(FPDF):
             if 't1' in self.info_reporte:
                 _bloque_cajas_prov_cli(self, self.info_reporte['t1'], self.info_reporte['txt1'], self.info_reporte['t2'], self.info_reporte['txt2'])
             
-            if self.info_reporte.get('tipo') != 'dinero':
+            if self.info_reporte.get('tipo') not in ['dinero']:
                 self.set_y(90) 
                 self.set_font('Arial', 'B', 9); self.set_fill_color(200, 200, 200)
                 self.cell(25, 7, "O.C.", 1, 0, 'C', True)
@@ -78,9 +117,17 @@ class PDF(FPDF):
         self.cell(10, 0, '', 0, 0)
         self.cell(90, 0, '_______________________________', 0, 1, 'C')
         self.ln(4)
-        self.cell(90, 5, 'Entrega / Autoriza', 0, 0, 'C')
-        self.cell(10, 5, '', 0, 0)
-        self.cell(90, 5, 'Recibe / Caja', 0, 1, 'C')
+        
+        # ✨ CAMBIO DE FIRMAS DINÁMICAS PARA DINERO ✨
+        if self.info_reporte and self.info_reporte.get('tipo') == 'dinero':
+            self.cell(90, 5, 'Firma quien entrega', 0, 0, 'C')
+            self.cell(10, 5, '', 0, 0)
+            self.cell(90, 5, 'Firma quien recibe', 0, 1, 'C')
+        else:
+            self.cell(90, 5, 'Entrega / Autoriza', 0, 0, 'C')
+            self.cell(10, 5, '', 0, 0)
+            self.cell(90, 5, 'Recibe / Caja', 0, 1, 'C')
+            
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
@@ -108,6 +155,47 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     pdf.set_auto_page_break(auto=True, margin=45)
     _dibujar_filas_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
+    return pdf.output(dest='S').encode('latin-1')
+
+# ✨ NUEVO GENERADOR EXCLUSIVO PARA DINERO ✨
+def generar_pdf_recibo_dinero(datos, folio):
+    pdf = PDF()
+    pdf.info_reporte = {
+        'tipo': 'dinero', 
+        'titulo_doc': f"COMPROBANTE DE {str(datos['tipo']).upper()}", 
+        'folio': folio, 
+        'fecha': datos['fecha']
+    }
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=45)
+    
+    pdf.set_y(50)
+    # Bloque de monto destacado
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, f"BUENO POR: $ {datos['monto']:,.2f} MXN", 0, 1, 'R')
+    pdf.ln(10)
+    
+    # Textos del recibo
+    pdf.set_font('Arial', 'B', 12)
+    pdf.write(8, "Entregado por: ")
+    pdf.set_font('Arial', '', 12)
+    pdf.write(8, f"{datos['quien_entrega']}\n\n")
+    
+    pdf.set_font('Arial', 'B', 12)
+    pdf.write(8, "Recibido por: ")
+    pdf.set_font('Arial', '', 12)
+    pdf.write(8, f"{datos['quien_recibe']}\n\n")
+    
+    pdf.set_font('Arial', 'B', 12)
+    pdf.write(8, "La cantidad de: ")
+    pdf.set_font('Arial', '', 12)
+    pdf.write(8, f"{numero_a_letras(datos['monto'])}\n\n")
+    
+    pdf.set_font('Arial', 'B', 12)
+    pdf.write(8, "Por concepto de: ")
+    pdf.set_font('Arial', '', 12)
+    pdf.multi_cell(0, 8, f"{datos['concepto']}")
+    
     return pdf.output(dest='S').encode('latin-1')
 
 def _dibujar_filas_productos(pdf, oc, df_productos):
@@ -147,8 +235,7 @@ def convertir_df_a_excel(df):
 st.sidebar.title("🏭 Almacén Central")
 opcion_almacen = st.sidebar.radio(
     "Selecciona Operación:",
-    # MEJORA: Eliminado "Recibos de Dinero"
-    ["Insumos (Consumibles)", "Herramientas (Activos)", "Recibos de Entrega OC", "Entrada de Material"]
+    ["Insumos (Consumibles)", "Herramientas (Activos)", "Recibos de Entrega OC", "Entrada de Material", "Recibos de Dinero"]
 )
 
 st.title(f"Control de {opcion_almacen.split(' (')[0]}")
@@ -219,7 +306,6 @@ if "Insumos" in opcion_almacen:
             st.download_button("📥 Descargar Existencias", convertir_df_a_excel(df_view), "Existencias.xlsx")
             st.dataframe(df_view, use_container_width=True)
 
-    # ✨ HISTORIAL INSUMOS CON MODAL Y BORRADO ✨
     with tab_hist:
         @st.dialog("Detalles del Movimiento - Insumos")
         def ver_detalle_insumo(mov_id, df_source):
@@ -306,7 +392,6 @@ elif "Herramientas" in opcion_almacen:
                         st.success("Devuelto"); time.sleep(1); st.rerun()
     with tab2: st.dataframe(df_her, use_container_width=True)
 
-    # ✨ HISTORIAL HERRAMIENTAS CON MODAL Y BORRADO ✨
     with tab3:
         @st.dialog("Detalles del Movimiento - Herramientas")
         def ver_detalle_herramienta(mov_id, df_source):
@@ -347,7 +432,6 @@ elif "Herramientas" in opcion_almacen:
         except Exception as e: 
             st.error(f"Error cargando historial: {e}")
 
-
 # ==================================================
 # 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC 
 # ==================================================
@@ -383,18 +467,13 @@ elif "Recibos" in opcion_almacen:
                 items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
 
                 errores = []
-                if not oc_input:
-                    errores.append("- **Falta Orden de Compra (O.C.)**: Escribe el número de la orden en la parte superior.")
-                if not prov_input:
-                    errores.append("- **Falta Proveedor**: Selecciona el proveedor (Origen) de la lista desplegable.")
-                if not cliente_input:
-                    errores.append("- **Falta Cliente**: Selecciona el cliente (Destino) de la lista desplegable.")
-                if items.empty:
-                    errores.append("- **Tabla vacía**: Debes agregar al menos un producto válido (asegúrate de escribir su Código). Las celdas en blanco se ignoran.")
+                if not oc_input: errores.append("- **Falta Orden de Compra (O.C.)**: Escribe el número.")
+                if not prov_input: errores.append("- **Falta Proveedor**: Selecciona el proveedor.")
+                if not cliente_input: errores.append("- **Falta Cliente**: Selecciona el cliente.")
+                if items.empty: errores.append("- **Tabla vacía**: Debes agregar al menos un producto válido.")
 
                 if errores:
-                    mensaje_error = "⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores)
-                    st.error(mensaje_error)
+                    st.error("⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores))
                 else:
                     for _, row in items.iterrows():
                         val_cant = row.get("Cantidad", 0)
@@ -402,16 +481,9 @@ elif "Recibos" in opcion_almacen:
                         except: cant_f = 0.0
 
                         data_to_insert = {
-                            "fecha": str(fecha_input.isoformat()), 
-                            "oc": str(oc_input), 
-                            "cliente": str(cliente_input), 
-                            "proveedor": str(prov_input), 
-                            "codigo": str(row["Código"]), 
-                            "descripcion": str(row["Descripción"]), 
-                            "color": str(row["Color"]), 
-                            "cantidad": cant_f, 
-                            "usuario": str(usuario_input), 
-                            "observaciones": str(observaciones)
+                            "fecha": str(fecha_input.isoformat()), "oc": str(oc_input), "cliente": str(cliente_input), 
+                            "proveedor": str(prov_input), "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
+                            "color": str(row["Color"]), "cantidad": cant_f, "usuario": str(usuario_input), "observaciones": str(observaciones)
                         }
                         supabase.table("Recibos_OC").insert(data_to_insert).execute()
                     
@@ -422,7 +494,6 @@ elif "Recibos" in opcion_almacen:
                         
                         prov_text = _formatear_datos_contacto(prov_input, prov_data)
                         cli_text = _formatear_datos_contacto(cliente_input, cli_data)
-                        
                         datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text}
                         pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
                         
@@ -437,7 +508,6 @@ elif "Recibos" in opcion_almacen:
             df_oc = df_source[df_source['oc'] == oc_seleccionada].copy()
             if not df_oc.empty:
                 row_info = df_oc.iloc[0]
-                
                 st.markdown(f"#### 📄 Gestionar O.C. {oc_seleccionada}")
                 
                 try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
@@ -510,7 +580,6 @@ elif "Recibos" in opcion_almacen:
                     c3.write(row['Cliente'])
                     if c4.button("Ver Detalle", key=f"btn_oc_{row['Orden de Compra']}"):
                         ver_editar_oc(row['Orden de Compra'], df_hist)
-                
             else:
                 st.info("No hay recibos registrados.")
         except Exception as e: 
@@ -550,28 +619,20 @@ elif "Entrada" in opcion_almacen:
                         except: cant_f_in = 0.0
 
                         data_in = {
-                            "fecha": str(fecha_in.isoformat()), 
-                            "oc": str(oc_in), 
-                            "proveedor": str(prov_in), 
-                            "codigo": str(row["Código"]), 
-                            "descripcion": str(row["Descripción"]), 
-                            "color": str(row["Color"]), 
-                            "cantidad": cant_f_in, 
-                            "usuario": str(user_in), 
-                            "observaciones": str(obs_in)
+                            "fecha": str(fecha_in.isoformat()), "oc": str(oc_in), "proveedor": str(prov_in), 
+                            "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
+                            "color": str(row["Color"]), "cantidad": cant_f_in, "usuario": str(user_in), "observaciones": str(obs_in)
                         }
                         supabase.table("Entradas_Material").insert(data_in).execute()
                     
                     st.success("✅ Registrado."); st.rerun()
 
-    # ✨ HISTORIAL ENTRADAS CON EDICIÓN Y REIMPRESIÓN ✨
     with tab_ent_hist:
         @st.dialog("Detalles de Entrada de Material")
         def ver_editar_entrada(oc_seleccionada, df_source):
             df_oc = df_source[df_source['oc'] == oc_seleccionada].copy()
             if not df_oc.empty:
                 row_info = df_oc.iloc[0]
-                
                 st.markdown(f"#### 📥 Gestionar Entrada O.C. / Remisión {oc_seleccionada}")
                 
                 try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
@@ -601,10 +662,8 @@ elif "Entrada" in opcion_almacen:
                         except: cant_f = 0.0
                         
                         supabase.table("Entradas_Material").update({
-                            "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov),
-                            "observaciones": str(n_obs), "usuario": str(n_usr),
-                            "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
-                            "color": str(r["Color"]), "cantidad": cant_f
+                            "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov), "observaciones": str(n_obs), "usuario": str(n_usr),
+                            "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]), "color": str(r["Color"]), "cantidad": cant_f
                         }).eq("id", r["id"]).execute()
                     st.success("Guardado."); time.sleep(0.5); st.rerun()
 
@@ -644,8 +703,127 @@ elif "Entrada" in opcion_almacen:
                     c3.write(row['Proveedor'])
                     if c4.button("Ver Detalle", key=f"btn_ent_{row['OC / Remisión']}"):
                         ver_editar_entrada(row['OC / Remisión'], df_hist_ent)
-                
             else:
                 st.info("No hay entradas registradas.")
         except Exception as e: 
             st.error(f"Error cargando historial: {e}")
+
+# ==================================================
+# 💰 OPCIÓN 5: RECIBOS DE DINERO (NUEVO MÓDULO)
+# ==================================================
+elif "Dinero" in opcion_almacen:
+    st.markdown("### 💰 Recibos de Dinero")
+    
+    tab_money_new, tab_money_hist = st.tabs(["➕ Nuevo Recibo", "📜 Historial"])
+    
+    with tab_money_new:
+        with st.container(border=True):
+            tipo_movimiento = st.radio("Tipo de Movimiento:", ["Entrada de Dinero", "Salida de Dinero"], horizontal=True)
+            fecha_dinero = st.date_input("Fecha", value=datetime.now().date())
+            
+            c1, c2 = st.columns(2)
+            quien_entrega = c1.text_input("Quien entrega el dinero:")
+            quien_recibe = c2.text_input("Quien recibe el dinero:")
+            
+            monto_dinero = st.number_input("Monto ($)", min_value=0.01, step=100.0)
+            concepto_dinero = st.text_area("Descripción / Concepto:")
+            
+            if st.button("💾 Generar Recibo y PDF", type="primary"):
+                errores_dinero = []
+                if not quien_entrega: errores_dinero.append("- Escribe quién entrega el dinero.")
+                if not quien_recibe: errores_dinero.append("- Escribe quién recibe el dinero.")
+                if monto_dinero <= 0: errores_dinero.append("- El monto debe ser mayor a $0.")
+                if not concepto_dinero: errores_dinero.append("- Agrega un concepto o descripción.")
+
+                if errores_dinero:
+                    st.error("⚠️ **Faltan datos:**\n\n" + "\n".join(errores_dinero))
+                else:
+                    data_insert = {
+                        "fecha": str(fecha_dinero.isoformat()),
+                        "tipo": str(tipo_movimiento),
+                        "quien_entrega": str(quien_entrega),
+                        "quien_recibe": str(quien_recibe),
+                        "monto": float(monto_dinero),
+                        "concepto": str(concepto_dinero)
+                    }
+                    
+                    supabase.table("Recibos_Dinero").insert(data_insert).execute()
+                    try: last_id = supabase.table("Recibos_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
+                    except: last_id = 1
+                    
+                    pdf_bytes_dinero = generar_pdf_recibo_dinero(data_insert, last_id)
+                    st.success("✅ Recibo generado correctamente.")
+                    st.download_button("🖨️ Imprimir Recibo", pdf_bytes_dinero, f"Recibo_Dinero_{last_id}.pdf", "application/pdf")
+
+    with tab_money_hist:
+        @st.dialog("Detalles del Recibo de Dinero")
+        def ver_editar_dinero(id_recibo, df_source):
+            row_info = df_source[df_source['id'] == id_recibo].iloc[0]
+            st.markdown(f"#### 📄 Recibo Folio: {id_recibo}")
+            
+            try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
+            except: fecha_dt = datetime.now().date()
+            
+            t_mov = st.radio("Tipo:", ["Entrada de Dinero", "Salida de Dinero"], index=0 if row_info['tipo'] == "Entrada de Dinero" else 1, horizontal=True)
+            n_fecha = st.date_input("Fecha", value=fecha_dt, key="d_f")
+            
+            c1, c2 = st.columns(2)
+            n_entrega = c1.text_input("Quien entrega:", value=row_info.get('quien_entrega', ''), key="d_ent")
+            n_recibe = c2.text_input("Quien recibe:", value=row_info.get('quien_recibe', ''), key="d_rec")
+            
+            n_monto = st.number_input("Monto ($)", value=float(row_info.get('monto', 0)), step=100.0, key="d_mon")
+            n_concepto = st.text_area("Concepto:", value=row_info.get('concepto', ''), key="d_con")
+            
+            st.divider()
+            col_g, col_p = st.columns(2)
+            
+            if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                supabase.table("Recibos_Dinero").update({
+                    "fecha": str(n_fecha.isoformat()), "tipo": str(t_mov),
+                    "quien_entrega": str(n_entrega), "quien_recibe": str(n_recibe),
+                    "monto": float(n_monto), "concepto": str(n_concepto)
+                }).eq("id", id_recibo).execute()
+                st.success("Guardado."); time.sleep(0.5); st.rerun()
+                
+            datos_act = {
+                "fecha": n_fecha.strftime("%d/%m/%Y"), "tipo": t_mov,
+                "quien_entrega": n_entrega, "quien_recibe": n_recibe,
+                "monto": n_monto, "concepto": n_concepto
+            }
+            try:
+                pdf_bytes_upd = generar_pdf_recibo_dinero(datos_act, id_recibo)
+                col_p.download_button("🖨️ Reimprimir", pdf_bytes_upd, f"Recibo_Dinero_{id_recibo}.pdf", "application/pdf", use_container_width=True)
+            except Exception as e:
+                col_p.error("Error PDF")
+                
+            st.divider()
+            if st.button("🗑️ ELIMINAR ESTE RECIBO", type="secondary", use_container_width=True):
+                supabase.table("Recibos_Dinero").delete().eq("id", id_recibo).execute()
+                st.warning("Recibo eliminado."); time.sleep(1); st.rerun()
+
+        try:
+            res_h = supabase.table("Recibos_Dinero").select("*").order("id", desc=True).limit(200).execute()
+            df_hist_dinero = pd.DataFrame(res_h.data)
+            
+            if not df_hist_dinero.empty:
+                c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([2, 1, 2, 2, 2])
+                c_h1.markdown("**Fecha**")
+                c_h2.markdown("**Folio**")
+                c_h3.markdown("**Tipo**")
+                c_h4.markdown("**Monto**")
+                c_h5.markdown("**Acción**")
+                
+                for idx, row in df_hist_dinero.iterrows():
+                    c1, c2, c3, c4, c5 = st.columns([2, 1, 2, 2, 2])
+                    c1.write(row.get('fecha', ''))
+                    c2.write(str(row.get('id', '')))
+                    # Color visual rápido para identificar entradas y salidas
+                    color = "🟢 " if "Entrada" in str(row.get('tipo', '')) else "🔴 "
+                    c3.write(f"{color} {row.get('tipo', '')}")
+                    c4.write(f"$ {float(row.get('monto', 0)):,.2f}")
+                    if c5.button("Ver Detalle", key=f"btn_din_{row['id']}"):
+                        ver_editar_dinero(row['id'], df_hist_dinero)
+            else:
+                st.info("No hay recibos de dinero registrados.")
+        except Exception as e: 
+            st.error(f"Error cargando historial de dinero: {e}")
