@@ -377,89 +377,97 @@ elif "Recibos" in opcion_almacen:
                     except Exception as e: 
                         st.error(f"Error interno al generar el archivo PDF: {e}")
 
-    # ✨ SECCIÓN MODIFICADA: HISTORIAL CON EDICIÓN Y REIMPRESIÓN ✨
+    # ✨ SECCIÓN MODIFICADA: HISTORIAL CON TABLA, VENTANA MODAL Y BORRADO ✨
     with tab_historial:
+        # Función de la ventana emergente (modal)
+        @st.dialog("Detalles de Orden de Compra")
+        def ver_editar_oc(oc_seleccionada, df_source):
+            df_oc = df_source[df_source['oc'] == oc_seleccionada].copy()
+            if not df_oc.empty:
+                row_info = df_oc.iloc[0]
+                
+                st.markdown(f"#### 📄 Gestionar O.C. {oc_seleccionada}")
+                
+                # Datos de cabecera editables
+                try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
+                except: fecha_dt = datetime.now().date()
+                
+                idx_cli = lista_nombres_cli.index(row_info['cliente']) if row_info['cliente'] in lista_nombres_cli else None
+                idx_prov = lista_nombres_prov.index(row_info['proveedor']) if row_info['proveedor'] in lista_nombres_prov else None
+                
+                c1, c2, c3 = st.columns(3)
+                n_fecha = c1.date_input("Fecha", value=fecha_dt, key="d_fecha")
+                n_cli = c2.selectbox("Cliente", lista_nombres_cli, index=idx_cli, key="d_cli")
+                n_prov = c3.selectbox("Proveedor", lista_nombres_prov, index=idx_prov, key="d_prov")
+                n_obs = st.text_area("Observaciones", value=row_info.get('observaciones', ''), key="d_obs")
+                
+                st.divider()
+                st.write("**Productos:**")
+                df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
+                df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
+                edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], key="d_editor")
+                
+                col_g, col_p = st.columns(2)
+                
+                # Botón Guardar
+                if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                    for _, r in edited_prods.iterrows():
+                        val_cant = r.get("Cantidad", 0)
+                        try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
+                        except: cant_f = 0.0
+                        
+                        supabase.table("Recibos_OC").update({
+                            "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
+                            "observaciones": str(n_obs), "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
+                            "color": str(r["Color"]), "cantidad": cant_f
+                        }).eq("id", r["id"]).execute()
+                    st.success("Guardado."); time.sleep(0.5); st.rerun()
+
+                # Botón Reimprimir
+                if n_cli in lista_nombres_cli and n_prov in lista_nombres_prov:
+                    try:
+                        cli_data = df_clientes[df_clientes['nombre'] == n_cli].iloc[0]
+                        prov_data = df_proveedores[df_proveedores[col_p_name] == n_prov].iloc[0]
+                        prov_text = _formatear_datos_contacto(n_prov, prov_data)
+                        cli_text = _formatear_datos_contacto(n_cli, cli_data)
+                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text}
+                        pdf_bytes = generar_pdf_entrega(datos_pdf, edited_prods, row_info['id'])
+                        col_p.download_button("🖨️ PDF", pdf_bytes, f"Recibo_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
+                    except: col_p.error("Error PDF")
+                
+                st.divider()
+                # Botón Eliminar (Zona de Peligro)
+                if st.button("🗑️ ELIMINAR ESTA ORDEN DE COMPRA", type="secondary", use_container_width=True):
+                    supabase.table("Recibos_OC").delete().eq("oc", oc_seleccionada).execute()
+                    st.warning("Orden eliminada. Actualizando..."); time.sleep(1); st.rerun()
+
+        # Carga de datos
         try:
             res_h = supabase.table("Recibos_OC").select("*").order("id", desc=True).limit(500).execute()
             df_hist = pd.DataFrame(res_h.data)
             
             if not df_hist.empty:
-                ocs_unicas = df_hist['oc'].unique()
-                oc_seleccionada = st.selectbox("🎯 Selecciona la Orden de Compra para ver o editar:", ocs_unicas)
+                # Tabla Resumen (solo columnas solicitadas)
+                df_resumen = df_hist.drop_duplicates(subset=['oc'])[['fecha', 'oc', 'cliente']].reset_index(drop=True)
+                df_resumen.columns = ['Fecha', 'Orden de Compra', 'Cliente']
                 
-                if oc_seleccionada:
-                    df_oc = df_hist[df_hist['oc'] == oc_seleccionada].copy()
-                    row_info = df_oc.iloc[0] # Tomamos los datos del encabezado de la primera fila
-                    
-                    st.markdown(f"### 📦 Detalles de la O.C. {oc_seleccionada}")
-                    with st.container(border=True):
-                        c1, c2, c3 = st.columns(3)
-                        
-                        # Precargar la fecha si es válida, si no poner la de hoy
-                        try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
-                        except: fecha_dt = datetime.now().date()
-                        
-                        # Buscar los índices para precargar los selectbox
-                        idx_cli = lista_nombres_cli.index(row_info['cliente']) if row_info['cliente'] in lista_nombres_cli else None
-                        idx_prov = lista_nombres_prov.index(row_info['proveedor']) if row_info['proveedor'] in lista_nombres_prov else None
-                        
-                        # Inputs para editar cabecera
-                        n_fecha = c1.date_input("Fecha", value=fecha_dt)
-                        n_cli = c2.selectbox("Cliente", lista_nombres_cli, index=idx_cli)
-                        n_prov = c3.selectbox("Proveedor", lista_nombres_prov, index=idx_prov)
-                        n_obs = st.text_area("Observaciones", value=row_info.get('observaciones', ''))
-                        
-                        st.markdown("**Productos en este Recibo:**")
-                        # Preparamos la tabla para el editor (renombramos columnas para que sea visualmente igual al ingreso)
-                        df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
-                        df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
-                        
-                        # Mostrar el editor de datos (la columna ID se bloquea para no romper la base de datos)
-                        edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'])
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        # BOTÓN 1: GUARDAR CAMBIOS
-                        if col1.button("💾 Guardar Cambios", type="primary", use_container_width=True):
-                            for _, r in edited_prods.iterrows():
-                                val_cant = r.get("Cantidad", 0)
-                                try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
-                                except: cant_f = 0.0
-                                
-                                # Actualizamos directo por el ID de la fila
-                                supabase.table("Recibos_OC").update({
-                                    "fecha": str(n_fecha.isoformat()),
-                                    "cliente": str(n_cli),
-                                    "proveedor": str(n_prov),
-                                    "observaciones": str(n_obs),
-                                    "codigo": str(r["Código"]),
-                                    "descripcion": str(r["Descripción"]),
-                                    "color": str(r["Color"]),
-                                    "cantidad": cant_f
-                                }).eq("id", r["id"]).execute()
-                                
-                            st.success("✅ Cambios guardados correctamente."); st.rerun()
-                            
-                        # BOTÓN 2: REIMPRIMIR PDF
-                        if n_cli in lista_nombres_cli and n_prov in lista_nombres_prov:
-                            try:
-                                cli_data = df_clientes[df_clientes['nombre'] == n_cli].iloc[0]
-                                prov_data = df_proveedores[df_proveedores[col_p_name] == n_prov].iloc[0]
-                                prov_text = _formatear_datos_contacto(n_prov, prov_data)
-                                cli_text = _formatear_datos_contacto(n_cli, cli_data)
-                                
-                                datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text}
-                                # Usamos la tabla editada y el ID de la primera fila como folio visual
-                                pdf_bytes = generar_pdf_entrega(datos_pdf, edited_prods, row_info['id'])
-                                
-                                col2.download_button("🖨️ Reimprimir PDF", pdf_bytes, f"Recibo_{oc_seleccionada}_Reimpresion.pdf", "application/pdf", use_container_width=True)
-                            except Exception as e:
-                                col2.error(f"Error preparando PDF: {e}")
-                        else:
-                            col2.warning("Para reimprimir, el Cliente y Proveedor deben ser válidos.")
-                            
+                # Encabezados de la tabla visual
+                c_h1, c_h2, c_h3, c_h4 = st.columns([2, 2, 3, 2])
+                c_h1.markdown("**Fecha**")
+                c_h2.markdown("**Orden de Compra**")
+                c_h3.markdown("**Cliente**")
+                c_h4.markdown("**Acción**")
+                
+                for idx, row in df_resumen.iterrows():
+                    c1, c2, c3, c4 = st.columns([2, 2, 3, 2])
+                    c1.write(row['Fecha'])
+                    c2.write(row['Orden de Compra'])
+                    c3.write(row['Cliente'])
+                    if c4.button("Ver Detalle", key=f"btn_oc_{row['Orden de Compra']}"):
+                        ver_editar_oc(row['Orden de Compra'], df_hist)
+                
             else:
-                st.info("No hay recibos registrados en el historial.")
+                st.info("No hay recibos registrados.")
         except Exception as e: 
             st.error(f"Error cargando historial: {e}")
 
