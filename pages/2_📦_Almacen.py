@@ -181,27 +181,71 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
+# ✨ MEJORA: FUNCIÓN MODIFICADA PARA CELDAS DINÁMICAS CON MULTI_CELL ✨
 def _dibujar_filas_productos(pdf, oc, df_productos):
+    base_font_size = 8.0
+    line_height = 4.5  # Altura de cada línea de texto dentro de multi_cell (ajustado para fuente 8)
+    max_lines_allowed = 3 # Límite máximo de líneas solicitado
+    min_row_height = 7.0  # Altura mínima original de la fila
+
     for index, row in df_productos.iterrows():
         textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
         anchos = [25, 30, 95, 20, 20]
         alineaciones = ['C', 'C', 'L', 'C', 'C']
         
+        pdf.set_font('Arial', '', base_font_size)
+        
+        # --- PASO 1: CALCULAR LA ALTURA NECESARIA PARA ESTA FILA ---
+        # Necesitamos saber cuánto ocupa la descripción si se envuelve.
+        
+        # Guardamos posición Y antes de medir
+        start_y = pdf.get_y()
+        start_x = pdf.get_x()
+        
+        # Movemos el cursor temporalmente a donde iría la descripción para medirla
+        pdf.set_xy(start_x + anchos[0] + anchos[1], start_y)
+        
+        # Usamos multi_cell para imprimir "en invisible" y ver cuánto baja Y.
+        # Nota: FPDF no tiene un modo "dry-run" nativo fácil, así que imprimimos y luego restauramos Y.
+        pdf.multi_cell(anchos[2], line_height, textos[2], 0, alineaciones[2])
+        
+        h_desc_calculada = pdf.get_y() - start_y
+        
+        # Aplicar el límite de 3 líneas máximo
+        max_allowed_h = line_height * max_lines_allowed
+        if h_desc_calculada > max_allowed_h:
+            h_desc_calculada = max_allowed_h
+            # Nota: Si el texto es más largo de 3 líneas, se cortará visualmente al dibujar el borde final.
+            
+        # La altura final de la fila es la mayor entre la mínima (7) y la calculada para la descripción
+        final_row_height = max(min_row_height, h_desc_calculada)
+        
+        # Restauramos la posición Y y X al inicio de la fila para empezar a dibujar de verdad
+        pdf.set_xy(start_x, start_y)
+
+        # --- PASO 2: DIBUJAR LAS CELDAS CON LA ALTURA CALCULADA ---
         for i, text in enumerate(textos):
-            font_size = 8.0
-            pdf.set_font('Arial', '', font_size)
+            current_x = pdf.get_x()
+            current_y = pdf.get_y()
             
-            while pdf.get_string_width(text) > (anchos[i] - 2) and font_size > 5.5:
-                font_size -= 0.5
-                pdf.set_font('Arial', '', font_size)
-            
-            if pdf.get_string_width(text) > (anchos[i] - 2):
-                while pdf.get_string_width(text + "...") > (anchos[i] - 2) and len(text) > 0:
-                    text = text[:-1]
-                text += "..."
+            if i == 2: # Es la columna "Descripción" -> Usar MultiCell
+                # 1. Dibujamos el borde exterior de la celda con la altura total calculada
+                pdf.rect(current_x, current_y, anchos[i], final_row_height)
                 
-            ln_val = 1 if i == 4 else 0
-            pdf.cell(anchos[i], 7, text, 1, ln_val, alineaciones[i])
+                # 2. Imprimimos el texto dentro usando multi_cell (sin borde propio, alineado a la izquierda)
+                pdf.multi_cell(anchos[i], line_height, text, 0, alineaciones[i])
+                
+                # 3. IMPORTANTE: Mover el cursor a la derecha de esta celda y VOLVER a la altura inicial de la fila
+                # para que la siguiente celda (Color) se dibuje alineada arriba.
+                pdf.set_xy(current_x + anchos[i], current_y)
+                
+            else: # Son columnas normales de una línea -> Usar Cell normal con altura dinámica
+                # Usamos cell() pero le pasamos 'final_row_height' en lugar de 7 fijo.
+                # El texto se centrará verticalmente automáticamente.
+                pdf.cell(anchos[i], final_row_height, text, 1, 0, alineaciones[i])
+        
+        # Al terminar todas las columnas de la fila, movemos el cursor hacia abajo usando la altura calculada
+        pdf.set_y(start_y + final_row_height)
 
 def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
@@ -230,7 +274,7 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.set_font('Arial', 'B', 10)
     entrada_check = "[ X ] ENTRADA" if datos['tipo'] == "Entrada" else "[   ] ENTRADA"
     salida_check = "[ X ] SALIDA" if datos['tipo'] == "Salida" else "[   ] SALIDA"
-    pdf.cell(0, 5, f"{entrada_check}        {salida_check}", 0, 1, 'C')
+    pdf.cell(0, 5, f"{entrada_check}         {salida_check}", 0, 1, 'C')
     pdf.ln(6)
     
     # 4. Folio y Fecha
