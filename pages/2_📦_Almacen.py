@@ -16,7 +16,7 @@ utils.validar_login()
 
 supabase = utils.supabase 
 
-# --- HELPER FUNCION: NÚMERO A LETRAS (PARA RECIBOS DE DINERO) ---
+# --- HELPER FUNCION: NÚMERO A LETRAS (PARA TICKET DE DINERO) ---
 def numero_a_letras(numero):
     unidades = ["", "UN ", "DOS ", "TRES ", "CUATRO ", "CINCO ", "SEIS ", "SIETE ", "OCHO ", "NUEVE ", "DIEZ ", "ONCE ", "DOCE ", "TRECE ", "CATORCE ", "QUINCE ", "DIECISEIS ", "DIECISIETE ", "DIECIOCHO ", "DIECINUEVE ", "VEINTE ", "VEINTIUN ", "VEINTIDOS ", "VEINTITRES ", "VEINTICUATRO ", "VEINTICINCO ", "VEINTISEIS ", "VEINTISIETE ", "VEINTIOCHO ", "VEINTINUEVE "]
     decenas = ["", "DIEZ ", "VEINTE ", "TREINTA ", "CUARENTA ", "CINCUENTA ", "SESENTA ", "SETENTA ", "OCHENTA ", "NOVENTA "]
@@ -100,15 +100,14 @@ class PDF(FPDF):
             if 't1' in self.info_reporte:
                 _bloque_cajas_prov_cli(self, self.info_reporte['t1'], self.info_reporte['txt1'], self.info_reporte['t2'], self.info_reporte['txt2'])
             
-            if self.info_reporte.get('tipo') != 'dinero':
-                self.set_y(90) 
-                self.set_font('Arial', 'B', 9); self.set_fill_color(200, 200, 200)
-                self.cell(25, 7, "O.C.", 1, 0, 'C', True)
-                self.cell(30, 7, "Codigo", 1, 0, 'C', True)
-                self.cell(95, 7, "Descripcion", 1, 0, 'C', True)
-                self.cell(20, 7, "Color", 1, 0, 'C', True)
-                self.cell(20, 7, "Cant", 1, 1, 'C', True)
-                self.ln() 
+            self.set_y(90) 
+            self.set_font('Arial', 'B', 9); self.set_fill_color(200, 200, 200)
+            self.cell(25, 7, "O.C.", 1, 0, 'C', True)
+            self.cell(30, 7, "Codigo", 1, 0, 'C', True)
+            self.cell(95, 7, "Descripcion", 1, 0, 'C', True)
+            self.cell(20, 7, "Color", 1, 0, 'C', True)
+            self.cell(20, 7, "Cant", 1, 1, 'C', True)
+            self.ln() 
 
     def footer(self):
         self.set_y(-40)
@@ -149,6 +148,73 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
+# ✨ GENERADOR EXCLUSIVO PARA TICKET DE DINERO (NO USA LA CLASE PDF PRINCIPAL PARA EVITAR ERRORES) ✨
+def generar_pdf_ticket_dinero(datos, folio):
+    # Formato cuarto de hoja carta
+    pdf = FPDF(orientation='P', unit='mm', format=(108, 140))
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=10)
+    
+    # Logo
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", 10, 8, 25) 
+    else:
+        pdf.set_font('Arial', 'B', 14)
+        pdf.cell(0, 10, 'HEMORE', 0, 1, 'L')
+    
+    # Título
+    pdf.set_xy(10, 25)
+    pdf.set_font('Arial', 'B', 11)
+    pdf.cell(0, 5, "RECIBO DE DINERO", 0, 1, 'C')
+    
+    pdf.set_font('Arial', 'I', 9)
+    pdf.cell(0, 5, f"{str(datos['tipo']).upper()}", 0, 1, 'C')
+    pdf.ln(3)
+    
+    # Folio y Fecha
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(15, 5, "Folio:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(30, 5, str(folio), 0, 0)
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(15, 5, "Fecha:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['fecha']), 0, 1)
+    pdf.ln(2)
+    
+    # Quien recibe y Quien da
+    pdf.set_font('Arial', 'B', 9); pdf.cell(38, 5, "Quien recibe el dinero:", 0, 0)
+    pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_recibe']), 0, 1)
+    
+    pdf.set_font('Arial', 'B', 9); pdf.cell(38, 5, "Quien da el dinero:", 0, 0)
+    pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_da']), 0, 1)
+    pdf.ln(2)
+    
+    # Montos
+    pdf.set_font('Arial', 'B', 9); pdf.cell(38, 6, "Monto en numero:", 0, 0)
+    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 6, f"$ {datos['monto']:,.2f}", 0, 1)
+    
+    pdf.set_font('Arial', 'B', 9); pdf.cell(0, 5, "Monto escrito a letra:", 0, 1)
+    pdf.set_font('Arial', '', 8)
+    pdf.multi_cell(0, 4, f"({numero_a_letras(datos['monto'])})")
+    pdf.ln(2)
+    
+    # Descripción
+    pdf.set_font('Arial', 'B', 9); pdf.cell(0, 5, "Descripcion:", 0, 1)
+    pdf.set_font('Arial', '', 8)
+    pdf.multi_cell(0, 4, str(datos['descripcion']))
+    
+    # Firmas Fijas al final del ticket
+    pdf.set_y(-25)
+    pdf.set_font('Arial', '', 7)
+    
+    pdf.cell(40, 0, "_"*30, 0, 0, 'C')
+    pdf.cell(8, 0, "", 0, 0)
+    pdf.cell(40, 0, "_"*30, 0, 1, 'C')
+    
+    pdf.ln(3)
+    pdf.cell(40, 3, "Firma de quien lo hace", 0, 0, 'C')
+    pdf.cell(8, 3, "", 0, 0)
+    pdf.cell(40, 3, "Firma de quien recibe", 0, 1, 'C')
+
+    return pdf.output(dest='S').encode('latin-1')
+
 def _dibujar_filas_productos(pdf, oc, df_productos):
     for index, row in df_productos.iterrows():
         textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
@@ -174,73 +240,6 @@ def _dibujar_filas_productos(pdf, oc, df_productos):
 def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
     pdf.write(5, str(texto) if texto else "_"*110)
-
-# ✨ GENERADOR EXCLUSIVO PARA TICKET DE DINERO (1/4 DE CARTA) ✨
-def generar_pdf_ticket_dinero(datos, folio):
-    # Formato cuarto de hoja carta: 108mm x 140mm
-    pdf = FPDF(orientation='P', unit='mm', format=(108, 140))
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=10)
-    
-    # 1. Logo
-    if os.path.exists("logo.png"):
-        pdf.image("logo.png", 10, 8, 25) 
-    else:
-        pdf.set_font('Arial', 'B', 14)
-        pdf.cell(0, 10, 'HEMORE', 0, 1, 'L')
-    
-    # 2. Encabezado
-    pdf.set_xy(10, 25)
-    pdf.set_font('Arial', 'B', 11)
-    pdf.cell(0, 5, "RECIBO DE DINERO", 0, 1, 'C')
-    
-    pdf.set_font('Arial', 'I', 9)
-    pdf.cell(0, 5, f"{datos['tipo'].upper()}", 0, 1, 'C')
-    pdf.ln(2)
-    
-    # 3. Folio y Fecha
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(15, 5, "Folio:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(30, 5, str(folio), 0, 0)
-    pdf.set_font('Arial', 'B', 9)
-    pdf.cell(15, 5, "Fecha:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['fecha']), 0, 1)
-    pdf.ln(2)
-    
-    # 4. Quien da y Quien recibe
-    pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Quien da:", 0, 0)
-    pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_da'])[:40], 0, 1)
-    
-    pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Quien recibe:", 0, 0)
-    pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_recibe'])[:40], 0, 1)
-    pdf.ln(3)
-    
-    # 5. Monto Destacado
-    pdf.set_font('Arial', 'B', 10); pdf.cell(15, 6, "Monto:", 0, 0)
-    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 6, f"$ {datos['monto']:,.2f} MXN", 0, 1)
-    
-    # Monto en Letras
-    pdf.set_font('Arial', '', 7)
-    pdf.multi_cell(0, 3, f"({numero_a_letras(datos['monto'])})")
-    pdf.ln(2)
-    
-    # 6. Concepto
-    pdf.set_font('Arial', 'B', 9); pdf.cell(0, 5, "Concepto / Descripción:", 0, 1)
-    pdf.set_font('Arial', '', 8)
-    pdf.multi_cell(0, 4, str(datos['concepto']))
-    
-    # 7. Firmas (Fijadas en la parte inferior del ticket)
-    pdf.set_y(-25)
-    pdf.set_font('Arial', '', 7)
-    
-    pdf.cell(38, 0, "_"*28, 0, 0, 'C')
-    pdf.cell(12, 0, "", 0, 0)
-    pdf.cell(38, 0, "_"*28, 0, 1, 'C')
-    
-    pdf.ln(3)
-    pdf.cell(38, 3, "Firma quien da", 0, 0, 'C')
-    pdf.cell(12, 3, "", 0, 0)
-    pdf.cell(38, 3, "Firma quien recibe", 0, 1, 'C')
-
-    return pdf.output(dest='S').encode('latin-1')
 
 def convertir_df_a_excel(df):
     output = io.BytesIO()
@@ -714,7 +713,7 @@ elif "Entrada" in opcion_almacen:
                         prov_data = df_provs[df_provs[col_p_name] == n_prov].iloc[0]
                         prov_text = _formatear_datos_contacto(n_prov, prov_data)
                         hemore_text = "HEMORE INDUSTRIAS\nAlmacén Central" 
-                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "hemore_text": hemore_text}
+                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "hemore_texto": hemore_text}
                         pdf_bytes = generar_pdf_entrada(datos_pdf, edited_prods, row_info['id'])
                         col_p.download_button("🖨️ Reimprimir PDF", pdf_bytes, f"Entrada_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
                     except: col_p.error("Error PDF")
@@ -752,7 +751,7 @@ elif "Entrada" in opcion_almacen:
             st.error(f"Error cargando historial: {e}")
 
 # ==================================================
-# 💰 OPCIÓN 5: RECIBOS DE DINERO (NUEVO MÓDULO DIRECTO)
+# 💰 OPCIÓN 5: RECIBOS DE DINERO (RECONSTRUIDO EXACTO)
 # ==================================================
 elif "Dinero" in opcion_almacen:
     st.markdown("### 💰 Recibos de Dinero")
@@ -761,61 +760,63 @@ elif "Dinero" in opcion_almacen:
     
     with tab_money_new:
         with st.container(border=True):
-            tipo_movimiento = st.radio("Tipo de Movimiento:", ["Entrada de Dinero", "Salida de Dinero"], horizontal=True)
-            fecha_dinero = st.date_input("Fecha de Operación", value=datetime.now().date())
+            st.subheader("Datos del Recibo")
+            tipo_movimiento = st.radio("Tipo de Operación:", ["Entrada de Dinero", "Salida de Dinero"], horizontal=True)
+            fecha_dinero = st.date_input("Fecha", value=datetime.now().date())
             
             c1, c2 = st.columns(2)
-            quien_da = c1.text_input("Quien da el dinero:")
-            quien_recibe = c2.text_input("Quien recibe el dinero:")
+            quien_recibe = c1.text_input("Quien recibe el dinero:")
+            quien_da = c2.text_input("Quien da el dinero:")
             
-            monto_dinero = st.number_input("Monto ($)", min_value=0.00, value=0.00, step=100.0)
-            concepto_dinero = st.text_area("Descripción o Concepto:")
+            monto_numero = st.number_input("Monto en número ($):", min_value=0.00, value=0.00, step=100.0)
+            descripcion = st.text_area("Descripción:")
             
             if st.button("💾 Generar Recibo y PDF", type="primary"):
                 errores_dinero = []
-                if not quien_da: errores_dinero.append("- Escribe quién da el dinero.")
-                if not quien_recibe: errores_dinero.append("- Escribe quién recibe el dinero.")
-                if monto_dinero <= 0: errores_dinero.append("- El monto debe ser mayor a $0.")
-                if not concepto_dinero: errores_dinero.append("- Agrega una descripción o concepto.")
+                if not quien_recibe: errores_dinero.append("- Falta quién recibe el dinero.")
+                if not quien_da: errores_dinero.append("- Falta quién da el dinero.")
+                if monto_numero <= 0: errores_dinero.append("- El monto debe ser mayor a cero.")
+                if not descripcion: errores_dinero.append("- Falta la descripción.")
 
                 if errores_dinero:
-                    st.error("⚠️ **No se pudo generar el recibo. Faltan datos:**\n\n" + "\n".join(errores_dinero))
+                    st.error("⚠️ **No se pudo generar el recibo:**\n\n" + "\n".join(errores_dinero))
                 else:
                     data_insert = {
                         "fecha": str(fecha_dinero.isoformat()),
                         "tipo": str(tipo_movimiento),
-                        "quien_da": str(quien_da),
                         "quien_recibe": str(quien_recibe),
-                        "monto": float(monto_dinero),
-                        "concepto": str(concepto_dinero)
+                        "quien_da": str(quien_da),
+                        "monto": float(monto_numero),
+                        "descripcion": str(descripcion)
                     }
                     
                     supabase.table("Recibos_Dinero").insert(data_insert).execute()
+                    
                     try: last_id = supabase.table("Recibos_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
                     except: last_id = 1
                     
-                    pdf_bytes_dinero = generar_pdf_ticket_dinero(data_insert, last_id)
-                    st.success("✅ Recibo generado correctamente.")
-                    st.download_button("🖨️ Imprimir Ticket PDF", pdf_bytes_dinero, f"Ticket_Dinero_Folio_{last_id}.pdf", "application/pdf")
+                    pdf_bytes = generar_pdf_ticket_dinero(data_insert, last_id)
+                    st.success("✅ Recibo guardado y PDF generado con éxito.")
+                    st.download_button("🖨️ Imprimir Ticket", pdf_bytes, f"Recibo_Dinero_{last_id}.pdf", "application/pdf")
 
     with tab_money_hist:
-        @st.dialog("Detalles del Ticket de Dinero")
+        @st.dialog("Detalle del Recibo de Dinero")
         def ver_editar_dinero(id_recibo, df_source):
             row_info = df_source[df_source['id'] == id_recibo].iloc[0]
-            st.markdown(f"#### 📄 Ticket Folio: {id_recibo}")
+            st.markdown(f"#### 📄 Editar Recibo Folio: {id_recibo}")
             
             try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
             except: fecha_dt = datetime.now().date()
             
-            t_mov = st.radio("Tipo:", ["Entrada de Dinero", "Salida de Dinero"], index=0 if row_info['tipo'] == "Entrada de Dinero" else 1, horizontal=True)
+            t_mov = st.radio("Tipo de Operación:", ["Entrada de Dinero", "Salida de Dinero"], index=0 if row_info['tipo'] == "Entrada de Dinero" else 1, horizontal=True)
             n_fecha = st.date_input("Fecha", value=fecha_dt, key="d_f")
             
             c1, c2 = st.columns(2)
-            n_da = c1.text_input("Quien da:", value=row_info.get('quien_da', ''), key="d_da")
-            n_recibe = c2.text_input("Quien recibe:", value=row_info.get('quien_recibe', ''), key="d_rec")
+            n_recibe = c1.text_input("Quien recibe el dinero:", value=row_info.get('quien_recibe', ''), key="d_rec")
+            n_da = c2.text_input("Quien da el dinero:", value=row_info.get('quien_da', ''), key="d_da")
             
-            n_monto = st.number_input("Monto ($)", value=float(row_info.get('monto', 0)), step=100.0, key="d_mon")
-            n_concepto = st.text_area("Concepto:", value=row_info.get('concepto', ''), key="d_con")
+            n_monto = st.number_input("Monto en número ($):", value=float(row_info.get('monto', 0)), step=100.0, key="d_mon")
+            n_descripcion = st.text_area("Descripción:", value=row_info.get('descripcion', ''), key="d_desc")
             
             st.divider()
             col_g, col_p = st.columns(2)
@@ -823,26 +824,26 @@ elif "Dinero" in opcion_almacen:
             if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
                 supabase.table("Recibos_Dinero").update({
                     "fecha": str(n_fecha.isoformat()), "tipo": str(t_mov),
-                    "quien_da": str(n_da), "quien_recibe": str(n_recibe),
-                    "monto": float(n_monto), "concepto": str(n_concepto)
+                    "quien_recibe": str(n_recibe), "quien_da": str(n_da),
+                    "monto": float(n_monto), "descripcion": str(n_descripcion)
                 }).eq("id", id_recibo).execute()
-                st.success("Guardado."); time.sleep(0.5); st.rerun()
+                st.success("Guardado correctamente."); time.sleep(0.5); st.rerun()
                 
             datos_act = {
                 "fecha": n_fecha.strftime("%d/%m/%Y"), "tipo": t_mov,
-                "quien_da": n_da, "quien_recibe": n_recibe,
-                "monto": n_monto, "concepto": n_concepto
+                "quien_recibe": n_recibe, "quien_da": n_da,
+                "monto": n_monto, "descripcion": n_descripcion
             }
             try:
                 pdf_bytes_upd = generar_pdf_ticket_dinero(datos_act, id_recibo)
-                col_p.download_button("🖨️ Reimprimir Ticket", pdf_bytes_upd, f"Ticket_Dinero_{id_recibo}.pdf", "application/pdf", use_container_width=True)
+                col_p.download_button("🖨️ Reimprimir Ticket", pdf_bytes_upd, f"Recibo_Dinero_{id_recibo}.pdf", "application/pdf", use_container_width=True)
             except Exception as e:
                 col_p.error("Error PDF")
                 
             st.divider()
-            if st.button("🗑️ ELIMINAR ESTE TICKET", type="secondary", use_container_width=True):
+            if st.button("🗑️ ELIMINAR ESTE RECIBO", type="secondary", use_container_width=True):
                 supabase.table("Recibos_Dinero").delete().eq("id", id_recibo).execute()
-                st.warning("Ticket eliminado."); time.sleep(1); st.rerun()
+                st.warning("Recibo eliminado."); time.sleep(1); st.rerun()
 
         try:
             res_h = supabase.table("Recibos_Dinero").select("*").order("id", desc=True).limit(200).execute()
