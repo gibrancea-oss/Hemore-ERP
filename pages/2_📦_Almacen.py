@@ -39,6 +39,48 @@ def _formatear_datos_contacto(nombre_principal, dict_datos):
             lineas.append(f"{str(col).capitalize()}: {val}")
     return "\n".join(lineas)
 
+# ✨ HELPER: NÚMERO A LETRAS (PARA DINERO) ✨
+def numero_a_letras(numero):
+    unidades = ["", "UN ", "DOS ", "TRES ", "CUATRO ", "CINCO ", "SEIS ", "SIETE ", "OCHO ", "NUEVE ", "DIEZ ", "ONCE ", "DOCE ", "TRECE ", "CATORCE ", "QUINCE ", "DIECISEIS ", "DIECISIETE ", "DIECIOCHO ", "DIECINUEVE ", "VEINTE ", "VEINTIUN ", "VEINTIDOS ", "VEINTITRES ", "VEINTICUATRO ", "VEINTICINCO ", "VEINTISEIS ", "VEINTISIETE ", "VEINTIOCHO ", "VEINTINUEVE "]
+    decenas = ["", "DIEZ ", "VEINTE ", "TREINTA ", "CUARENTA ", "CINCUENTA ", "SESENTA ", "SETENTA ", "OCHENTA ", "NOVENTA "]
+    centenas = ["", "CIENTO ", "DOSCIENTOS ", "TRESCIENTOS ", "CUATROCIENTOS ", "QUINIENTOS ", "SEISCIENTOS ", "SETECIENTOS ", "OCHOCIENTOS ", "NOVECIENTOS "]
+
+    def convertir_grupo(n):
+        output = ""
+        if n == 100: return "CIEN "
+        output += centenas[n // 100]
+        n = n % 100
+        if n < 30: output += unidades[n]
+        else:
+            output += decenas[n // 10]
+            if n % 10 != 0: output += "Y " + unidades[n % 10]
+        return output
+
+    try:
+        numero = float(numero)
+        entero = int(numero)
+        decimal = int(round((numero - entero) * 100))
+
+        if entero == 0: letras = "CERO "
+        else:
+            letras = ""
+            millones = entero // 1000000
+            entero = entero % 1000000
+            miles = entero // 1000
+            resto = entero % 1000
+
+            if millones == 1: letras += "UN MILLON "
+            elif millones > 1: letras += convertir_grupo(millones) + "MILLONES "
+
+            if miles == 1: letras += "MIL "
+            elif miles > 1: letras += convertir_grupo(miles) + "MIL "
+
+            letras += convertir_grupo(resto)
+
+        return f"{letras.strip()} PESOS {decimal:02d}/100 M.N."
+    except:
+        return "CANTIDAD NO VALIDA"
+
 # --- CLASE PDF PERSONALIZADA ---
 class PDF(FPDF):
     def __init__(self, orientation='P', unit='mm', format='A4'):
@@ -135,6 +177,76 @@ def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
     pdf.write(5, str(texto) if texto else "_"*110)
 
+# ✨ GENERADOR PDF TICKET PARA DINERO (CUARTO DE CARTA) ✨
+def generar_pdf_ticket_dinero(datos, folio):
+    pdf = FPDF(orientation='P', unit='mm', format=(108, 140))
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=10)
+    
+    # 1. Logo
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", 10, 8, 25) 
+    else:
+        pdf.set_font('Arial', 'B', 14)
+        pdf.cell(0, 10, 'HEMORE', 0, 1, 'L')
+    
+    # 2. Encabezado
+    pdf.set_xy(10, 25)
+    pdf.set_font('Arial', 'B', 11)
+    pdf.cell(0, 5, "COMPROBANTE DE MOVIMIENTO", 0, 1, 'C')
+    pdf.ln(2)
+    
+    # 3. Checkboxes de Entrada / Salida
+    pdf.set_font('Arial', 'B', 10)
+    entrada_check = "[ X ] ENTRADA" if datos['tipo'] == "Entrada" else "[   ] ENTRADA"
+    salida_check = "[ X ] SALIDA" if datos['tipo'] == "Salida" else "[   ] SALIDA"
+    pdf.cell(0, 5, f"{entrada_check}        {salida_check}", 0, 1, 'C')
+    pdf.ln(3)
+    
+    # 4. Folio y Fecha
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(15, 5, "Folio:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(30, 5, str(folio), 0, 0)
+    pdf.set_font('Arial', 'B', 9)
+    pdf.cell(15, 5, "Fecha:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['fecha']), 0, 1)
+    pdf.ln(2)
+    
+    # 5. Nombres
+    pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Entrega:", 0, 0)
+    pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_entrega'])[:45], 0, 1)
+    
+    pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Recibe:", 0, 0)
+    pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_recibe'])[:45], 0, 1)
+    pdf.ln(3)
+    
+    # 6. Cantidad
+    pdf.set_font('Arial', 'B', 10); pdf.cell(20, 6, "Cantidad:", 0, 0)
+    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 6, f"$ {datos['monto']:,.2f} MXN", 0, 1)
+    
+    pdf.set_font('Arial', '', 7)
+    pdf.multi_cell(0, 3, f"({numero_a_letras(datos['monto'])})")
+    pdf.ln(3)
+    
+    # 7. Detalle
+    pdf.set_font('Arial', 'B', 9); pdf.cell(0, 5, "Detalle / Descripcion:", 0, 1)
+    pdf.set_font('Arial', '', 8)
+    pdf.multi_cell(0, 4, str(datos['descripcion']))
+    
+    # 8. Firmas fijadas al fondo
+    pdf.set_y(-25)
+    pdf.set_font('Arial', '', 7)
+    
+    pdf.cell(38, 0, "_"*28, 0, 0, 'C')
+    pdf.cell(12, 0, "", 0, 0)
+    pdf.cell(38, 0, "_"*28, 0, 1, 'C')
+    
+    pdf.ln(3)
+    pdf.cell(38, 3, "Firma de quien entrega", 0, 0, 'C')
+    pdf.cell(12, 3, "", 0, 0)
+    pdf.cell(38, 3, "Firma de quien recibe", 0, 1, 'C')
+
+    return pdf.output(dest='S').encode('latin-1')
+
+
 def convertir_df_a_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output) as writer: df.to_excel(writer, index=False, sheet_name='Reporte')
@@ -146,7 +258,7 @@ def convertir_df_a_excel(df):
 st.sidebar.title("🏭 Almacén Central")
 opcion_almacen = st.sidebar.radio(
     "Selecciona Operación:",
-    ["Insumos (Consumibles)", "Herramientas (Activos)", "Recibos de Entrega OC", "Entrada de Material"]
+    ["Insumos (Consumibles)", "Herramientas (Activos)", "Recibos de Entrega OC", "Entrada de Material", "Entradas y Salidas de Dinero"]
 )
 
 st.title(f"Control de {opcion_almacen.split(' (')[0]}")
@@ -643,3 +755,123 @@ elif "Entrada" in opcion_almacen:
                 st.info("No hay entradas registradas.")
         except Exception as e: 
             st.error(f"Error cargando historial: {e}")
+
+# ==================================================
+# 💰 OPCIÓN 5: ENTRADAS Y SALIDAS DE DINERO (NUEVO)
+# ==================================================
+elif "Dinero" in opcion_almacen:
+    st.markdown("### 💰 Entradas y Salidas de Dinero")
+    
+    tab_dinero_new, tab_dinero_hist = st.tabs(["➕ Nuevo Movimiento", "📜 Historial"])
+    
+    with tab_dinero_new:
+        with st.container(border=True):
+            tipo_mov = st.radio("Tipo de Movimiento:", ["Entrada", "Salida"], horizontal=True)
+            fecha_mov = st.date_input("Fecha", value=datetime.now().date())
+            
+            c1, c2 = st.columns(2)
+            quien_entrega = c1.text_input("Nombre de quien entrega:")
+            quien_recibe = c2.text_input("Nombre de quien recibe:")
+            
+            monto_mov = st.number_input("Cantidad ($):", min_value=0.00, value=0.00, step=100.0)
+            detalle_mov = st.text_area("Detalle / Descripción del movimiento:")
+            
+            if st.button("💾 Guardar y Generar Ticket", type="primary"):
+                errores_dinero = []
+                if not quien_entrega: errores_dinero.append("- Falta la persona que entrega.")
+                if not quien_recibe: errores_dinero.append("- Falta la persona que recibe.")
+                if monto_mov <= 0: errores_dinero.append("- La cantidad debe ser mayor a cero.")
+                if not detalle_mov: errores_dinero.append("- Escribe el detalle del movimiento.")
+
+                if errores_dinero:
+                    st.error("⚠️ **Faltan datos:**\n\n" + "\n".join(errores_dinero))
+                else:
+                    data_insert = {
+                        "fecha": str(fecha_mov.isoformat()),
+                        "tipo": str(tipo_mov),
+                        "quien_entrega": str(quien_entrega),
+                        "quien_recibe": str(quien_recibe),
+                        "monto": float(monto_mov),
+                        "descripcion": str(detalle_mov)
+                    }
+                    
+                    supabase.table("Entradas_Salidas_Dinero").insert(data_insert).execute()
+                    
+                    try: last_id = supabase.table("Entradas_Salidas_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
+                    except: last_id = 1
+                    
+                    pdf_bytes_ticket = generar_pdf_ticket_movimiento(data_insert, last_id)
+                    st.success("✅ Movimiento guardado correctamente.")
+                    st.download_button("🖨️ Imprimir Ticket PDF", pdf_bytes_ticket, f"Ticket_{tipo_mov}_{last_id}.pdf", "application/pdf")
+
+    with tab_dinero_hist:
+        @st.dialog("Detalle del Movimiento de Dinero")
+        def ver_editar_movimiento(id_mov, df_source):
+            row_info = df_source[df_source['id'] == id_mov].iloc[0]
+            st.markdown(f"#### 📄 Folio de Movimiento: {id_mov}")
+            
+            try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
+            except: fecha_dt = datetime.now().date()
+            
+            n_tipo = st.radio("Tipo:", ["Entrada", "Salida"], index=0 if row_info['tipo'] == "Entrada" else 1, horizontal=True)
+            n_fecha = st.date_input("Fecha", value=fecha_dt, key="d_f")
+            
+            c1, c2 = st.columns(2)
+            n_entrega = c1.text_input("Quien entrega:", value=row_info.get('quien_entrega', ''), key="d_ent")
+            n_recibe = c2.text_input("Quien recibe:", value=row_info.get('quien_recibe', ''), key="d_rec")
+            
+            n_monto = st.number_input("Cantidad ($):", value=float(row_info.get('monto', 0)), step=100.0, key="d_mon")
+            n_detalle = st.text_area("Detalle:", value=row_info.get('descripcion', ''), key="d_desc")
+            
+            st.divider()
+            col_g, col_p = st.columns(2)
+            
+            if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                supabase.table("Entradas_Salidas_Dinero").update({
+                    "fecha": str(n_fecha.isoformat()), "tipo": str(n_tipo),
+                    "quien_entrega": str(n_entrega), "quien_recibe": str(n_recibe),
+                    "monto": float(n_monto), "descripcion": str(n_detalle)
+                }).eq("id", id_mov).execute()
+                st.success("Guardado."); time.sleep(0.5); st.rerun()
+                
+            datos_act = {
+                "fecha": n_fecha.strftime("%d/%m/%Y"), "tipo": n_tipo,
+                "quien_entrega": n_entrega, "quien_recibe": n_recibe,
+                "monto": n_monto, "descripcion": n_detalle
+            }
+            try:
+                pdf_bytes_upd = generar_pdf_ticket_movimiento(datos_act, id_mov)
+                col_p.download_button("🖨️ Reimprimir Ticket", pdf_bytes_upd, f"Ticket_{n_tipo}_{id_mov}.pdf", "application/pdf", use_container_width=True)
+            except Exception as e:
+                col_p.error("Error PDF")
+                
+            st.divider()
+            if st.button("🗑️ ELIMINAR ESTE MOVIMIENTO", type="secondary", use_container_width=True):
+                supabase.table("Entradas_Salidas_Dinero").delete().eq("id", id_mov).execute()
+                st.warning("Movimiento eliminado."); time.sleep(1); st.rerun()
+
+        try:
+            res_h = supabase.table("Entradas_Salidas_Dinero").select("*").order("id", desc=True).limit(200).execute()
+            df_hist_dinero = pd.DataFrame(res_h.data)
+            
+            if not df_hist_dinero.empty:
+                c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([2, 1, 2, 2, 2])
+                c_h1.markdown("**Fecha**")
+                c_h2.markdown("**Folio**")
+                c_h3.markdown("**Tipo**")
+                c_h4.markdown("**Monto**")
+                c_h5.markdown("**Acción**")
+                
+                for idx, row in df_hist_dinero.iterrows():
+                    c1, c2, c3, c4, c5 = st.columns([2, 1, 2, 2, 2])
+                    c1.write(row.get('fecha', ''))
+                    c2.write(str(row.get('id', '')))
+                    color = "🟢" if row.get('tipo', '') == "Entrada" else "🔴"
+                    c3.write(f"{color} {row.get('tipo', '')}")
+                    c4.write(f"$ {float(row.get('monto', 0)):,.2f}")
+                    if c5.button("Ver Detalle", key=f"btn_mov_{row['id']}"):
+                        ver_editar_movimiento(row['id'], df_hist_dinero)
+            else:
+                st.info("No hay movimientos registrados.")
+        except Exception as e: 
+            st.error(f"Error cargando historial: Asegúrate de crear la tabla 'Entradas_Salidas_Dinero' en Supabase.")
