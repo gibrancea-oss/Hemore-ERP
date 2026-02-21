@@ -106,14 +106,69 @@ def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
     pdf.set_xy(107, y_start + 8); pdf.multi_cell(90, 4, str(texto2))
     pdf.set_xy(10, y_start + 35)
 
+# ✨ FUNCIÓN RECONSTRUIDA PARA MULTILINEAS ✨
 def _dibujar_tabla_productos(pdf, oc, df_productos):
     pdf.set_font('Arial', 'B', 9); pdf.set_fill_color(200, 200, 200)
-    pdf.cell(25, 7, "O.C.", 1, 0, 'C', True); pdf.cell(30, 7, "Codigo", 1, 0, 'C', True)
-    pdf.cell(95, 7, "Descripcion", 1, 0, 'C', True); pdf.cell(20, 7, "Color", 1, 0, 'C', True); pdf.cell(20, 7, "Cant", 1, 1, 'C', True)
+    # Encabezados
+    pdf.cell(25, 7, "O.C.", 1, 0, 'C', True)
+    pdf.cell(30, 7, "Codigo", 1, 0, 'C', True)
+    pdf.cell(95, 7, "Descripcion", 1, 0, 'C', True)
+    pdf.cell(20, 7, "Color", 1, 0, 'C', True)
+    pdf.cell(20, 7, "Cant", 1, 1, 'C', True)
+    
     pdf.set_font('Arial', '', 8)
+    anchos = [25, 30, 95, 20, 20]
+    
     for index, row in df_productos.iterrows():
-        pdf.cell(25, 7, str(oc), 1, 0, 'C'); pdf.cell(30, 7, str(row['Código']), 1, 0, 'C')
-        pdf.cell(95, 7, str(row['Descripción'])[:55], 1, 0, 'L'); pdf.cell(20, 7, str(row['Color']), 1, 0, 'C'); pdf.cell(20, 7, str(row['Cantidad']), 1, 1, 'C')
+        textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
+        
+        # 1. Simulamos el dibujo para saber qué tan alta debe ser la fila
+        y_inicio = pdf.get_y()
+        
+        # Prevención de salto de página a mitad de cálculo si estamos muy abajo
+        if y_inicio > 250:
+            pdf.add_page()
+            y_inicio = pdf.get_y()
+            
+        altura_maxima = 0
+        for i, text in enumerate(textos):
+            x_start = pdf.get_x()
+            # multi_cell procesa los saltos de línea automáticamente
+            pdf.multi_cell(anchos[i], 4, text)
+            altura_actual = pdf.get_y() - y_inicio
+            if altura_actual > altura_maxima:
+                altura_maxima = altura_actual
+            # Regresamos a la posición inicial en Y y avanzamos en X para simular la siguiente
+            pdf.set_xy(x_start, y_inicio)
+            
+        alto_fila = altura_maxima + 2 # Agregamos un pequeño margen para que respire
+        if alto_fila < 7:
+            alto_fila = 7 # Altura mínima estética
+            
+        # Si la fila entera ya no cabe tras calcularla, forzamos salto real
+        if y_inicio + alto_fila > 265:
+            pdf.add_page()
+            y_inicio = pdf.get_y()
+            
+        # 2. Ahora sí dibujamos las celdas y el texto
+        for i, text in enumerate(textos):
+            x = pdf.get_x()
+            y = pdf.get_y()
+            
+            # Dibujamos el contorno (la caja vacía)
+            pdf.rect(x, y, anchos[i], alto_fila)
+            
+            # Insertamos el texto dentro del contorno
+            pdf.set_xy(x, y + 1) # Margen superior leve
+            alineacion = 'L' if i == 2 else 'C' # Descripción justificada a la izq, el resto centrado
+            pdf.multi_cell(anchos[i], 4, text, border=0, align=alineacion)
+            
+            # Posicionamos el cursor para la siguiente columna
+            pdf.set_xy(x + anchos[i], y)
+            
+        # Bajamos el cursor real para la fila que sigue
+        pdf.ln(alto_fila)
+# ✨ FIN DE FUNCIÓN RECONSTRUIDA ✨
 
 def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
@@ -281,10 +336,8 @@ elif "Recibos" in opcion_almacen:
             usuario_input = st.selectbox("Registrado por:", lista_personal)
             
             if st.button("💾 Guardar y PDF", type="primary"):
-                # 1. Filtramos las filas: ignoramos completamente las que no tienen "Código"
                 items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
 
-                # 2. Generamos lista de errores si falta algo
                 errores = []
                 if not oc_input:
                     errores.append("- **Falta Orden de Compra (O.C.)**: Escribe el número de la orden en la parte superior.")
@@ -295,12 +348,10 @@ elif "Recibos" in opcion_almacen:
                 if items.empty:
                     errores.append("- **Tabla vacía**: Debes agregar al menos un producto válido (asegúrate de escribir su Código). Las celdas en blanco se ignoran.")
 
-                # 3. Si hay errores, los mostramos y detenemos el proceso
                 if errores:
                     mensaje_error = "⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores)
                     st.error(mensaje_error)
                 else:
-                    # 4. Si todo está correcto, procedemos a guardar
                     for _, row in items.iterrows():
                         val_cant = row.get("Cantidad", 0)
                         try: cant_f = float(val_cant) if val_cant is not None else 0.0
