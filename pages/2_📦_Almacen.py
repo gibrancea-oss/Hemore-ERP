@@ -110,33 +110,6 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
-def generar_pdf_dinero(datos_cabecera, df_conceptos, folio):
-    pdf = PDF()
-    pdf.info_reporte = {'tipo': 'dinero', 'titulo_doc': 'Recibo de Dinero', 'folio': folio, 'fecha': datos_cabecera['fecha']}
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=45)
-    
-    pdf.set_y(45)
-    pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 10)
-    pdf.cell(0, 8, "  Información del Pago", 1, 1, 'L', True)
-    pdf.set_font('Arial', '', 10); pdf.cell(40, 8, "Recibimos de:", 0, 0)
-    pdf.set_font('Arial', 'B', 10); pdf.cell(0, 8, datos_cabecera['cliente'], 0, 1)
-    pdf.set_font('Arial', '', 10); pdf.cell(40, 8, "La cantidad de:", 0, 0)
-    total = pd.to_numeric(df_conceptos["Monto"]).sum()
-    pdf.set_font('Arial', 'B', 12); pdf.cell(0, 8, f"$ {total:,.2f} MXN", 0, 1)
-    pdf.set_font('Arial', '', 10); pdf.cell(40, 8, "Método de Pago:", 0, 0)
-    pdf.cell(0, 8, datos_cabecera['metodo'], 0, 1); pdf.ln(5)
-    pdf.set_font('Arial', 'B', 9); pdf.set_fill_color(200, 200, 200)
-    pdf.cell(140, 8, "Concepto / Descripción", 1, 0, 'C', True); pdf.cell(50, 8, "Importe", 1, 1, 'C', True)
-    pdf.set_font('Arial', '', 9)
-    for index, row in df_conceptos.iterrows():
-        pdf.cell(140, 8, str(row['Concepto']), 1, 0, 'L')
-        monto_f = float(row['Monto']) if row['Monto'] else 0.0
-        pdf.cell(50, 8, f"$ {monto_f:,.2f}", 1, 1, 'R')
-    pdf.set_font('Arial', 'B', 9); pdf.cell(140, 8, "TOTAL RECIBIDO", 1, 0, 'R'); pdf.cell(50, 8, f"$ {total:,.2f}", 1, 1, 'R')
-    _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
-    return pdf.output(dest='S').encode('latin-1')
-
 def _dibujar_filas_productos(pdf, oc, df_productos):
     for index, row in df_productos.iterrows():
         textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
@@ -174,7 +147,8 @@ def convertir_df_a_excel(df):
 st.sidebar.title("🏭 Almacén Central")
 opcion_almacen = st.sidebar.radio(
     "Selecciona Operación:",
-    ["Insumos (Consumibles)", "Herramientas (Activos)", "Recibos de Entrega OC", "Entrada de Material", "Recibos de Dinero"]
+    # MEJORA: Eliminado "Recibos de Dinero"
+    ["Insumos (Consumibles)", "Herramientas (Activos)", "Recibos de Entrega OC", "Entrada de Material"]
 )
 
 st.title(f"Control de {opcion_almacen.split(' (')[0]}")
@@ -245,6 +219,49 @@ if "Insumos" in opcion_almacen:
             st.download_button("📥 Descargar Existencias", convertir_df_a_excel(df_view), "Existencias.xlsx")
             st.dataframe(df_view, use_container_width=True)
 
+    # ✨ HISTORIAL INSUMOS CON MODAL Y BORRADO ✨
+    with tab_hist:
+        @st.dialog("Detalles del Movimiento - Insumos")
+        def ver_detalle_insumo(mov_id, df_source):
+            row_info = df_source[df_source['id'] == mov_id].iloc[0]
+            st.markdown("#### 📄 Información del Registro")
+            st.write(f"**Fecha y Hora:** {row_info.get('fecha', '')}")
+            st.write(f"**Código:** {row_info.get('codigo', '')}")
+            st.write(f"**Descripción:** {row_info.get('descripcion', '')}")
+            st.write(f"**Tipo de Movimiento:** {row_info.get('tipo_movimiento', '')}")
+            st.write(f"**Cantidad:** {row_info.get('cantidad', '')}")
+            st.write(f"**Responsable:** {row_info.get('responsable', '')}")
+            
+            st.divider()
+            if st.button("🗑️ ELIMINAR ESTE REGISTRO", type="secondary", use_container_width=True):
+                supabase.table("Historial_Insumos").delete().eq("id", int(mov_id)).execute()
+                st.warning("Registro eliminado exitosamente."); time.sleep(1); st.rerun()
+
+        try:
+            res_h = supabase.table("Historial_Insumos").select("*").order("id", desc=True).limit(200).execute()
+            df_hist_ins = pd.DataFrame(res_h.data)
+            
+            if not df_hist_ins.empty:
+                c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([2, 2, 3, 1, 2])
+                c_h1.markdown("**Fecha**")
+                c_h2.markdown("**Código**")
+                c_h3.markdown("**Movimiento**")
+                c_h4.markdown("**Cant**")
+                c_h5.markdown("**Acción**")
+                
+                for idx, row in df_hist_ins.iterrows():
+                    c1, c2, c3, c4, c5 = st.columns([2, 2, 3, 1, 2])
+                    c1.write(row.get('fecha', ''))
+                    c2.write(row.get('codigo', ''))
+                    c3.write(row.get('tipo_movimiento', ''))
+                    c4.write(row.get('cantidad', ''))
+                    if c5.button("Ver Detalle", key=f"btn_ins_{row['id']}"):
+                        ver_detalle_insumo(row['id'], df_hist_ins)
+            else:
+                st.info("No hay movimientos registrados.")
+        except Exception as e: 
+            st.error(f"Error cargando historial: {e}")
+
 # ==================================================
 # 🔧 OPCIÓN 2: HERRAMIENTAS
 # ==================================================
@@ -288,11 +305,48 @@ elif "Herramientas" in opcion_almacen:
                         except: pass
                         st.success("Devuelto"); time.sleep(1); st.rerun()
     with tab2: st.dataframe(df_her, use_container_width=True)
+
+    # ✨ HISTORIAL HERRAMIENTAS CON MODAL Y BORRADO ✨
     with tab3:
+        @st.dialog("Detalles del Movimiento - Herramientas")
+        def ver_detalle_herramienta(mov_id, df_source):
+            row_info = df_source[df_source['id'] == mov_id].iloc[0]
+            st.markdown("#### 📄 Información del Registro")
+            st.write(f"**Fecha y Hora:** {row_info.get('Fecha_Hora', '')}")
+            st.write(f"**Herramienta:** {row_info.get('Herramienta', '')}")
+            st.write(f"**Tipo de Movimiento:** {row_info.get('Movimiento', '')}")
+            st.write(f"**Responsable:** {row_info.get('Responsable', '')}")
+            
+            st.divider()
+            if st.button("🗑️ ELIMINAR ESTE REGISTRO", type="secondary", use_container_width=True):
+                supabase.table("Historial_Herramientas").delete().eq("id", int(mov_id)).execute()
+                st.warning("Registro eliminado exitosamente."); time.sleep(1); st.rerun()
+
         try:
-            h_her = pd.DataFrame(supabase.table("Historial_Herramientas").select("*").order("id", desc=True).limit(100).execute().data)
-            st.dataframe(h_her, use_container_width=True)
-        except: pass
+            res_h = supabase.table("Historial_Herramientas").select("*").order("id", desc=True).limit(200).execute()
+            df_hist_herr = pd.DataFrame(res_h.data)
+            
+            if not df_hist_herr.empty:
+                c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([2, 3, 2, 2, 2])
+                c_h1.markdown("**Fecha**")
+                c_h2.markdown("**Herramienta**")
+                c_h3.markdown("**Movimiento**")
+                c_h4.markdown("**Responsable**")
+                c_h5.markdown("**Acción**")
+                
+                for idx, row in df_hist_herr.iterrows():
+                    c1, c2, c3, c4, c5 = st.columns([2, 3, 2, 2, 2])
+                    c1.write(row.get('Fecha_Hora', ''))
+                    c2.write(row.get('Herramienta', ''))
+                    c3.write(row.get('Movimiento', ''))
+                    c4.write(row.get('Responsable', ''))
+                    if c5.button("Ver Detalle", key=f"btn_herr_{row['id']}"):
+                        ver_detalle_herramienta(row['id'], df_hist_herr)
+            else:
+                st.info("No hay movimientos registrados.")
+        except Exception as e: 
+            st.error(f"Error cargando historial: {e}")
+
 
 # ==================================================
 # 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC 
@@ -377,9 +431,7 @@ elif "Recibos" in opcion_almacen:
                     except Exception as e: 
                         st.error(f"Error interno al generar el archivo PDF: {e}")
 
-    # ✨ SECCIÓN MODIFICADA: HISTORIAL CON TABLA, VENTANA MODAL Y BORRADO ✨
     with tab_historial:
-        # Función de la ventana emergente (modal)
         @st.dialog("Detalles de Orden de Compra")
         def ver_editar_oc(oc_seleccionada, df_source):
             df_oc = df_source[df_source['oc'] == oc_seleccionada].copy()
@@ -388,7 +440,6 @@ elif "Recibos" in opcion_almacen:
                 
                 st.markdown(f"#### 📄 Gestionar O.C. {oc_seleccionada}")
                 
-                # Datos de cabecera editables
                 try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
                 except: fecha_dt = datetime.now().date()
                 
@@ -409,7 +460,6 @@ elif "Recibos" in opcion_almacen:
                 
                 col_g, col_p = st.columns(2)
                 
-                # Botón Guardar
                 if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
                     for _, r in edited_prods.iterrows():
                         val_cant = r.get("Cantidad", 0)
@@ -423,7 +473,6 @@ elif "Recibos" in opcion_almacen:
                         }).eq("id", r["id"]).execute()
                     st.success("Guardado."); time.sleep(0.5); st.rerun()
 
-                # Botón Reimprimir
                 if n_cli in lista_nombres_cli and n_prov in lista_nombres_prov:
                     try:
                         cli_data = df_clientes[df_clientes['nombre'] == n_cli].iloc[0]
@@ -436,22 +485,18 @@ elif "Recibos" in opcion_almacen:
                     except: col_p.error("Error PDF")
                 
                 st.divider()
-                # Botón Eliminar (Zona de Peligro)
                 if st.button("🗑️ ELIMINAR ESTA ORDEN DE COMPRA", type="secondary", use_container_width=True):
                     supabase.table("Recibos_OC").delete().eq("oc", oc_seleccionada).execute()
                     st.warning("Orden eliminada. Actualizando..."); time.sleep(1); st.rerun()
 
-        # Carga de datos
         try:
             res_h = supabase.table("Recibos_OC").select("*").order("id", desc=True).limit(500).execute()
             df_hist = pd.DataFrame(res_h.data)
             
             if not df_hist.empty:
-                # Tabla Resumen (solo columnas solicitadas)
                 df_resumen = df_hist.drop_duplicates(subset=['oc'])[['fecha', 'oc', 'cliente']].reset_index(drop=True)
                 df_resumen.columns = ['Fecha', 'Orden de Compra', 'Cliente']
                 
-                # Encabezados de la tabla visual
                 c_h1, c_h2, c_h3, c_h4 = st.columns([2, 2, 3, 2])
                 c_h1.markdown("**Fecha**")
                 c_h2.markdown("**Orden de Compra**")
@@ -519,59 +564,88 @@ elif "Entrada" in opcion_almacen:
                     
                     st.success("✅ Registrado."); st.rerun()
 
+    # ✨ HISTORIAL ENTRADAS CON EDICIÓN Y REIMPRESIÓN ✨
     with tab_ent_hist:
-        try:
-            h_in = pd.DataFrame(supabase.table("Entradas_Material").select("*").order("id", desc=True).limit(200).execute().data)
-            st.dataframe(h_in, use_container_width=True)
-        except: pass
-
-# ==================================================
-# 💰 OPCIÓN 5: RECIBOS DE DINERO
-# ==================================================
-elif "Dinero" in opcion_almacen:
-    st.markdown("### 💰 Recibos de Dinero")
-    try:
-        res_cli = supabase.table("Clientes").select("nombre").execute(); df_c = pd.DataFrame(res_cli.data)
-        lista_clientes = df_c['nombre'].tolist() if not df_c.empty else []
-        df_p = pd.DataFrame(supabase.table("Personal").select("nombre").eq("activo", True).execute().data)
-        lista_p = df_p['nombre'].tolist() if not df_p.empty else []
-    except: lista_clientes = []; lista_p = []
-
-    tab_money_new, tab_money_hist = st.tabs(["➕ Nuevo Recibo", "📜 Historial"])
-    with tab_money_new:
-        fecha_pago = st.date_input("Fecha", value=datetime.now().date())
-        cliente_pago = st.selectbox("Recibimos de:", lista_clientes, index=None)
-        metodo = st.selectbox("Método", ["Transferencia", "Efectivo", "Cheque", "Depósito"])
-        user_p = st.selectbox("Recibe:", lista_p)
-        
-        if "data_money" not in st.session_state: st.session_state["data_money"] = pd.DataFrame([{"Concepto": "", "Monto": 0.0}], columns=["Concepto", "Monto"])
-        edited_money = st.data_editor(st.session_state["data_money"], num_rows="dynamic", use_container_width=True)
-        total_m = pd.to_numeric(edited_money["Monto"]).sum()
-        obs_m = st.text_area("Obs:", key="obs_m")
-        
-        if st.button("💾 Generar Recibo", type="primary"):
-            if cliente_pago and total_m > 0:
-                items_m = edited_money[edited_money["Concepto"].notna() & (edited_money["Concepto"] != "")]
-                for _, row in items_m.iterrows():
-                    val_monto = row.get("Monto", 0)
-                    try: monto_f = float(val_monto) if val_monto is not None else 0.0
-                    except: monto_f = 0.0
-
-                    data_m = {
-                        "fecha": str(fecha_pago.isoformat()), 
-                        "cliente": str(cliente_pago), 
-                        "concepto": str(row["Concepto"]), 
-                        "monto": monto_f, 
-                        "metodo_pago": str(metodo), 
-                        "usuario": str(user_p), 
-                        "observaciones": str(obs_m)
-                    }
-                    supabase.table("Recibos_Dinero").insert(data_m).execute()
+        @st.dialog("Detalles de Entrada de Material")
+        def ver_editar_entrada(oc_seleccionada, df_source):
+            df_oc = df_source[df_source['oc'] == oc_seleccionada].copy()
+            if not df_oc.empty:
+                row_info = df_oc.iloc[0]
                 
-                st.success("✅ Generado."); st.rerun()
+                st.markdown(f"#### 📥 Gestionar Entrada O.C. / Remisión {oc_seleccionada}")
+                
+                try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
+                except: fecha_dt = datetime.now().date()
+                
+                idx_prov = lista_provs.index(row_info['proveedor']) if row_info['proveedor'] in lista_provs else None
+                idx_usr = lista_pers.index(row_info['usuario']) if row_info['usuario'] in lista_pers else None
 
-    with tab_hist:
+                c1, c2, c3 = st.columns(3)
+                n_fecha = c1.date_input("Fecha", value=fecha_dt, key="e_fecha")
+                n_prov = c2.selectbox("Proveedor", lista_provs, index=idx_prov, key="e_prov")
+                n_usr = c3.selectbox("Recibido por", lista_pers, index=idx_usr, key="e_usr")
+                n_obs = st.text_area("Observaciones", value=row_info.get('observaciones', ''), key="e_obs")
+                
+                st.divider()
+                st.write("**Productos:**")
+                df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
+                df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
+                edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], key="e_editor")
+                
+                col_g, col_p = st.columns(2)
+                
+                if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                    for _, r in edited_prods.iterrows():
+                        val_cant = r.get("Cantidad", 0)
+                        try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
+                        except: cant_f = 0.0
+                        
+                        supabase.table("Entradas_Material").update({
+                            "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov),
+                            "observaciones": str(n_obs), "usuario": str(n_usr),
+                            "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
+                            "color": str(r["Color"]), "cantidad": cant_f
+                        }).eq("id", r["id"]).execute()
+                    st.success("Guardado."); time.sleep(0.5); st.rerun()
+
+                if n_prov in lista_provs:
+                    try:
+                        prov_data = df_provs[df_provs[col_p_name] == n_prov].iloc[0]
+                        prov_text = _formatear_datos_contacto(n_prov, prov_data)
+                        hemore_text = "HEMORE INDUSTRIAS\nAlmacén Central" 
+                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "hemore_texto": hemore_text}
+                        pdf_bytes = generar_pdf_entrada(datos_pdf, edited_prods, row_info['id'])
+                        col_p.download_button("🖨️ Reimprimir PDF", pdf_bytes, f"Entrada_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
+                    except: col_p.error("Error PDF")
+                
+                st.divider()
+                if st.button("🗑️ ELIMINAR ESTA ENTRADA", type="secondary", use_container_width=True):
+                    supabase.table("Entradas_Material").delete().eq("oc", oc_seleccionada).execute()
+                    st.warning("Entrada eliminada. Actualizando..."); time.sleep(1); st.rerun()
+
         try:
-            h_mon = pd.DataFrame(supabase.table("Recibos_Dinero").select("*").order("id", desc=True).limit(200).execute().data)
-            st.dataframe(h_mon, use_container_width=True)
-        except: pass
+            res_h = supabase.table("Entradas_Material").select("*").order("id", desc=True).limit(500).execute()
+            df_hist_ent = pd.DataFrame(res_h.data)
+            
+            if not df_hist_ent.empty:
+                df_resumen_ent = df_hist_ent.drop_duplicates(subset=['oc'])[['fecha', 'oc', 'proveedor']].reset_index(drop=True)
+                df_resumen_ent.columns = ['Fecha', 'OC / Remisión', 'Proveedor']
+                
+                c_h1, c_h2, c_h3, c_h4 = st.columns([2, 2, 3, 2])
+                c_h1.markdown("**Fecha**")
+                c_h2.markdown("**OC / Remisión**")
+                c_h3.markdown("**Proveedor**")
+                c_h4.markdown("**Acción**")
+                
+                for idx, row in df_resumen_ent.iterrows():
+                    c1, c2, c3, c4 = st.columns([2, 2, 3, 2])
+                    c1.write(row['Fecha'])
+                    c2.write(row['OC / Remisión'])
+                    c3.write(row['Proveedor'])
+                    if c4.button("Ver Detalle", key=f"btn_ent_{row['OC / Remisión']}"):
+                        ver_editar_entrada(row['OC / Remisión'], df_hist_ent)
+                
+            else:
+                st.info("No hay entradas registradas.")
+        except Exception as e: 
+            st.error(f"Error cargando historial: {e}")
