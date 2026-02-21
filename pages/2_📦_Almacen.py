@@ -266,7 +266,7 @@ st.title(f"Control de {opcion_almacen.split(' (')[0]}")
 # ==================================================
 # 🧱 OPCIÓN 1: INSUMOS
 # ==================================================
-if "Insumos" in opcion_almacen:
+if opcion_almacen == "Insumos (Consumibles)":
     try:
         response_ins = supabase.table("Insumos").select("*").order("id").execute()
         df_ins = pd.DataFrame(response_ins.data)
@@ -374,7 +374,7 @@ if "Insumos" in opcion_almacen:
 # ==================================================
 # 🔧 OPCIÓN 2: HERRAMIENTAS
 # ==================================================
-elif "Herramientas" in opcion_almacen:
+elif opcion_almacen == "Herramientas (Activos)":
     try:
         df_her = pd.DataFrame(supabase.table("Herramientas").select("*").order("id").execute().data)
         df_personal = pd.DataFrame(supabase.table("Personal").select("nombre").eq("activo", True).execute().data)
@@ -458,7 +458,7 @@ elif "Herramientas" in opcion_almacen:
 # ==================================================
 # 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC 
 # ==================================================
-elif "Recibos" in opcion_almacen:
+elif opcion_almacen == "Recibos de Entrega OC":
     st.markdown("### 📑 Recibos de Entrega (Salidas a Clientes)")
     try:
         res_cli = supabase.table("Clientes").select("*").execute(); df_clientes = pd.DataFrame(res_cli.data)
@@ -626,7 +626,7 @@ elif "Recibos" in opcion_almacen:
 # ==================================================
 # 📥 OPCIÓN 4: ENTRADA DE MATERIAL
 # ==================================================
-elif "Entrada" in opcion_almacen:
+elif opcion_almacen == "Entrada de Material":
     st.markdown("### 📥 Registro de Entrada de Material")
     try:
         res_prov = supabase.table("Proveedores").select("*").execute(); df_provs = pd.DataFrame(res_prov.data)
@@ -759,7 +759,7 @@ elif "Entrada" in opcion_almacen:
 # ==================================================
 # 💰 OPCIÓN 5: ENTRADAS Y SALIDAS DE DINERO (NUEVO)
 # ==================================================
-elif "Dinero" in opcion_almacen:
+elif opcion_almacen == "Entradas y Salidas de Dinero":
     st.markdown("### 💰 Entradas y Salidas de Dinero")
     
     tab_dinero_new, tab_dinero_hist = st.tabs(["➕ Nuevo Movimiento", "📜 Historial"])
@@ -800,7 +800,7 @@ elif "Dinero" in opcion_almacen:
                     try: last_id = supabase.table("Entradas_Salidas_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
                     except: last_id = 1
                     
-                    pdf_bytes_ticket = generar_pdf_ticket_movimiento(data_insert, last_id)
+                    pdf_bytes_ticket = generar_pdf_ticket_dinero(data_insert, last_id)
                     st.success("✅ Movimiento guardado correctamente.")
                     st.download_button("🖨️ Imprimir Ticket PDF", pdf_bytes_ticket, f"Ticket_{tipo_mov}_{last_id}.pdf", "application/pdf")
 
@@ -840,7 +840,7 @@ elif "Dinero" in opcion_almacen:
                 "monto": n_monto, "descripcion": n_detalle
             }
             try:
-                pdf_bytes_upd = generar_pdf_ticket_movimiento(datos_act, id_mov)
+                pdf_bytes_upd = generar_pdf_ticket_dinero(datos_act, id_mov)
                 col_p.download_button("🖨️ Reimprimir Ticket", pdf_bytes_upd, f"Ticket_{n_tipo}_{id_mov}.pdf", "application/pdf", use_container_width=True)
             except Exception as e:
                 col_p.error("Error PDF")
@@ -874,4 +874,4 @@ elif "Dinero" in opcion_almacen:
             else:
                 st.info("No hay movimientos registrados.")
         except Exception as e: 
-            st.error(f"Error cargando historial: Asegúrate de crear la tabla 'Entradas_Salidas_Dinero' en Supabase.")
+            st.error("Error cargando historial. Asegúrate de crear la tabla 'Entradas_Salidas_Dinero' en Supabase.")
