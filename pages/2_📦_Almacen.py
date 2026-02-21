@@ -177,7 +177,7 @@ def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
     pdf.write(5, str(texto) if texto else "_"*110)
 
-# ✨ GENERADOR PDF TICKET PARA DINERO (CUARTO DE CARTA) ✨
+# ✨ GENERADOR PDF TICKET PARA DINERO (CUARTO DE CARTA) - MEJORADO ✨
 def generar_pdf_ticket_dinero(datos, folio):
     pdf = FPDF(orientation='P', unit='mm', format=(108, 140))
     pdf.add_page()
@@ -190,25 +190,25 @@ def generar_pdf_ticket_dinero(datos, folio):
         pdf.set_font('Arial', 'B', 14)
         pdf.cell(0, 10, 'HEMORE', 0, 1, 'L')
     
-    # 2. Encabezado
-    pdf.set_xy(10, 25)
+    # 2. Encabezado (Título) - Aumenté el espacio vertical
+    pdf.set_xy(10, 30) # Bajé un poco el título
     pdf.set_font('Arial', 'B', 11)
     pdf.cell(0, 5, "COMPROBANTE DE MOVIMIENTO", 0, 1, 'C')
-    pdf.ln(2)
+    pdf.ln(5) # Más espacio después del título
     
     # 3. Checkboxes de Entrada / Salida
     pdf.set_font('Arial', 'B', 10)
     entrada_check = "[ X ] ENTRADA" if datos['tipo'] == "Entrada" else "[   ] ENTRADA"
     salida_check = "[ X ] SALIDA" if datos['tipo'] == "Salida" else "[   ] SALIDA"
     pdf.cell(0, 5, f"{entrada_check}        {salida_check}", 0, 1, 'C')
-    pdf.ln(3)
+    pdf.ln(6) # Más espacio después de los checkboxes
     
     # 4. Folio y Fecha
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 5, "Folio:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(30, 5, str(folio), 0, 0)
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 5, "Fecha:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['fecha']), 0, 1)
-    pdf.ln(2)
+    pdf.ln(6) # Más espacio después de Folio/Fecha
     
     # 5. Nombres
     pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Entrega:", 0, 0)
@@ -216,15 +216,15 @@ def generar_pdf_ticket_dinero(datos, folio):
     
     pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Recibe:", 0, 0)
     pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_recibe'])[:45], 0, 1)
-    pdf.ln(3)
+    pdf.ln(6) # Más espacio después de los nombres
     
     # 6. Cantidad
     pdf.set_font('Arial', 'B', 10); pdf.cell(20, 6, "Cantidad:", 0, 0)
     pdf.set_font('Arial', 'B', 12); pdf.cell(0, 6, f"$ {datos['monto']:,.2f} MXN", 0, 1)
     
     pdf.set_font('Arial', '', 7)
-    pdf.multi_cell(0, 3, f"({numero_a_letras(datos['monto'])})")
-    pdf.ln(3)
+    pdf.multi_cell(0, 4, f"({numero_a_letras(datos['monto'])})") # Un poco más de altura de línea para la letra
+    pdf.ln(6) # Más espacio después de la cantidad
     
     # 7. Detalle
     pdf.set_font('Arial', 'B', 9); pdf.cell(0, 5, "Detalle / Descripcion:", 0, 1)
@@ -239,7 +239,7 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.cell(12, 0, "", 0, 0)
     pdf.cell(38, 0, "_"*28, 0, 1, 'C')
     
-    pdf.ln(3)
+    pdf.ln(4) # Un poco más de espacio antes de los textos de firma
     pdf.cell(38, 3, "Firma de quien entrega", 0, 0, 'C')
     pdf.cell(12, 3, "", 0, 0)
     pdf.cell(38, 3, "Firma de quien recibe", 0, 1, 'C')
@@ -874,4 +874,4 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
             else:
                 st.info("No hay movimientos registrados.")
         except Exception as e: 
-            st.error("Error cargando historial. Asegúrate de crear la tabla 'Entradas_Salidas_Dinero' en Supabase.")
+            st.error(f"Error cargando historial: Asegúrate de crear la tabla 'Entradas_Salidas_Dinero' en Supabase.")
