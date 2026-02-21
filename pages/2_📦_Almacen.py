@@ -22,41 +22,33 @@ def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
     pdf.set_xy(140, 31); pdf.set_font('Arial', 'B', 10); pdf.cell(25, 6, "Fecha:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(fecha), 0, 1, 'L')
 
-# ✨ MEJORA: CAJAS DINÁMICAS QUE SE AJUSTAN AL TEXTO ✨
 def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
     pdf.set_y(45)
     pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 9)
     
-    # Dibujamos las cabeceras grises de las cajas
     pdf.cell(95, 6, f" {titulo1}", 1, 0, 'L', True)
     pdf.cell(95, 6, f" {titulo2}", 1, 1, 'L', True)
     
     y_cajas = pdf.get_y()
     pdf.set_font('Arial', '', 8)
     
-    # Escribimos el primer bloque midiendo su altura
     pdf.set_xy(12, y_cajas + 2)
     pdf.multi_cell(91, 4, str(texto1))
     h1 = pdf.get_y() - y_cajas
     
-    # Escribimos el segundo bloque midiendo su altura
     pdf.set_xy(107, y_cajas + 2)
     pdf.multi_cell(91, 4, str(texto2))
     h2 = pdf.get_y() - y_cajas
     
-    # Determinamos la caja más alta y aplicamos un padding
     alto_caja = max(h1, h2) + 4
     if alto_caja < 25:
-        alto_caja = 25 # Altura mínima por estética
+        alto_caja = 25 
         
-    # Dibujamos los contornos exteriores de las cajas en base a la altura calculada
     pdf.rect(10, y_cajas, 95, alto_caja)
     pdf.rect(105, y_cajas, 95, alto_caja)
     
-    # Posicionamos el cursor debajo de las cajas dinámicas para que la tabla comience bien
     pdf.set_xy(10, y_cajas + alto_caja + 8)
 
-# ✨ MEJORA: MAYÚSCULAS Y REEMPLAZO POR "CP" ✨
 def _formatear_datos_contacto(nombre_principal, dict_datos):
     lineas = [str(nombre_principal).upper()]
     for col, val in dict_datos.items():
@@ -64,11 +56,9 @@ def _formatear_datos_contacto(nombre_principal, dict_datos):
             nombre_col = str(col).upper()
             if nombre_col == "CODIGO_POSTAL":
                 nombre_col = "CP"
-            # Aseguramos que tanto el título (colonia, dirección) como el valor (el dato) estén en mayúsculas
             lineas.append(f"{nombre_col}: {str(val).upper()}")
     return "\n".join(lineas)
 
-# ✨ HELPER: NÚMERO A LETRAS (PARA DINERO) ✨
 def numero_a_letras(numero):
     unidades = ["", "UN ", "DOS ", "TRES ", "CUATRO ", "CINCO ", "SEIS ", "SIETE ", "OCHO ", "NUEVE ", "DIEZ ", "ONCE ", "DOCE ", "TRECE ", "CATORCE ", "QUINCE ", "DIECISEIS ", "DIECISIETE ", "DIECIOCHO ", "DIECINUEVE ", "VEINTE ", "VEINTIUN ", "VEINTIDOS ", "VEINTITRES ", "VEINTICUATRO ", "VEINTICINCO ", "VEINTISEIS ", "VEINTISIETE ", "VEINTIOCHO ", "VEINTINUEVE "]
     decenas = ["", "DIEZ ", "VEINTE ", "TREINTA ", "CUARENTA ", "CINCUENTA ", "SESENTA ", "SETENTA ", "OCHENTA ", "NOVENTA "]
@@ -133,7 +123,6 @@ class PDF(FPDF):
                 _bloque_cajas_prov_cli(self, self.info_reporte['t1'], self.info_reporte['txt1'], self.info_reporte['t2'], self.info_reporte['txt2'])
             
             if self.info_reporte.get('tipo') != 'dinero':
-                # Ya no fijamos self.set_y(90) porque las cajas de arriba ahora dictan dónde empieza la tabla
                 self.set_font('Arial', 'B', 9); self.set_fill_color(200, 200, 200)
                 self.cell(25, 7, "O.C.", 1, 0, 'C', True)
                 self.cell(30, 7, "Codigo", 1, 0, 'C', True)
@@ -181,66 +170,90 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
+# ✨ MEJORA: DIBUJO DE FILAS DINÁMICO (MÁXIMO 2 LÍNEAS, MISMO TAMAÑO DE LETRA) ✨
 def _dibujar_filas_productos(pdf, oc, df_productos):
+    pdf.set_font('Arial', '', 8.0) # Tamaño de letra siempre fijo
+    
     for index, row in df_productos.iterrows():
         textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
         anchos = [25, 30, 95, 20, 20]
         alineaciones = ['C', 'C', 'L', 'C', 'C']
         
+        # 1. Calculamos si la fila necesita 1 o 2 líneas
+        max_lines = 1
         for i, text in enumerate(textos):
-            font_size = 8.0
-            pdf.set_font('Arial', '', font_size)
+            w_disp = anchos[i] - 2 # Ancho disponible con padding
+            if pdf.get_string_width(text) > w_disp:
+                max_lines = 2 # Si algún texto es más largo que la celda, la fila entera se hace de 2 líneas
+                
+        row_height = 7 if max_lines == 1 else 11 # 7mm para 1 línea, 11mm para 2 líneas
+        
+        # Salto de página preventivo si la fila no cabe al final de la hoja
+        if pdf.get_y() + row_height > 265:
+            pdf.add_page()
             
-            while pdf.get_string_width(text) > (anchos[i] - 2) and font_size > 5.5:
-                font_size -= 0.5
-                pdf.set_font('Arial', '', font_size)
+        x_start = pdf.get_x()
+        y_start = pdf.get_y()
+        
+        # 2. Dibujamos las celdas
+        for i, text in enumerate(textos):
+            w_disp = anchos[i] - 2
+            max_w = w_disp * 2 # El ancho máximo que soportan 2 líneas
             
-            if pdf.get_string_width(text) > (anchos[i] - 2):
-                while pdf.get_string_width(text + "...") > (anchos[i] - 2) and len(text) > 0:
+            # Si el texto es tan largo que ocuparía 3 líneas, lo cortamos y ponemos "..."
+            if pdf.get_string_width(text) > max_w:
+                while pdf.get_string_width(text + "...") > max_w and len(text) > 0:
                     text = text[:-1]
                 text += "..."
+            
+            # Dibujamos el cuadro de la celda
+            pdf.rect(x_start, y_start, anchos[i], row_height)
+            
+            # Posicionamos y dibujamos el texto
+            if max_lines == 2 and pdf.get_string_width(text) <= w_disp:
+                # Centrado vertical si el texto es corto pero la celda es alta
+                pdf.set_xy(x_start + 1, y_start + 3.5)
+            else:
+                pdf.set_xy(x_start + 1, y_start + 1.5)
                 
-            ln_val = 1 if i == 4 else 0
-            pdf.cell(anchos[i], 7, text, 1, ln_val, alineaciones[i])
+            pdf.multi_cell(w_disp, 4, text, border=0, align=alineaciones[i])
+            
+            x_start += anchos[i] # Avanzamos a la siguiente columna
+            
+        pdf.set_xy(10, y_start + row_height) # Bajamos a la siguiente fila
 
 def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
     pdf.write(5, str(texto) if texto else "_"*110)
 
-# ✨ GENERADOR PDF TICKET PARA DINERO (CUARTO DE CARTA) ✨
 def generar_pdf_ticket_dinero(datos, folio):
     pdf = FPDF(orientation='P', unit='mm', format=(108, 140))
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=10)
     
-    # 1. Logo
     if os.path.exists("logo.png"):
         pdf.image("logo.png", 10, 8, 25) 
     else:
         pdf.set_font('Arial', 'B', 14)
         pdf.cell(0, 10, 'HEMORE', 0, 1, 'L')
     
-    # 2. Encabezado (Título) - Aumenté el espacio vertical
     pdf.set_xy(10, 30)
     pdf.set_font('Arial', 'B', 11)
     pdf.cell(0, 5, "COMPROBANTE DE MOVIMIENTO", 0, 1, 'C')
     pdf.ln(5)
     
-    # 3. Checkboxes de Entrada / Salida
     pdf.set_font('Arial', 'B', 10)
     entrada_check = "[ X ] ENTRADA" if datos['tipo'] == "Entrada" else "[   ] ENTRADA"
     salida_check = "[ X ] SALIDA" if datos['tipo'] == "Salida" else "[   ] SALIDA"
     pdf.cell(0, 5, f"{entrada_check}        {salida_check}", 0, 1, 'C')
     pdf.ln(6)
     
-    # 4. Folio y Fecha
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 5, "Folio:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(30, 5, str(folio), 0, 0)
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 5, "Fecha:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['fecha']), 0, 1)
     pdf.ln(6)
     
-    # 5. Nombres
     pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Entrega:", 0, 0)
     pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_entrega'])[:45], 0, 1)
     
@@ -248,7 +261,6 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_recibe'])[:45], 0, 1)
     pdf.ln(6)
     
-    # 6. Cantidad
     pdf.set_font('Arial', 'B', 10); pdf.cell(20, 6, "Cantidad:", 0, 0)
     pdf.set_font('Arial', 'B', 12); pdf.cell(0, 6, f"$ {datos['monto']:,.2f} MXN", 0, 1)
     
@@ -256,12 +268,10 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.multi_cell(0, 4, f"({numero_a_letras(datos['monto'])})")
     pdf.ln(6)
     
-    # 7. Detalle
     pdf.set_font('Arial', 'B', 9); pdf.cell(0, 5, "Detalle / Descripcion:", 0, 1)
     pdf.set_font('Arial', '', 8)
     pdf.multi_cell(0, 4, str(datos['descripcion']))
     
-    # 8. Firmas fijadas al fondo
     pdf.set_y(-25)
     pdf.set_font('Arial', '', 7)
     
