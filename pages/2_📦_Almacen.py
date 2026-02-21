@@ -251,7 +251,7 @@ elif "Herramientas" in opcion_almacen:
         except: pass
 
 # ==================================================
-# 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC (REPARADO)
+# 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC 
 # ==================================================
 elif "Recibos" in opcion_almacen:
     st.markdown("### 📑 Recibos de Entrega (Salidas a Clientes)")
@@ -281,39 +281,58 @@ elif "Recibos" in opcion_almacen:
             usuario_input = st.selectbox("Registrado por:", lista_personal)
             
             if st.button("💾 Guardar y PDF", type="primary"):
-                if oc_input and cliente_input and prov_input and not edited_df.empty:
-                    items = edited_df[edited_df["Código"].notna() & (edited_df["Código"] != "")]
-                    if not items.empty:
-                        for _, row in items.iterrows():
-                            # LIMPIEZA DE CANTIDAD PARA EVITAR TYPEERROR
-                            val_cant = row.get("Cantidad", 0)
-                            try: cant_f = float(val_cant) if val_cant is not None else 0.0
-                            except: cant_f = 0.0
+                # 1. Filtramos las filas: ignoramos completamente las que no tienen "Código"
+                items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
 
-                            data_to_insert = {
-                                "fecha": str(fecha_input.isoformat()), 
-                                "oc": str(oc_input), 
-                                "cliente": str(cliente_input), 
-                                "proveedor": str(prov_input), 
-                                "codigo": str(row["Código"]), 
-                                "descripcion": str(row["Descripción"]), 
-                                "color": str(row["Color"]), 
-                                "cantidad": cant_f, 
-                                "usuario": str(usuario_input), 
-                                "observaciones": str(observaciones)
-                            }
-                            supabase.table("Recibos_OC").insert(data_to_insert).execute()
+                # 2. Generamos lista de errores si falta algo
+                errores = []
+                if not oc_input:
+                    errores.append("- **Falta Orden de Compra (O.C.)**: Escribe el número de la orden en la parte superior.")
+                if not prov_input:
+                    errores.append("- **Falta Proveedor**: Selecciona el proveedor (Origen) de la lista desplegable.")
+                if not cliente_input:
+                    errores.append("- **Falta Cliente**: Selecciona el cliente (Destino) de la lista desplegable.")
+                if items.empty:
+                    errores.append("- **Tabla vacía**: Debes agregar al menos un producto válido (asegúrate de escribir su Código). Las celdas en blanco se ignoran.")
+
+                # 3. Si hay errores, los mostramos y detenemos el proceso
+                if errores:
+                    mensaje_error = "⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores)
+                    st.error(mensaje_error)
+                else:
+                    # 4. Si todo está correcto, procedemos a guardar
+                    for _, row in items.iterrows():
+                        val_cant = row.get("Cantidad", 0)
+                        try: cant_f = float(val_cant) if val_cant is not None else 0.0
+                        except: cant_f = 0.0
+
+                        data_to_insert = {
+                            "fecha": str(fecha_input.isoformat()), 
+                            "oc": str(oc_input), 
+                            "cliente": str(cliente_input), 
+                            "proveedor": str(prov_input), 
+                            "codigo": str(row["Código"]), 
+                            "descripcion": str(row["Descripción"]), 
+                            "color": str(row["Color"]), 
+                            "cantidad": cant_f, 
+                            "usuario": str(usuario_input), 
+                            "observaciones": str(observaciones)
+                        }
+                        supabase.table("Recibos_OC").insert(data_to_insert).execute()
+                    
+                    try:
+                        cli_data = df_clientes[df_clientes['nombre'] == cliente_input].iloc[0]
+                        prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
+                        last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
+                        prov_text = f"{prov_input}\n{prov_data.get('domicilio', '')}\nRFC: {prov_data.get('rfc', '')}"
+                        cli_text = f"{cliente_input}\n{cli_data.get('direccion', '')}\nRFC: {cli_data.get('rfc', '')}"
+                        datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text}
+                        pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
                         
-                        try:
-                            cli_data = df_clientes[df_clientes['nombre'] == cliente_input].iloc[0]
-                            prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
-                            last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
-                            prov_text = f"{prov_input}\n{prov_data.get('domicilio', '')}\nRFC: {prov_data.get('rfc', '')}"
-                            cli_text = f"{cliente_input}\n{cli_data.get('direccion', '')}\nRFC: {cli_data.get('rfc', '')}"
-                            datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text}
-                            pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
-                            st.success("Guardado."); st.download_button("🖨️ PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
-                        except Exception as e: st.error(f"Error al generar PDF: {e}")
+                        st.success("✅ Guardado correctamente.")
+                        st.download_button("🖨️ Imprimir PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
+                    except Exception as e: 
+                        st.error(f"Error interno al generar el archivo PDF: {e}")
 
     with tab_historial:
         try:
