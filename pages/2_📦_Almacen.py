@@ -47,7 +47,8 @@ def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     pdf.set_auto_page_break(auto=True, margin=45)
     pdf.set_xy(0, 10); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'Recibo de Entrega', 0, 1, 'C')
     _bloque_folio_fecha(pdf, folio, datos_cabecera['fecha'])
-    _bloque_cajas_prov_cli(pdf, "Proveedor (Origen)", datos_cabecera['prov_texto'], "Cliente (Destino)", datos_cabecera['cli_texto'])
+    # MEJORA: Eliminado (Origen) y (Destino)
+    _bloque_cajas_prov_cli(pdf, "Proveedor", datos_cabecera['prov_texto'], "Cliente", datos_cabecera['cli_texto'])
     _dibujar_tabla_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
@@ -58,7 +59,8 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     pdf.set_auto_page_break(auto=True, margin=45)
     pdf.set_xy(0, 10); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'Constancia de Entrada', 0, 1, 'C')
     _bloque_folio_fecha(pdf, folio, datos_cabecera['fecha'])
-    _bloque_cajas_prov_cli(pdf, "Proveedor (Origen)", datos_cabecera['prov_texto'], "Receptor (Destino)", datos_cabecera['hemore_texto'])
+    # MEJORA: Eliminado (Origen) y (Destino)
+    _bloque_cajas_prov_cli(pdf, "Proveedor", datos_cabecera['prov_texto'], "Receptor", datos_cabecera['hemore_texto'])
     _dibujar_tabla_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
@@ -101,16 +103,23 @@ def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
     pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 9)
     pdf.cell(95, 6, f" {titulo1}", 1, 0, 'L', True); pdf.cell(95, 6, f" {titulo2}", 1, 1, 'L', True)
     pdf.set_font('Arial', '', 8)
-    pdf.cell(95, 25, "", 1, 0); pdf.cell(95, 25, "", 1, 0)
+    # MEJORA: Aumenté el tamaño del recuadro de 25 a 35 para que quepan todos los datos de contacto
+    pdf.cell(95, 35, "", 1, 0); pdf.cell(95, 35, "", 1, 0)
     pdf.set_xy(12, y_start + 8); pdf.multi_cell(90, 4, str(texto1))
     pdf.set_xy(107, y_start + 8); pdf.multi_cell(90, 4, str(texto2))
-    pdf.set_xy(10, y_start + 35)
+    pdf.set_xy(10, y_start + 45)
 
+# MEJORA: Función para extraer y formatear TODOS los datos dinámicamente
+def _formatear_datos_contacto(nombre_principal, dict_datos):
+    lineas = [str(nombre_principal)]
+    for col, val in dict_datos.items():
+        # Ignoramos datos de sistema vacíos
+        if str(col).lower() not in ['id', 'created_at', 'nombre', 'empresa', 'activo'] and pd.notna(val) and str(val).strip() != "":
+            lineas.append(f"{str(col).capitalize()}: {val}")
+    return "\n".join(lineas)
 
-# ✨ FUNCIÓN REPARADA: AUTO-AJUSTE DE TAMAÑO DE TEXTO ✨
 def _dibujar_tabla_productos(pdf, oc, df_productos):
     pdf.set_font('Arial', 'B', 9); pdf.set_fill_color(200, 200, 200)
-    # Encabezados fijos
     pdf.cell(25, 7, "O.C.", 1, 0, 'C', True)
     pdf.cell(30, 7, "Codigo", 1, 0, 'C', True)
     pdf.cell(95, 7, "Descripcion", 1, 0, 'C', True)
@@ -126,18 +135,15 @@ def _dibujar_tabla_productos(pdf, oc, df_productos):
             font_size = 8.0
             pdf.set_font('Arial', '', font_size)
             
-            # 1. Achicamos la letra si el texto es muy largo, hasta un mínimo de 5.5 (legible)
             while pdf.get_string_width(text) > (anchos[i] - 2) and font_size > 5.5:
                 font_size -= 0.5
                 pdf.set_font('Arial', '', font_size)
             
-            # 2. Si llegó al tamaño mínimo y aún no cabe, cortamos con "..."
             if pdf.get_string_width(text) > (anchos[i] - 2):
                 while pdf.get_string_width(text + "...") > (anchos[i] - 2) and len(text) > 0:
                     text = text[:-1]
                 text += "..."
                 
-            # 3. Imprimimos la celda de la tabla sin alterar las dimensiones
             ln_val = 1 if i == 4 else 0
             pdf.cell(anchos[i], 7, text, 1, ln_val, alineaciones[i])
 
@@ -347,8 +353,11 @@ elif "Recibos" in opcion_almacen:
                         cli_data = df_clientes[df_clientes['nombre'] == cliente_input].iloc[0]
                         prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
                         last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
-                        prov_text = f"{prov_input}\n{prov_data.get('domicilio', '')}\nRFC: {prov_data.get('rfc', '')}"
-                        cli_text = f"{cliente_input}\n{cli_data.get('direccion', '')}\nRFC: {cli_data.get('rfc', '')}"
+                        
+                        # MEJORA: Construcción dinámica con TODO lo que tengas en base de datos
+                        prov_text = _formatear_datos_contacto(prov_input, prov_data)
+                        cli_text = _formatear_datos_contacto(cliente_input, cli_data)
+                        
                         datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text}
                         pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
                         
