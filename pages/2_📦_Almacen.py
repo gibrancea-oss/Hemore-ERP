@@ -106,69 +106,41 @@ def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
     pdf.set_xy(107, y_start + 8); pdf.multi_cell(90, 4, str(texto2))
     pdf.set_xy(10, y_start + 35)
 
-# ✨ FUNCIÓN RECONSTRUIDA PARA MULTILINEAS ✨
+
+# ✨ FUNCIÓN REPARADA: AUTO-AJUSTE DE TAMAÑO DE TEXTO ✨
 def _dibujar_tabla_productos(pdf, oc, df_productos):
     pdf.set_font('Arial', 'B', 9); pdf.set_fill_color(200, 200, 200)
-    # Encabezados
+    # Encabezados fijos
     pdf.cell(25, 7, "O.C.", 1, 0, 'C', True)
     pdf.cell(30, 7, "Codigo", 1, 0, 'C', True)
     pdf.cell(95, 7, "Descripcion", 1, 0, 'C', True)
     pdf.cell(20, 7, "Color", 1, 0, 'C', True)
     pdf.cell(20, 7, "Cant", 1, 1, 'C', True)
     
-    pdf.set_font('Arial', '', 8)
-    anchos = [25, 30, 95, 20, 20]
-    
     for index, row in df_productos.iterrows():
         textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
+        anchos = [25, 30, 95, 20, 20]
+        alineaciones = ['C', 'C', 'L', 'C', 'C']
         
-        # 1. Simulamos el dibujo para saber qué tan alta debe ser la fila
-        y_inicio = pdf.get_y()
-        
-        # Prevención de salto de página a mitad de cálculo si estamos muy abajo
-        if y_inicio > 250:
-            pdf.add_page()
-            y_inicio = pdf.get_y()
-            
-        altura_maxima = 0
         for i, text in enumerate(textos):
-            x_start = pdf.get_x()
-            # multi_cell procesa los saltos de línea automáticamente
-            pdf.multi_cell(anchos[i], 4, text)
-            altura_actual = pdf.get_y() - y_inicio
-            if altura_actual > altura_maxima:
-                altura_maxima = altura_actual
-            # Regresamos a la posición inicial en Y y avanzamos en X para simular la siguiente
-            pdf.set_xy(x_start, y_inicio)
+            font_size = 8.0
+            pdf.set_font('Arial', '', font_size)
             
-        alto_fila = altura_maxima + 2 # Agregamos un pequeño margen para que respire
-        if alto_fila < 7:
-            alto_fila = 7 # Altura mínima estética
+            # 1. Achicamos la letra si el texto es muy largo, hasta un mínimo de 5.5 (legible)
+            while pdf.get_string_width(text) > (anchos[i] - 2) and font_size > 5.5:
+                font_size -= 0.5
+                pdf.set_font('Arial', '', font_size)
             
-        # Si la fila entera ya no cabe tras calcularla, forzamos salto real
-        if y_inicio + alto_fila > 265:
-            pdf.add_page()
-            y_inicio = pdf.get_y()
-            
-        # 2. Ahora sí dibujamos las celdas y el texto
-        for i, text in enumerate(textos):
-            x = pdf.get_x()
-            y = pdf.get_y()
-            
-            # Dibujamos el contorno (la caja vacía)
-            pdf.rect(x, y, anchos[i], alto_fila)
-            
-            # Insertamos el texto dentro del contorno
-            pdf.set_xy(x, y + 1) # Margen superior leve
-            alineacion = 'L' if i == 2 else 'C' # Descripción justificada a la izq, el resto centrado
-            pdf.multi_cell(anchos[i], 4, text, border=0, align=alineacion)
-            
-            # Posicionamos el cursor para la siguiente columna
-            pdf.set_xy(x + anchos[i], y)
-            
-        # Bajamos el cursor real para la fila que sigue
-        pdf.ln(alto_fila)
-# ✨ FIN DE FUNCIÓN RECONSTRUIDA ✨
+            # 2. Si llegó al tamaño mínimo y aún no cabe, cortamos con "..."
+            if pdf.get_string_width(text) > (anchos[i] - 2):
+                while pdf.get_string_width(text + "...") > (anchos[i] - 2) and len(text) > 0:
+                    text = text[:-1]
+                text += "..."
+                
+            # 3. Imprimimos la celda de la tabla sin alterar las dimensiones
+            ln_val = 1 if i == 4 else 0
+            pdf.cell(anchos[i], 7, text, 1, ln_val, alineaciones[i])
+
 
 def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
