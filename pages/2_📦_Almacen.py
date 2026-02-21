@@ -141,16 +141,34 @@ class PDF(FPDF):
                 self.cell(20, 7, "Cant", 1, 1, 'C', True)
                 self.ln() 
 
+    # ✨ MEJORA: FOOTER DINÁMICO CON NOMBRE Y FIRMAS ACTUALIZADAS ✨
     def footer(self):
         self.set_y(-40)
         self.set_font('Arial', '', 8)
+        
+        # Recuperamos el usuario registrado
+        nombre_usuario = ""
+        if self.info_reporte and 'usuario' in self.info_reporte:
+            nombre_usuario = str(self.info_reporte['usuario'])
+            
         self.cell(90, 0, '_______________________________', 0, 0, 'C')
         self.cell(10, 0, '', 0, 0)
         self.cell(90, 0, '_______________________________', 0, 1, 'C')
-        self.ln(4)
-        self.cell(90, 5, 'Entrega / Autoriza', 0, 0, 'C')
-        self.cell(10, 5, '', 0, 0)
-        self.cell(90, 5, 'Recibe / Caja', 0, 1, 'C')
+        
+        self.ln(2) # Pequeño espacio para bajar los textos
+        
+        # Fila de nombres (Solo izquierda para quien entrega)
+        self.set_font('Arial', 'B', 8)
+        self.cell(90, 4, nombre_usuario[:45], 0, 0, 'C')
+        self.cell(10, 4, '', 0, 0)
+        self.cell(90, 4, '', 0, 1, 'C') # Vacío en la derecha
+        
+        # Fila de leyendas solicitadas
+        self.set_font('Arial', '', 8)
+        self.cell(90, 4, 'Nombre completo de quien entrega y firma', 0, 0, 'C')
+        self.cell(10, 4, '', 0, 0)
+        self.cell(90, 4, 'Nombre completo de quien recibe y firma', 0, 1, 'C')
+        
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
@@ -160,7 +178,8 @@ def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     pdf = PDF()
     pdf.info_reporte = {
         'tipo': 'entrega', 'titulo_doc': 'Recibo de Entrega', 'folio': folio, 'fecha': datos_cabecera['fecha'],
-        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Cliente", 'txt2': datos_cabecera['cli_texto']
+        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Cliente", 'txt2': datos_cabecera['cli_texto'],
+        'usuario': datos_cabecera.get('usuario', '') # <-- Pasamos el usuario aquí
     }
     pdf.add_page() 
     pdf.set_auto_page_break(auto=True, margin=45)
@@ -172,7 +191,8 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     pdf = PDF()
     pdf.info_reporte = {
         'tipo': 'entrada', 'titulo_doc': 'Constancia de Entrada', 'folio': folio, 'fecha': datos_cabecera['fecha'],
-        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Receptor", 'txt2': datos_cabecera['hemore_texto']
+        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Receptor", 'txt2': datos_cabecera['hemore_texto'],
+        'usuario': datos_cabecera.get('usuario', '') # <-- Pasamos el usuario aquí
     }
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
@@ -629,7 +649,8 @@ elif opcion_almacen == "Recibos de Entrega OC":
                         prov_text = _formatear_datos_contacto(prov_input, prov_data)
                         cli_text = _formatear_datos_contacto(cliente_input, cli_data)
                         
-                        datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text}
+                        # ✨ PASAMOS EL USUARIO AL DICCIONARIO PARA EL PDF ✨
+                        datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "usuario": usuario_input}
                         pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
                         
                         st.success("✅ Guardado correctamente.")
@@ -685,7 +706,9 @@ elif opcion_almacen == "Recibos de Entrega OC":
                         prov_data = df_proveedores[df_proveedores[col_p_name] == n_prov].iloc[0]
                         prov_text = _formatear_datos_contacto(n_prov, prov_data)
                         cli_text = _formatear_datos_contacto(n_cli, cli_data)
-                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text}
+                        
+                        # ✨ PASAMOS EL USUARIO AL DICCIONARIO PARA EL PDF ✨
+                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text, "usuario": row_info.get('usuario', '')}
                         pdf_bytes = generar_pdf_entrega(datos_pdf, edited_prods, row_info['id'])
                         col_p.download_button("🖨️ PDF", pdf_bytes, f"Recibo_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
                     except: col_p.error("Error PDF")
@@ -818,7 +841,9 @@ elif opcion_almacen == "Entrada de Material":
                         prov_data = df_provs[df_provs[col_p_name] == n_prov].iloc[0]
                         prov_text = _formatear_datos_contacto(n_prov, prov_data)
                         hemore_text = "HEMORE INDUSTRIAS\nAlmacén Central" 
-                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "hemore_texto": hemore_text}
+                        
+                        # ✨ PASAMOS EL USUARIO AL DICCIONARIO PARA EL PDF ✨
+                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "hemore_texto": hemore_text, "usuario": n_usr}
                         pdf_bytes = generar_pdf_entrada(datos_pdf, edited_prods, row_info['id'])
                         col_p.download_button("🖨️ Reimprimir PDF", pdf_bytes, f"Entrada_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
                     except: col_p.error("Error PDF")
