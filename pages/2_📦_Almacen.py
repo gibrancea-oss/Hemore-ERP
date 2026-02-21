@@ -16,7 +16,7 @@ utils.validar_login()
 
 supabase = utils.supabase 
 
-# --- HELPER FUNCTIONS (DEFINIDAS ANTES PARA QUE LA CLASE PDF LAS PUEDA USAR) ---
+# --- HELPER FUNCTIONS ---
 def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_font('Arial', 'B', 10)
     pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
@@ -27,11 +27,9 @@ def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
     pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 9)
     pdf.cell(95, 6, f" {titulo1}", 1, 0, 'L', True); pdf.cell(95, 6, f" {titulo2}", 1, 1, 'L', True)
     pdf.set_font('Arial', '', 8)
-    # Altura fija de 35 para los recuadros de información
     pdf.cell(95, 35, "", 1, 0); pdf.cell(95, 35, "", 1, 0)
     pdf.set_xy(12, y_start + 8); pdf.multi_cell(90, 4, str(texto1))
     pdf.set_xy(107, y_start + 8); pdf.multi_cell(90, 4, str(texto2))
-    # Movemos el cursor abajo de las cajas para lo que siga
     pdf.set_xy(10, y_start + 40)
 
 def _formatear_datos_contacto(nombre_principal, dict_datos):
@@ -41,14 +39,13 @@ def _formatear_datos_contacto(nombre_principal, dict_datos):
             lineas.append(f"{str(col).capitalize()}: {val}")
     return "\n".join(lineas)
 
-# --- CLASE PDF PERSONALIZADA (MEJORADA PARA REPETIR ENCABEZADOS) ---
+# --- CLASE PDF PERSONALIZADA ---
 class PDF(FPDF):
     def __init__(self, orientation='P', unit='mm', format='A4'):
         super().__init__(orientation, unit, format)
-        self.info_reporte = None # Aquí guardaremos los datos para redibujarlos en cada página
+        self.info_reporte = None 
 
     def header(self):
-        # 1. Logo (Siempre se dibuja)
         if os.path.exists("logo.png"):
             self.image("logo.png", 10, 8, 33) 
         else:
@@ -56,31 +53,23 @@ class PDF(FPDF):
             self.cell(40, 10, 'HEMORE', 0, 0, 'L')
         self.ln(1)
 
-        # 2. Si hay información del reporte configurada, dibujamos toda la cabecera
-        # Esto asegura que salga en la Pág 1, Pág 2, etc.
         if self.info_reporte:
-            # Título
             self.set_xy(0, 10); self.set_font('Arial', 'B', 16)
             self.cell(0, 10, self.info_reporte['titulo_doc'], 0, 1, 'C')
-            
-            # Folio y Fecha
             _bloque_folio_fecha(self, self.info_reporte['folio'], self.info_reporte['fecha'])
             
-            # Cajas de Cliente/Proveedor (Solo si es reporte de Entrega o Entrada)
             if 't1' in self.info_reporte:
                 _bloque_cajas_prov_cli(self, self.info_reporte['t1'], self.info_reporte['txt1'], self.info_reporte['t2'], self.info_reporte['txt2'])
             
-            # Encabezados de la Tabla (La franja gris)
-            # Solo si no es recibo de dinero (que tiene otro formato)
             if self.info_reporte.get('tipo') != 'dinero':
-                self.set_y(90) # Posición fija para que la tabla empiece siempre igual
+                self.set_y(90) 
                 self.set_font('Arial', 'B', 9); self.set_fill_color(200, 200, 200)
                 self.cell(25, 7, "O.C.", 1, 0, 'C', True)
                 self.cell(30, 7, "Codigo", 1, 0, 'C', True)
                 self.cell(95, 7, "Descripcion", 1, 0, 'C', True)
                 self.cell(20, 7, "Color", 1, 0, 'C', True)
                 self.cell(20, 7, "Cant", 1, 1, 'C', True)
-                self.ln() # Salto de línea para empezar los datos
+                self.ln() 
 
     def footer(self):
         self.set_y(-40)
@@ -96,22 +85,15 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
-# --- GENERADORES DE PDF (MODIFICADOS PARA USAR LA NUEVA CLASE) ---
+# --- GENERADORES DE PDF ---
 def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     pdf = PDF()
-    # Configuramos los datos QUE SE REPETIRÁN en cada página
     pdf.info_reporte = {
-        'tipo': 'entrega',
-        'titulo_doc': 'Recibo de Entrega',
-        'folio': folio,
-        'fecha': datos_cabecera['fecha'],
-        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'],
-        't2': "Cliente", 'txt2': datos_cabecera['cli_texto']
+        'tipo': 'entrega', 'titulo_doc': 'Recibo de Entrega', 'folio': folio, 'fecha': datos_cabecera['fecha'],
+        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Cliente", 'txt2': datos_cabecera['cli_texto']
     }
-    pdf.add_page() # Al agregar página, se dibuja el header automáticamente
+    pdf.add_page() 
     pdf.set_auto_page_break(auto=True, margin=45)
-    
-    # Ya no dibujamos cajas ni headers aquí, porque lo hace la clase PDF
     _dibujar_filas_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
@@ -119,16 +101,11 @@ def generar_pdf_entrega(datos_cabecera, df_productos, folio):
 def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     pdf = PDF()
     pdf.info_reporte = {
-        'tipo': 'entrada',
-        'titulo_doc': 'Constancia de Entrada',
-        'folio': folio,
-        'fecha': datos_cabecera['fecha'],
-        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'],
-        't2': "Receptor", 'txt2': datos_cabecera['hemore_texto']
+        'tipo': 'entrada', 'titulo_doc': 'Constancia de Entrada', 'folio': folio, 'fecha': datos_cabecera['fecha'],
+        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Receptor", 'txt2': datos_cabecera['hemore_texto']
     }
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
-    
     _dibujar_filas_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
@@ -136,11 +113,9 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
 def generar_pdf_dinero(datos_cabecera, df_conceptos, folio):
     pdf = PDF()
     pdf.info_reporte = {'tipo': 'dinero', 'titulo_doc': 'Recibo de Dinero', 'folio': folio, 'fecha': datos_cabecera['fecha']}
-    # El recibo de dinero es especial, sus cajas no son estándar, así que no las pasamos a info_reporte
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
     
-    # Dibujo manual específico para dinero (se mantiene igual)
     pdf.set_y(45)
     pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 10)
     pdf.cell(0, 8, "  Información del Pago", 1, 1, 'L', True)
@@ -162,11 +137,7 @@ def generar_pdf_dinero(datos_cabecera, df_conceptos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
-
-# ✨ FUNCIÓN SOLO PARA FILAS (LOS ENCABEZADOS AHORA ESTÁN EN LA CLASE PDF) ✨
 def _dibujar_filas_productos(pdf, oc, df_productos):
-    # Nota: Ya no dibujamos los encabezados grises aquí.
-    
     for index, row in df_productos.iterrows():
         textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
         anchos = [25, 30, 95, 20, 20]
@@ -339,6 +310,7 @@ elif "Recibos" in opcion_almacen:
     except: lista_nombres_cli = []; lista_nombres_prov = []; lista_personal = []; df_clientes = pd.DataFrame(); df_proveedores = pd.DataFrame()
 
     tab_nuevo, tab_historial = st.tabs(["➕ Nuevo Recibo", "📜 Historial"])
+    
     with tab_nuevo:
         with st.container(border=True):
             st.subheader("Datos de la Entrega")
@@ -405,11 +377,91 @@ elif "Recibos" in opcion_almacen:
                     except Exception as e: 
                         st.error(f"Error interno al generar el archivo PDF: {e}")
 
+    # ✨ SECCIÓN MODIFICADA: HISTORIAL CON EDICIÓN Y REIMPRESIÓN ✨
     with tab_historial:
         try:
-            h = pd.DataFrame(supabase.table("Recibos_OC").select("*").order("id", desc=True).limit(200).execute().data)
-            st.dataframe(h, use_container_width=True)
-        except: pass
+            res_h = supabase.table("Recibos_OC").select("*").order("id", desc=True).limit(500).execute()
+            df_hist = pd.DataFrame(res_h.data)
+            
+            if not df_hist.empty:
+                ocs_unicas = df_hist['oc'].unique()
+                oc_seleccionada = st.selectbox("🎯 Selecciona la Orden de Compra para ver o editar:", ocs_unicas)
+                
+                if oc_seleccionada:
+                    df_oc = df_hist[df_hist['oc'] == oc_seleccionada].copy()
+                    row_info = df_oc.iloc[0] # Tomamos los datos del encabezado de la primera fila
+                    
+                    st.markdown(f"### 📦 Detalles de la O.C. {oc_seleccionada}")
+                    with st.container(border=True):
+                        c1, c2, c3 = st.columns(3)
+                        
+                        # Precargar la fecha si es válida, si no poner la de hoy
+                        try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
+                        except: fecha_dt = datetime.now().date()
+                        
+                        # Buscar los índices para precargar los selectbox
+                        idx_cli = lista_nombres_cli.index(row_info['cliente']) if row_info['cliente'] in lista_nombres_cli else None
+                        idx_prov = lista_nombres_prov.index(row_info['proveedor']) if row_info['proveedor'] in lista_nombres_prov else None
+                        
+                        # Inputs para editar cabecera
+                        n_fecha = c1.date_input("Fecha", value=fecha_dt)
+                        n_cli = c2.selectbox("Cliente", lista_nombres_cli, index=idx_cli)
+                        n_prov = c3.selectbox("Proveedor", lista_nombres_prov, index=idx_prov)
+                        n_obs = st.text_area("Observaciones", value=row_info.get('observaciones', ''))
+                        
+                        st.markdown("**Productos en este Recibo:**")
+                        # Preparamos la tabla para el editor (renombramos columnas para que sea visualmente igual al ingreso)
+                        df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
+                        df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
+                        
+                        # Mostrar el editor de datos (la columna ID se bloquea para no romper la base de datos)
+                        edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'])
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        # BOTÓN 1: GUARDAR CAMBIOS
+                        if col1.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                            for _, r in edited_prods.iterrows():
+                                val_cant = r.get("Cantidad", 0)
+                                try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
+                                except: cant_f = 0.0
+                                
+                                # Actualizamos directo por el ID de la fila
+                                supabase.table("Recibos_OC").update({
+                                    "fecha": str(n_fecha.isoformat()),
+                                    "cliente": str(n_cli),
+                                    "proveedor": str(n_prov),
+                                    "observaciones": str(n_obs),
+                                    "codigo": str(r["Código"]),
+                                    "descripcion": str(r["Descripción"]),
+                                    "color": str(r["Color"]),
+                                    "cantidad": cant_f
+                                }).eq("id", r["id"]).execute()
+                                
+                            st.success("✅ Cambios guardados correctamente."); st.rerun()
+                            
+                        # BOTÓN 2: REIMPRIMIR PDF
+                        if n_cli in lista_nombres_cli and n_prov in lista_nombres_prov:
+                            try:
+                                cli_data = df_clientes[df_clientes['nombre'] == n_cli].iloc[0]
+                                prov_data = df_proveedores[df_proveedores[col_p_name] == n_prov].iloc[0]
+                                prov_text = _formatear_datos_contacto(n_prov, prov_data)
+                                cli_text = _formatear_datos_contacto(n_cli, cli_data)
+                                
+                                datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text}
+                                # Usamos la tabla editada y el ID de la primera fila como folio visual
+                                pdf_bytes = generar_pdf_entrega(datos_pdf, edited_prods, row_info['id'])
+                                
+                                col2.download_button("🖨️ Reimprimir PDF", pdf_bytes, f"Recibo_{oc_seleccionada}_Reimpresion.pdf", "application/pdf", use_container_width=True)
+                            except Exception as e:
+                                col2.error(f"Error preparando PDF: {e}")
+                        else:
+                            col2.warning("Para reimprimir, el Cliente y Proveedor deben ser válidos.")
+                            
+            else:
+                st.info("No hay recibos registrados en el historial.")
+        except Exception as e: 
+            st.error(f"Error cargando historial: {e}")
 
 # ==================================================
 # 📥 OPCIÓN 4: ENTRADA DE MATERIAL
