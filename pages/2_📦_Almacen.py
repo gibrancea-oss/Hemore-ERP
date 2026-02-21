@@ -16,15 +16,71 @@ utils.validar_login()
 
 supabase = utils.supabase 
 
-# --- CLASE PDF PERSONALIZADA ---
+# --- HELPER FUNCTIONS (DEFINIDAS ANTES PARA QUE LA CLASE PDF LAS PUEDA USAR) ---
+def _bloque_folio_fecha(pdf, folio, fecha):
+    pdf.set_font('Arial', 'B', 10)
+    pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
+    pdf.set_xy(140, 31); pdf.set_font('Arial', 'B', 10); pdf.cell(25, 6, "Fecha:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(fecha), 0, 1, 'L')
+
+def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
+    pdf.set_y(45); y_start = pdf.get_y()
+    pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 9)
+    pdf.cell(95, 6, f" {titulo1}", 1, 0, 'L', True); pdf.cell(95, 6, f" {titulo2}", 1, 1, 'L', True)
+    pdf.set_font('Arial', '', 8)
+    # Altura fija de 35 para los recuadros de información
+    pdf.cell(95, 35, "", 1, 0); pdf.cell(95, 35, "", 1, 0)
+    pdf.set_xy(12, y_start + 8); pdf.multi_cell(90, 4, str(texto1))
+    pdf.set_xy(107, y_start + 8); pdf.multi_cell(90, 4, str(texto2))
+    # Movemos el cursor abajo de las cajas para lo que siga
+    pdf.set_xy(10, y_start + 40)
+
+def _formatear_datos_contacto(nombre_principal, dict_datos):
+    lineas = [str(nombre_principal)]
+    for col, val in dict_datos.items():
+        if str(col).lower() not in ['id', 'created_at', 'nombre', 'empresa', 'activo'] and pd.notna(val) and str(val).strip() != "":
+            lineas.append(f"{str(col).capitalize()}: {val}")
+    return "\n".join(lineas)
+
+# --- CLASE PDF PERSONALIZADA (MEJORADA PARA REPETIR ENCABEZADOS) ---
 class PDF(FPDF):
+    def __init__(self, orientation='P', unit='mm', format='A4'):
+        super().__init__(orientation, unit, format)
+        self.info_reporte = None # Aquí guardaremos los datos para redibujarlos en cada página
+
     def header(self):
+        # 1. Logo (Siempre se dibuja)
         if os.path.exists("logo.png"):
             self.image("logo.png", 10, 8, 33) 
         else:
             self.set_font('Arial', 'B', 20)
             self.cell(40, 10, 'HEMORE', 0, 0, 'L')
         self.ln(1)
+
+        # 2. Si hay información del reporte configurada, dibujamos toda la cabecera
+        # Esto asegura que salga en la Pág 1, Pág 2, etc.
+        if self.info_reporte:
+            # Título
+            self.set_xy(0, 10); self.set_font('Arial', 'B', 16)
+            self.cell(0, 10, self.info_reporte['titulo_doc'], 0, 1, 'C')
+            
+            # Folio y Fecha
+            _bloque_folio_fecha(self, self.info_reporte['folio'], self.info_reporte['fecha'])
+            
+            # Cajas de Cliente/Proveedor (Solo si es reporte de Entrega o Entrada)
+            if 't1' in self.info_reporte:
+                _bloque_cajas_prov_cli(self, self.info_reporte['t1'], self.info_reporte['txt1'], self.info_reporte['t2'], self.info_reporte['txt2'])
+            
+            # Encabezados de la Tabla (La franja gris)
+            # Solo si no es recibo de dinero (que tiene otro formato)
+            if self.info_reporte.get('tipo') != 'dinero':
+                self.set_y(90) # Posición fija para que la tabla empiece siempre igual
+                self.set_font('Arial', 'B', 9); self.set_fill_color(200, 200, 200)
+                self.cell(25, 7, "O.C.", 1, 0, 'C', True)
+                self.cell(30, 7, "Codigo", 1, 0, 'C', True)
+                self.cell(95, 7, "Descripcion", 1, 0, 'C', True)
+                self.cell(20, 7, "Color", 1, 0, 'C', True)
+                self.cell(20, 7, "Cant", 1, 1, 'C', True)
+                self.ln() # Salto de línea para empezar los datos
 
     def footer(self):
         self.set_y(-40)
@@ -40,37 +96,51 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
-# --- GENERADORES DE PDF ---
+# --- GENERADORES DE PDF (MODIFICADOS PARA USAR LA NUEVA CLASE) ---
 def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     pdf = PDF()
-    pdf.add_page()
+    # Configuramos los datos QUE SE REPETIRÁN en cada página
+    pdf.info_reporte = {
+        'tipo': 'entrega',
+        'titulo_doc': 'Recibo de Entrega',
+        'folio': folio,
+        'fecha': datos_cabecera['fecha'],
+        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'],
+        't2': "Cliente", 'txt2': datos_cabecera['cli_texto']
+    }
+    pdf.add_page() # Al agregar página, se dibuja el header automáticamente
     pdf.set_auto_page_break(auto=True, margin=45)
-    pdf.set_xy(0, 10); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'Recibo de Entrega', 0, 1, 'C')
-    _bloque_folio_fecha(pdf, folio, datos_cabecera['fecha'])
-    # MEJORA: Eliminado (Origen) y (Destino)
-    _bloque_cajas_prov_cli(pdf, "Proveedor", datos_cabecera['prov_texto'], "Cliente", datos_cabecera['cli_texto'])
-    _dibujar_tabla_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
+    
+    # Ya no dibujamos cajas ni headers aquí, porque lo hace la clase PDF
+    _dibujar_filas_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
 def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     pdf = PDF()
+    pdf.info_reporte = {
+        'tipo': 'entrada',
+        'titulo_doc': 'Constancia de Entrada',
+        'folio': folio,
+        'fecha': datos_cabecera['fecha'],
+        't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'],
+        't2': "Receptor", 'txt2': datos_cabecera['hemore_texto']
+    }
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
-    pdf.set_xy(0, 10); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'Constancia de Entrada', 0, 1, 'C')
-    _bloque_folio_fecha(pdf, folio, datos_cabecera['fecha'])
-    # MEJORA: Eliminado (Origen) y (Destino)
-    _bloque_cajas_prov_cli(pdf, "Proveedor", datos_cabecera['prov_texto'], "Receptor", datos_cabecera['hemore_texto'])
-    _dibujar_tabla_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
+    
+    _dibujar_filas_productos(pdf, datos_cabecera.get('oc', ''), df_productos)
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
 def generar_pdf_dinero(datos_cabecera, df_conceptos, folio):
     pdf = PDF()
+    pdf.info_reporte = {'tipo': 'dinero', 'titulo_doc': 'Recibo de Dinero', 'folio': folio, 'fecha': datos_cabecera['fecha']}
+    # El recibo de dinero es especial, sus cajas no son estándar, así que no las pasamos a info_reporte
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
-    pdf.set_xy(0, 10); pdf.set_font('Arial', 'B', 16); pdf.cell(0, 10, 'Recibo de Dinero', 0, 1, 'C')
-    _bloque_folio_fecha(pdf, folio, datos_cabecera['fecha'])
+    
+    # Dibujo manual específico para dinero (se mantiene igual)
     pdf.set_y(45)
     pdf.set_fill_color(240, 240, 240); pdf.set_font('Arial', 'B', 10)
     pdf.cell(0, 8, "  Información del Pago", 1, 1, 'L', True)
@@ -92,39 +162,10 @@ def generar_pdf_dinero(datos_cabecera, df_conceptos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- HELPERS PDF ---
-def _bloque_folio_fecha(pdf, folio, fecha):
-    pdf.set_font('Arial', 'B', 10)
-    pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
-    pdf.set_xy(140, 31); pdf.set_font('Arial', 'B', 10); pdf.cell(25, 6, "Fecha:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(fecha), 0, 1, 'L')
 
-def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
-    pdf.set_y(45); y_start = pdf.get_y()
-    pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 9)
-    pdf.cell(95, 6, f" {titulo1}", 1, 0, 'L', True); pdf.cell(95, 6, f" {titulo2}", 1, 1, 'L', True)
-    pdf.set_font('Arial', '', 8)
-    # MEJORA: Aumenté el tamaño del recuadro de 25 a 35 para que quepan todos los datos de contacto
-    pdf.cell(95, 35, "", 1, 0); pdf.cell(95, 35, "", 1, 0)
-    pdf.set_xy(12, y_start + 8); pdf.multi_cell(90, 4, str(texto1))
-    pdf.set_xy(107, y_start + 8); pdf.multi_cell(90, 4, str(texto2))
-    pdf.set_xy(10, y_start + 45)
-
-# MEJORA: Función para extraer y formatear TODOS los datos dinámicamente
-def _formatear_datos_contacto(nombre_principal, dict_datos):
-    lineas = [str(nombre_principal)]
-    for col, val in dict_datos.items():
-        # Ignoramos datos de sistema vacíos
-        if str(col).lower() not in ['id', 'created_at', 'nombre', 'empresa', 'activo'] and pd.notna(val) and str(val).strip() != "":
-            lineas.append(f"{str(col).capitalize()}: {val}")
-    return "\n".join(lineas)
-
-def _dibujar_tabla_productos(pdf, oc, df_productos):
-    pdf.set_font('Arial', 'B', 9); pdf.set_fill_color(200, 200, 200)
-    pdf.cell(25, 7, "O.C.", 1, 0, 'C', True)
-    pdf.cell(30, 7, "Codigo", 1, 0, 'C', True)
-    pdf.cell(95, 7, "Descripcion", 1, 0, 'C', True)
-    pdf.cell(20, 7, "Color", 1, 0, 'C', True)
-    pdf.cell(20, 7, "Cant", 1, 1, 'C', True)
+# ✨ FUNCIÓN SOLO PARA FILAS (LOS ENCABEZADOS AHORA ESTÁN EN LA CLASE PDF) ✨
+def _dibujar_filas_productos(pdf, oc, df_productos):
+    # Nota: Ya no dibujamos los encabezados grises aquí.
     
     for index, row in df_productos.iterrows():
         textos = [str(oc), str(row['Código']), str(row['Descripción']), str(row['Color']), str(row['Cantidad'])]
@@ -146,7 +187,6 @@ def _dibujar_tabla_productos(pdf, oc, df_productos):
                 
             ln_val = 1 if i == 4 else 0
             pdf.cell(anchos[i], 7, text, 1, ln_val, alineaciones[i])
-
 
 def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
@@ -354,7 +394,6 @@ elif "Recibos" in opcion_almacen:
                         prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
                         last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
                         
-                        # MEJORA: Construcción dinámica con TODO lo que tengas en base de datos
                         prov_text = _formatear_datos_contacto(prov_input, prov_data)
                         cli_text = _formatear_datos_contacto(cliente_input, cli_data)
                         
