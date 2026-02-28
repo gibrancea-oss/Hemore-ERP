@@ -44,29 +44,26 @@ def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     
-    # --- AJUSTE DE DIMENSIONES SOLICITADO ---
-    ancho_etiqueta = 23.0  # 2.3 cm mm
-    alto_etiqueta = 30.0   # 3.0 cm mm
-    # ----------------------------------------
-    
+    # --- NUEVAS DIMENSIONES ---
+    ancho_etiqueta = 30.0  # 3 cm de ancho
+    alto_etiqueta = 23.0   # 2.3 cm de alto
     margen_izq = 10
     margen_sup = 15
     separacion = 2 
-    cols_por_fila = 7 
+    cols_por_fila = 6  # Ajustado a 6 para que no se salgan del margen de la hoja
     
     x = margen_izq
     y = margen_sup
     col_count = 0
     
     pdf.set_font('Arial', 'B', 12)
-    # Título actualizado con la nueva medida
-    pdf.cell(0, 8, f"Catálogo {tipo} (2.3x3.0cm)", 0, 1, 'C') 
+    pdf.cell(0, 8, f"Catálogo {tipo} (3.0x2.3cm)", 0, 1, 'C')
     pdf.ln(2)
     y = pdf.get_y()
     
     for index, row in df_items.iterrows():
         sku = str(row['codigo'])
-        desc = str(row['descripcion'])[:40] 
+        desc = str(row['descripcion'])[:35] 
         
         pdf.set_draw_color(180, 180, 180)
         pdf.rect(x, y, ancho_etiqueta, alto_etiqueta)
@@ -78,17 +75,20 @@ def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
         temp_qr_path = f"temp_qr_{index}.png"
         img_qr.save(temp_qr_path)
         
-        qr_size = 16 
+        # --- AJUSTE DE TAMAÑO Y POSICIÓN DEL QR ---
+        qr_size = 13  
         pos_qr_x = x + (ancho_etiqueta - qr_size) / 2
-        pos_qr_y = y + 2
+        pos_qr_y = y + 1.5
         pdf.image(temp_qr_path, x=pos_qr_x, y=pos_qr_y, w=qr_size, h=qr_size)
         
-        pdf.set_xy(x, pos_qr_y + qr_size + 1)
+        # --- AJUSTE DE POSICIÓN DEL TEXTO (SKU) ---
+        pdf.set_xy(x, pos_qr_y + qr_size + 0.5)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font('Arial', 'B', 7) 
         pdf.cell(ancho_etiqueta, 3, sku, 0, 1, 'C')
         
-        pdf.set_xy(x + 1, pos_qr_y + qr_size + 4)
+        # --- AJUSTE DE POSICIÓN DEL TEXTO (DESCRIPCIÓN) ---
+        pdf.set_xy(x + 1, pos_qr_y + qr_size + 3.5)
         pdf.set_font('Arial', '', 5) 
         pdf.multi_cell(ancho_etiqueta - 2, 2.5, desc, align='C')
         
