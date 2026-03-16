@@ -141,7 +141,6 @@ class PDF(FPDF):
                 self.cell(20, 7, "Cant", 1, 1, 'C', True)
                 self.ln() 
 
-    # ✨ MEJORA: FOOTER DINÁMICO CON NOMBRE Y FIRMAS ACTUALIZADAS ✨
     def footer(self):
         self.set_y(-40)
         self.set_font('Arial', '', 8)
@@ -197,7 +196,6 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     _bloque_observaciones(pdf, datos_cabecera.get('observaciones', ''))
     return pdf.output(dest='S').encode('latin-1')
 
-# ✨ MEJORA: CELDAS DINÁMICAS (MÁX. 3 LÍNEAS) CON CORTE SEGURO Y SIN ERRORES DE PÁGINA ✨
 def _dibujar_filas_productos(pdf, oc, df_productos):
     pdf.set_font('Arial', '', 8)
     line_height = 3.5
@@ -280,7 +278,6 @@ def _bloque_observaciones(pdf, texto):
     pdf.ln(8); pdf.set_font('Arial', 'B', 9); pdf.write(5, "Observaciones: "); pdf.set_font('Arial', '', 9)
     pdf.write(5, str(texto) if texto else "_"*110)
 
-# ✨ GENERADOR PDF TICKET PARA DINERO (CUARTO DE CARTA) ✨
 def generar_pdf_ticket_dinero(datos, folio):
     pdf = FPDF(orientation='P', unit='mm', format=(108, 140))
     pdf.add_page()
@@ -340,7 +337,6 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.cell(38, 3, "Firma de quien recibe", 0, 1, 'C')
 
     return pdf.output(dest='S').encode('latin-1')
-
 
 def convertir_df_a_excel(df):
     output = io.BytesIO()
@@ -618,44 +614,61 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 observaciones = st.text_area("Observaciones:")
                 quien_entrega_input = st.selectbox("Quien entrega:", lista_personal)
                 
-                if st.button("💾 Guardar y PDF", type="primary"):
-                    items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
+                # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
+                if "recibo_guardado" not in st.session_state:
+                    st.session_state["recibo_guardado"] = False
+                    st.session_state["recibo_pdf"] = None
+                    st.session_state["recibo_filename"] = ""
 
-                    errores = []
-                    if not oc_input: errores.append("- **Falta O.C.**")
-                    if not prov_input: errores.append("- **Falta Proveedor**")
-                    if not cliente_input: errores.append("- **Falta Cliente**")
-                    if items.empty: errores.append("- **Tabla vacía**")
+                if not st.session_state["recibo_guardado"]:
+                    if st.button("💾 Guardar y PDF", type="primary"):
+                        items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
 
-                    if errores:
-                        st.error("⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores))
-                    else:
-                        for _, row in items.iterrows():
-                            val_cant = row.get("Cantidad", 0)
-                            try: cant_f = float(val_cant) if val_cant is not None else 0.0
-                            except: cant_f = 0.0
+                        errores = []
+                        if not oc_input: errores.append("- **Falta O.C.**")
+                        if not prov_input: errores.append("- **Falta Proveedor**")
+                        if not cliente_input: errores.append("- **Falta Cliente**")
+                        if items.empty: errores.append("- **Tabla vacía**")
 
-                            data_to_insert = {
-                                "fecha": str(fecha_input.isoformat()), "oc": str(oc_input), 
-                                "cliente": str(cliente_input), "proveedor": str(prov_input), 
-                                "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
-                                "color": str(row["Color"]), "cantidad": cant_f, 
-                                "usuario": str(quien_entrega_input), "observaciones": str(observaciones)
-                            }
-                            supabase.table("Recibos_OC").insert(data_to_insert).execute()
-                        
-                        try:
-                            cli_data = df_clientes[df_clientes['nombre'] == cliente_input].iloc[0]
-                            prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
-                            last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
-                            prov_text = _formatear_datos_contacto(prov_input, prov_data)
-                            cli_text = _formatear_datos_contacto(cliente_input, cli_data)
-                            datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": quien_entrega_input}
-                            pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
-                            st.success("✅ Guardado correctamente.")
-                            st.download_button("🖨️ Imprimir PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
-                        except Exception as e: 
-                            st.error(f"Error interno al generar el archivo PDF: {e}")
+                        if errores:
+                            st.error("⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores))
+                        else:
+                            for _, row in items.iterrows():
+                                val_cant = row.get("Cantidad", 0)
+                                try: cant_f = float(val_cant) if val_cant is not None else 0.0
+                                except: cant_f = 0.0
+
+                                data_to_insert = {
+                                    "fecha": str(fecha_input.isoformat()), "oc": str(oc_input), 
+                                    "cliente": str(cliente_input), "proveedor": str(prov_input), 
+                                    "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
+                                    "color": str(row["Color"]), "cantidad": cant_f, 
+                                    "usuario": str(quien_entrega_input), "observaciones": str(observaciones)
+                                }
+                                supabase.table("Recibos_OC").insert(data_to_insert).execute()
+                            
+                            try:
+                                cli_data = df_clientes[df_clientes['nombre'] == cliente_input].iloc[0]
+                                prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
+                                last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
+                                prov_text = _formatear_datos_contacto(prov_input, prov_data)
+                                cli_text = _formatear_datos_contacto(cliente_input, cli_data)
+                                datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": quien_entrega_input}
+                                pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
+                                
+                                st.session_state["recibo_pdf"] = pdf_bytes
+                                st.session_state["recibo_filename"] = f"Recibo_{oc_input}.pdf"
+                                st.session_state["recibo_guardado"] = True
+                                st.rerun()
+                            except Exception as e: 
+                                st.error(f"Error interno al generar el archivo PDF: {e}")
+                else:
+                    st.success("✅ Guardado correctamente. Cualquier modificación extra debe hacerse desde el Historial.")
+                    st.download_button("🖨️ Imprimir PDF", st.session_state["recibo_pdf"], st.session_state["recibo_filename"], "application/pdf")
+                    if st.button("🔄 Crear Nuevo Recibo"):
+                        st.session_state["recibo_guardado"] = False
+                        st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                        st.rerun()
         else:
             st.warning("🔒 No tienes permiso para generar nuevos recibos OC.")
 
@@ -688,7 +701,6 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
                 df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
                 
-                # ✨ MEJORA: AÑADIDO NUM_ROWS="DYNAMIC" PARA PODER AGREGAR FILAS ✨
                 edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], num_rows="dynamic", key="d_editor")
                 
                 col_g, col_p = st.columns(2)
@@ -704,14 +716,13 @@ elif opcion_almacen == "Recibos de Entrega OC":
                                 "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
                                 "observaciones": str(n_obs), "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
                                 "color": str(r.get("Color", "")), "cantidad": cant_f, "usuario": str(n_entrega),
-                                "oc": str(oc_seleccionada) # IMPORTANTE PARA VINCULAR FILAS NUEVAS
+                                "oc": str(oc_seleccionada) 
                             }
                             
-                            # Si tiene ID, actualiza; Si NO tiene ID, inserta como fila nueva
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
                                 supabase.table("Recibos_OC").update(datos_update).eq("id", r["id"]).execute()
                             else:
-                                if str(r.get("Código", "")).strip() != "": # Valida que la fila no esté vacía
+                                if str(r.get("Código", "")).strip() != "": 
                                     supabase.table("Recibos_OC").insert(datos_update).execute()
                                     
                         st.success("Guardado."); time.sleep(0.5); st.rerun()
@@ -790,23 +801,35 @@ elif opcion_almacen == "Entrada de Material":
                 observaciones_in = st.text_area("Observaciones:", key="obs_in")
                 quien_entrega_in = st.selectbox("Quien entrega:", lista_pers, key="user_in")
                 
-                if st.button("💾 Registrar Entrada", type="primary"):
-                    if oc_in and prov_in and not edited_df_in.empty:
-                        items_in = edited_df_in[edited_df_in["Código"].notna() & (edited_df_in["Código"] != "")]
-                        for _, row in items_in.iterrows():
-                            val_cant_in = row.get("Cantidad", 0)
-                            try: cant_f_in = float(val_cant_in) if val_cant_in is not None else 0.0
-                            except: cant_f_in = 0.0
+                # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
+                if "entrada_guardada" not in st.session_state:
+                    st.session_state["entrada_guardada"] = False
 
-                            data_in = {
-                                "fecha": str(fecha_in.isoformat()), "oc": str(oc_in), "proveedor": str(prov_in), 
-                                "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
-                                "color": str(row["Color"]), "cantidad": cant_f_in, 
-                                "usuario": str(quien_entrega_in), "observaciones": str(observaciones_in)
-                            }
-                            supabase.table("Entradas_Material").insert(data_in).execute()
-                        
-                        st.success("✅ Registrado."); st.rerun()
+                if not st.session_state["entrada_guardada"]:
+                    if st.button("💾 Registrar Entrada", type="primary"):
+                        if oc_in and prov_in and not edited_df_in.empty:
+                            items_in = edited_df_in[edited_df_in["Código"].notna() & (edited_df_in["Código"] != "")]
+                            for _, row in items_in.iterrows():
+                                val_cant_in = row.get("Cantidad", 0)
+                                try: cant_f_in = float(val_cant_in) if val_cant_in is not None else 0.0
+                                except: cant_f_in = 0.0
+
+                                data_in = {
+                                    "fecha": str(fecha_in.isoformat()), "oc": str(oc_in), "proveedor": str(prov_in), 
+                                    "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
+                                    "color": str(row["Color"]), "cantidad": cant_f_in, 
+                                    "usuario": str(quien_entrega_in), "observaciones": str(observaciones_in)
+                                }
+                                supabase.table("Entradas_Material").insert(data_in).execute()
+                            
+                            st.session_state["entrada_guardada"] = True
+                            st.rerun()
+                else:
+                    st.success("✅ Entrada registrada exitosamente. Las modificaciones se hacen desde el Historial.")
+                    if st.button("🔄 Crear Nueva Entrada"):
+                        st.session_state["entrada_guardada"] = False
+                        st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                        st.rerun()
         else:
             st.warning("🔒 No tienes permiso para registrar nuevas entradas de material.")
 
@@ -837,7 +860,6 @@ elif opcion_almacen == "Entrada de Material":
                 df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
                 df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
                 
-                # ✨ MEJORA: AÑADIDO NUM_ROWS="DYNAMIC" PARA PODER AGREGAR FILAS ✨
                 edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], num_rows="dynamic", key="e_editor")
                 
                 col_g, col_p = st.columns(2)
@@ -854,10 +876,9 @@ elif opcion_almacen == "Entrada de Material":
                                 "observaciones": str(n_obs), "usuario": str(n_entrega),
                                 "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
                                 "color": str(r.get("Color", "")), "cantidad": cant_f,
-                                "oc": str(oc_seleccionada) # IMPORTANTE PARA VINCULAR FILAS NUEVAS
+                                "oc": str(oc_seleccionada)
                             }
                             
-                            # Si tiene ID, actualiza; Si NO tiene ID, inserta como fila nueva
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
                                 supabase.table("Entradas_Material").update(datos_update).eq("id", r["id"]).execute()
                             else:
@@ -933,33 +954,49 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
                 monto_mov = st.number_input("Cantidad ($):", min_value=0.00, value=0.00, step=100.0)
                 detalle_mov = st.text_area("Detalle / Descripción del movimiento:")
                 
-                if st.button("💾 Guardar y Generar Ticket", type="primary"):
-                    errores_dinero = []
-                    if not quien_entrega: errores_dinero.append("- Falta la persona que entrega.")
-                    if not quien_recibe: errores_dinero.append("- Falta la persona que recibe.")
-                    if monto_mov <= 0: errores_dinero.append("- La cantidad debe ser mayor a cero.")
-                    if not detalle_mov: errores_dinero.append("- Escribe el detalle del movimiento.")
+                # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
+                if "dinero_guardado" not in st.session_state:
+                    st.session_state["dinero_guardado"] = False
+                    st.session_state["dinero_pdf"] = None
+                    st.session_state["dinero_filename"] = ""
 
-                    if errores_dinero:
-                        st.error("⚠️ **Faltan datos:**\n\n" + "\n".join(errores_dinero))
-                    else:
-                        data_insert = {
-                            "fecha": str(fecha_mov.isoformat()),
-                            "tipo": str(tipo_mov),
-                            "quien_entrega": str(quien_entrega),
-                            "quien_recibe": str(quien_recibe),
-                            "monto": float(monto_mov),
-                            "descripcion": str(detalle_mov)
-                        }
-                        
-                        supabase.table("Entradas_Salidas_Dinero").insert(data_insert).execute()
-                        
-                        try: last_id = supabase.table("Entradas_Salidas_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
-                        except: last_id = 1
-                        
-                        pdf_bytes_ticket = generar_pdf_ticket_dinero(data_insert, last_id)
-                        st.success("✅ Movimiento guardado correctamente.")
-                        st.download_button("🖨️ Imprimir Ticket PDF", pdf_bytes_ticket, f"Ticket_{tipo_mov}_{last_id}.pdf", "application/pdf")
+                if not st.session_state["dinero_guardado"]:
+                    if st.button("💾 Guardar y Generar Ticket", type="primary"):
+                        errores_dinero = []
+                        if not quien_entrega: errores_dinero.append("- Falta la persona que entrega.")
+                        if not quien_recibe: errores_dinero.append("- Falta la persona que recibe.")
+                        if monto_mov <= 0: errores_dinero.append("- La cantidad debe ser mayor a cero.")
+                        if not detalle_mov: errores_dinero.append("- Escribe el detalle del movimiento.")
+
+                        if errores_dinero:
+                            st.error("⚠️ **Faltan datos:**\n\n" + "\n".join(errores_dinero))
+                        else:
+                            data_insert = {
+                                "fecha": str(fecha_mov.isoformat()),
+                                "tipo": str(tipo_mov),
+                                "quien_entrega": str(quien_entrega),
+                                "quien_recibe": str(quien_recibe),
+                                "monto": float(monto_mov),
+                                "descripcion": str(detalle_mov)
+                            }
+                            
+                            supabase.table("Entradas_Salidas_Dinero").insert(data_insert).execute()
+                            
+                            try: last_id = supabase.table("Entradas_Salidas_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
+                            except: last_id = 1
+                            
+                            pdf_bytes_ticket = generar_pdf_ticket_dinero(data_insert, last_id)
+                            
+                            st.session_state["dinero_pdf"] = pdf_bytes_ticket
+                            st.session_state["dinero_filename"] = f"Ticket_{tipo_mov}_{last_id}.pdf"
+                            st.session_state["dinero_guardado"] = True
+                            st.rerun()
+                else:
+                    st.success("✅ Movimiento guardado correctamente. Las modificaciones se hacen desde el Historial.")
+                    st.download_button("🖨️ Imprimir Ticket PDF", st.session_state["dinero_pdf"], st.session_state["dinero_filename"], "application/pdf")
+                    if st.button("🔄 Registrar Nuevo Movimiento"):
+                        st.session_state["dinero_guardado"] = False
+                        st.rerun()
         else:
             st.warning("🔒 No tienes permiso para registrar movimientos de dinero.")
 
