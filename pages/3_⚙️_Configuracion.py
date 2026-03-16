@@ -117,10 +117,10 @@ opcion = st.sidebar.radio(
 )
 
 # ==========================================
-# 1. PERSONAL
+# 1. PERSONAL (ACTUALIZADO CON PERMISOS)
 # ==========================================
 if opcion == "Personal":
-    st.markdown("### 👥 Gestión de Recursos Humanos")
+    st.markdown("### 👥 Gestión de Recursos Humanos y Accesos")
     try:
         response = utils.supabase.table("Personal").select("*").order("id").execute()
         df = pd.DataFrame(response.data)
@@ -129,26 +129,77 @@ if opcion == "Personal":
     except: df = pd.DataFrame()
     if df.empty: df = pd.DataFrame(columns=["id", "nombre", "puesto", "activo"])
     
-    t1, t2 = st.tabs(["➕ Alta Personal", "📋 Kardex"])
+    # LISTA MAESTRA DE OPERACIONES
+    lista_permisos = [
+        "Configuración: Personal", "Configuración: Insumos", "Configuración: Herramientas", 
+        "Configuración: Clientes", "Configuración: Proveedores", "Configuración: Generar QR",
+        "Almacén: Movimientos Insumos", "Almacén: Ver Existencias Insumos", "Almacén: Eliminar Historial Insumos",
+        "Almacén: Prestar/Devolver Herramientas", "Almacén: Eliminar Historial Herramientas",
+        "Almacén: Generar Recibos OC", "Almacén: Editar/Eliminar Recibos OC",
+        "Almacén: Registrar Entrada Material", "Almacén: Editar/Eliminar Entrada Material",
+        "Finanzas: Registrar Movimientos Dinero", "Finanzas: Editar/Eliminar Movimientos Dinero"
+    ]
+
+    t1, t2 = st.tabs(["➕ Alta Personal", "📋 Kardex y Accesos"])
     with t1:
         with st.form("alta_personal", clear_on_submit=True):
-            c1, c2 = st.columns(2); nombre = c1.text_input("Nombre Completo"); puesto = c2.selectbox("Puesto", ["Operador", "Supervisor", "Almacén", "Mantenimiento", "Administrativo"])
-            c3, c4 = st.columns(2); nacimiento = c3.text_input("Año Nacimiento"); domicilio = c4.text_input("Domicilio")
-            c5, c6 = st.columns(2); curp = c5.text_input("CURP"); rfc = c6.text_input("RFC")
+            st.subheader("Datos Generales")
+            c1, c2 = st.columns(2)
+            nombre = c1.text_input("Nombre Completo")
+            puesto = c2.selectbox("Puesto", ["Operador", "Supervisor", "Almacén", "Mantenimiento", "Administrativo"])
+            
+            c3, c4 = st.columns(2)
+            nacimiento = c3.text_input("Año Nacimiento")
+            domicilio = c4.text_input("Domicilio")
+            
+            c5, c6 = st.columns(2)
+            curp = c5.text_input("CURP")
+            rfc = c6.text_input("RFC")
             fecha_ingreso = st.date_input("Fecha de Ingreso", value=datetime.date.today())
+            
+            st.divider()
+            st.subheader("Control de Accesos")
+            c7, c8 = st.columns(2)
+            usuario_login = c7.text_input("Usuario (Para iniciar sesión)")
+            pin_login = c8.text_input("Contraseña / PIN", type="password")
+            
+            permisos_seleccionados = st.multiselect(
+                "Selecciona las operaciones permitidas para este operador:",
+                options=lista_permisos,
+                placeholder="Elige los permisos..."
+            )
+
             if st.form_submit_button("Guardar Empleado"):
-                if nombre:
-                    datos = {"nombre": nombre, "puesto": puesto, "anio_nacimiento": nacimiento, "domicilio": domicilio, "curp": curp, "rfc": rfc, "fecha_ingreso": fecha_ingreso.isoformat(), "activo": True}
+                if nombre and usuario_login and pin_login:
+                    # Convertir la lista de permisos a string separado por comas para guardado fácil, o dejarlo como lista si usas JSONB
+                    permisos_str = ", ".join(permisos_seleccionados)
+                    
+                    datos = {
+                        "nombre": nombre, "puesto": puesto, "anio_nacimiento": nacimiento, 
+                        "domicilio": domicilio, "curp": curp, "rfc": rfc, 
+                        "fecha_ingreso": fecha_ingreso.isoformat(), "activo": True,
+                        "usuario": usuario_login, "pin": pin_login, 
+                        "permisos": permisos_str
+                    }
                     utils.supabase.table("Personal").insert(datos).execute()
-                    st.success(f"✅ Registrado."); time.sleep(1); st.rerun()
+                    st.success(f"✅ Registrado con permisos asignados.")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("El Nombre, Usuario y Contraseña son obligatorios.")
     with t2:
-        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Actualizar Personal"):
-            for i, r in edited_df.iterrows():
-                d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                if pd.notna(r['id']): utils.supabase.table("Personal").update(d).eq("id", r['id']).execute()
-                else: utils.supabase.table("Personal").insert(d).execute()
-            st.success("✅ Actualizado"); time.sleep(1); st.rerun()
+        # Mostramos los datos, ocultando contraseñas por seguridad
+        if not df.empty:
+            columnas_mostrar = [col for col in df.columns if col not in ['usuario', 'pin']] 
+            edited_df = st.data_editor(df[columnas_mostrar], num_rows="dynamic", use_container_width=True)
+            if st.button("💾 Actualizar Personal"):
+                for i, r in edited_df.iterrows():
+                    d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
+                    if pd.notna(r['id']): utils.supabase.table("Personal").update(d).eq("id", r['id']).execute()
+                    else: utils.supabase.table("Personal").insert(d).execute()
+                st.success("✅ Actualizado")
+                time.sleep(1)
+                st.rerun()
 
 # ==========================================
 # 2. INSUMOS (CON PROTECCIÓN DE COLUMNAS)
