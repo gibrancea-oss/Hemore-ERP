@@ -18,9 +18,15 @@ utils.validar_login()
 supabase = utils.supabase
 
 # ==========================================
+# FUNCIÓN DE PERMISOS (LA MEJORA)
+# ==========================================
+def tiene_permiso(permiso):
+    if st.session_state.get("es_admin", False): return True
+    return permiso in st.session_state.get("permisos", [])
+
+# ==========================================
 # FUNCIONES AUXILIARES (QR y PDF)
 # ==========================================
-
 def get_qr_data_url(text):
     if not text: return None
     try:
@@ -44,13 +50,12 @@ def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
     pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     
-    # --- NUEVAS DIMENSIONES ---
     ancho_etiqueta = 30.0  # 3 cm de ancho
     alto_etiqueta = 23.0   # 2.3 cm de alto
     margen_izq = 10
     margen_sup = 15
     separacion = 2 
-    cols_por_fila = 6  # Ajustado a 6 para que no se salgan del margen de la hoja
+    cols_por_fila = 6  
     
     x = margen_izq
     y = margen_sup
@@ -75,19 +80,16 @@ def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
         temp_qr_path = f"temp_qr_{index}.png"
         img_qr.save(temp_qr_path)
         
-        # --- AJUSTE DE TAMAÑO Y POSICIÓN DEL QR ---
         qr_size = 13  
         pos_qr_x = x + (ancho_etiqueta - qr_size) / 2
         pos_qr_y = y + 1.5
         pdf.image(temp_qr_path, x=pos_qr_x, y=pos_qr_y, w=qr_size, h=qr_size)
         
-        # --- AJUSTE DE POSICIÓN DEL TEXTO (SKU) ---
         pdf.set_xy(x, pos_qr_y + qr_size + 0.5)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font('Arial', 'B', 7) 
         pdf.cell(ancho_etiqueta, 3, sku, 0, 1, 'C')
         
-        # --- AJUSTE DE POSICIÓN DEL TEXTO (DESCRIPCIÓN) ---
         pdf.set_xy(x + 1, pos_qr_y + qr_size + 3.5)
         pdf.set_font('Arial', '', 5) 
         pdf.multi_cell(ancho_etiqueta - 2, 2.5, desc, align='C')
@@ -108,13 +110,23 @@ def generar_pdf_etiquetas_qr(df_items, tipo="Insumos"):
     return pdf.output(dest='S').encode('latin-1')
 
 # ==========================================
-# MENÚ PRINCIPAL
+# MENÚ LATERAL (DINÁMICO POR PERMISOS)
 # ==========================================
 st.sidebar.title("🔧 Configuración")
-opcion = st.sidebar.radio(
-    "Selecciona Módulo:",
-    ["Personal", "Insumos", "Herramientas", "Clientes", "Proveedores", "📂 Catálogos & Etiquetas QR"]
-)
+
+opciones_config = []
+if tiene_permiso("Configuración: Personal"): opciones_config.append("Personal")
+if tiene_permiso("Configuración: Insumos"): opciones_config.append("Insumos")
+if tiene_permiso("Configuración: Herramientas"): opciones_config.append("Herramientas")
+if tiene_permiso("Configuración: Clientes"): opciones_config.append("Clientes")
+if tiene_permiso("Configuración: Proveedores"): opciones_config.append("Proveedores")
+if tiene_permiso("Configuración: Generar QR"): opciones_config.append("📂 Catálogos & Etiquetas QR")
+
+if not opciones_config:
+    st.warning("🔒 No tienes permisos para acceder a ningún módulo de Configuración.")
+    st.stop()
+
+opcion = st.sidebar.radio("Selecciona Módulo:", opciones_config)
 
 # ==========================================
 # 1. PERSONAL (CON CONTROL DE ACCESOS Y DIALOG)
@@ -207,14 +219,11 @@ if opcion == "Personal":
             # Recuperar permisos actuales para pre-llenar el multiselect
             permisos_actuales_str = emp_data.get('permisos', '')
             permisos_actuales_lista = [p.strip() for p in permisos_actuales_str.split(",")] if pd.notna(permisos_actuales_str) and permisos_actuales_str else []
-            # Filtrar solo los que existen en la lista maestra (por si alguno cambió de nombre)
             permisos_validos = [p for p in permisos_actuales_lista if p in lista_permisos]
 
-            # Fechas seguras
             try: fecha_dt = pd.to_datetime(emp_data['fecha_ingreso']).date()
             except: fecha_dt = datetime.date.today()
 
-            # --- FORMULARIO DE EDICIÓN ---
             st.write("**Datos Generales**")
             col_e1, col_e2 = st.columns(2)
             n_nombre = col_e1.text_input("Nombre", value=emp_data.get('nombre', ''), key=f"nom_{emp_id}")
@@ -248,7 +257,6 @@ if opcion == "Personal":
             st.divider()
             col_g, col_b = st.columns(2)
             
-            # BOTÓN GUARDAR
             if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True, key=f"btn_g_{emp_id}"):
                 if n_nombre and n_user and n_pin:
                     permisos_str_update = ", ".join(n_permisos)
@@ -265,14 +273,12 @@ if opcion == "Personal":
                 else:
                     st.error("Nombre, Usuario y Contraseña no pueden estar vacíos.")
             
-            # BOTÓN ELIMINAR DEFINITIVAMENTE
             if col_b.button("🗑️ ELIMINAR DEL SISTEMA", type="secondary", use_container_width=True, key=f"btn_d_{emp_id}"):
                 utils.supabase.table("Personal").delete().eq("id", emp_id).execute()
                 st.warning("⚠️ Empleado eliminado de la base de datos.")
                 time.sleep(1)
                 st.rerun()
 
-        # --- DIBUJAR LA TABLA ESTILO HISTORIAL ---
         if not df_personal.empty:
             c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([1, 3, 2, 2, 2])
             c_h1.markdown("**ID**")
@@ -282,9 +288,7 @@ if opcion == "Personal":
             c_h5.markdown("**Acciones**")
             
             for idx, row in df_personal.iterrows():
-                # Colorear un poco si está inactivo
                 estado_texto = "🔴" if not row.get('activo', True) else "🟢"
-                
                 c1, c2, c3, c4, c5 = st.columns([1, 3, 2, 2, 2])
                 c1.write(str(row.get('id', '')))
                 c2.write(f"{estado_texto} {row.get('nombre', '')}")
@@ -297,7 +301,7 @@ if opcion == "Personal":
             st.info("No hay personal registrado en el sistema aún.")
 
 # ==========================================
-# 2. INSUMOS (CON PROTECCIÓN DE COLUMNAS)
+# 2. INSUMOS 
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -338,7 +342,7 @@ elif opcion == "Insumos":
                 st.success("✅ Actualizado"); time.sleep(1); st.rerun()
 
 # ==========================================
-# 3. HERRAMIENTAS (MODO PRÉSTAMO/ACTIVOS)
+# 3. HERRAMIENTAS
 # ==========================================
 elif opcion == "Herramientas":
     st.markdown("### 🛠️ Gestión de Herramientas (Activos)")
