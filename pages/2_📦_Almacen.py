@@ -603,16 +603,6 @@ elif opcion_almacen == "Recibos de Entrega OC":
         if tiene_permiso("Almacén: Generar Recibos OC"):
             with st.container(border=True):
                 st.subheader("Datos de la Entrega")
-                c1, c2, c3 = st.columns([1, 1, 1])
-                oc_input = c1.text_input("Orden de Compra (O.C.)", placeholder="Ej. 2183")
-                fecha_input = c2.date_input("Fecha", value=datetime.now().date())
-                prov_input = c3.selectbox("Proveedor (Origen):", lista_nombres_prov, index=None, placeholder="Hemore...")
-                cliente_input = st.selectbox("Cliente (Destino):", lista_nombres_cli, index=None)
-                
-                if "data_recibo" not in st.session_state: st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
-                edited_df = st.data_editor(st.session_state["data_recibo"], num_rows="dynamic", use_container_width=True)
-                observaciones = st.text_area("Observaciones:")
-                quien_entrega_input = st.selectbox("Quien entrega:", lista_personal)
                 
                 # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
                 if "recibo_guardado" not in st.session_state:
@@ -621,6 +611,17 @@ elif opcion_almacen == "Recibos de Entrega OC":
                     st.session_state["recibo_filename"] = ""
 
                 if not st.session_state["recibo_guardado"]:
+                    c1, c2, c3 = st.columns([1, 1, 1])
+                    oc_input = c1.text_input("Orden de Compra (O.C.)", placeholder="Ej. 2183", key="new_ro_oc")
+                    fecha_input = c2.date_input("Fecha", value=datetime.now().date(), key="new_ro_fecha")
+                    prov_input = c3.selectbox("Proveedor (Origen):", lista_nombres_prov, index=None, placeholder="Hemore...", key="new_ro_prov")
+                    cliente_input = st.selectbox("Cliente (Destino):", lista_nombres_cli, index=None, key="new_ro_cli")
+                    
+                    if "data_recibo" not in st.session_state: st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                    edited_df = st.data_editor(st.session_state["data_recibo"], num_rows="dynamic", use_container_width=True)
+                    observaciones = st.text_area("Observaciones:", key="new_ro_obs")
+                    quien_entrega_input = st.selectbox("Quien entrega:", lista_personal, key="new_ro_usr")
+                    
                     if st.button("💾 Guardar y PDF", type="primary"):
                         items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
 
@@ -668,6 +669,9 @@ elif opcion_almacen == "Recibos de Entrega OC":
                     if st.button("🔄 Crear Nuevo Recibo"):
                         st.session_state["recibo_guardado"] = False
                         st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                        # Limpiamos las llaves de memoria para que los campos regresen a blanco
+                        for k in ["new_ro_oc", "new_ro_prov", "new_ro_cli", "new_ro_obs", "new_ro_usr", "new_ro_fecha"]:
+                            st.session_state.pop(k, None)
                         st.rerun()
         else:
             st.warning("🔒 No tienes permiso para generar nuevos recibos OC.")
@@ -792,20 +796,20 @@ elif opcion_almacen == "Entrada de Material":
     with tab_ent_new:
         if tiene_permiso("Almacén: Registrar Entrada Material"):
             with st.container(border=True):
-                oc_in = st.text_input("Orden de Compra / Remisión")
-                fecha_in = st.date_input("Fecha de Llegada", value=datetime.now().date())
-                prov_in = st.selectbox("Proveedor (Origen):", lista_provs, index=None)
-                
-                if "data_entrada" not in st.session_state: st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
-                edited_df_in = st.data_editor(st.session_state["data_entrada"], num_rows="dynamic", use_container_width=True)
-                observaciones_in = st.text_area("Observaciones:", key="obs_in")
-                quien_entrega_in = st.selectbox("Quien entrega:", lista_pers, key="user_in")
-                
                 # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
                 if "entrada_guardada" not in st.session_state:
                     st.session_state["entrada_guardada"] = False
 
                 if not st.session_state["entrada_guardada"]:
+                    oc_in = st.text_input("Orden de Compra / Remisión", key="new_em_oc")
+                    fecha_in = st.date_input("Fecha de Llegada", value=datetime.now().date(), key="new_em_fecha")
+                    prov_in = st.selectbox("Proveedor (Origen):", lista_provs, index=None, key="new_em_prov")
+                    
+                    if "data_entrada" not in st.session_state: st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                    edited_df_in = st.data_editor(st.session_state["data_entrada"], num_rows="dynamic", use_container_width=True)
+                    observaciones_in = st.text_area("Observaciones:", key="new_em_obs")
+                    quien_entrega_in = st.selectbox("Quien entrega:", lista_pers, key="new_em_usr")
+                    
                     if st.button("💾 Registrar Entrada", type="primary"):
                         if oc_in and prov_in and not edited_df_in.empty:
                             items_in = edited_df_in[edited_df_in["Código"].notna() & (edited_df_in["Código"] != "")]
@@ -829,6 +833,9 @@ elif opcion_almacen == "Entrada de Material":
                     if st.button("🔄 Crear Nueva Entrada"):
                         st.session_state["entrada_guardada"] = False
                         st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                        # Limpiamos las llaves
+                        for k in ["new_em_oc", "new_em_fecha", "new_em_prov", "new_em_obs", "new_em_usr"]:
+                            st.session_state.pop(k, None)
                         st.rerun()
         else:
             st.warning("🔒 No tienes permiso para registrar nuevas entradas de material.")
@@ -876,7 +883,7 @@ elif opcion_almacen == "Entrada de Material":
                                 "observaciones": str(n_obs), "usuario": str(n_entrega),
                                 "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
                                 "color": str(r.get("Color", "")), "cantidad": cant_f,
-                                "oc": str(oc_seleccionada)
+                                "oc": str(oc_seleccionada) 
                             }
                             
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
@@ -944,16 +951,6 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
     with tab_dinero_new:
         if tiene_permiso("Finanzas: Registrar Movimientos Dinero"):
             with st.container(border=True):
-                tipo_mov = st.radio("Tipo de Movimiento:", ["Entrada", "Salida"], horizontal=True)
-                fecha_mov = st.date_input("Fecha", value=datetime.now().date())
-                
-                c1, c2 = st.columns(2)
-                quien_entrega = c1.text_input("Nombre de quien entrega:")
-                quien_recibe = c2.text_input("Nombre de quien recibe:")
-                
-                monto_mov = st.number_input("Cantidad ($):", min_value=0.00, value=0.00, step=100.0)
-                detalle_mov = st.text_area("Detalle / Descripción del movimiento:")
-                
                 # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
                 if "dinero_guardado" not in st.session_state:
                     st.session_state["dinero_guardado"] = False
@@ -961,6 +958,16 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
                     st.session_state["dinero_filename"] = ""
 
                 if not st.session_state["dinero_guardado"]:
+                    tipo_mov = st.radio("Tipo de Movimiento:", ["Entrada", "Salida"], horizontal=True, key="new_din_tipo")
+                    fecha_mov = st.date_input("Fecha", value=datetime.now().date(), key="new_din_fecha")
+                    
+                    c1, c2 = st.columns(2)
+                    quien_entrega = c1.text_input("Nombre de quien entrega:", key="new_din_ent")
+                    quien_recibe = c2.text_input("Nombre de quien recibe:", key="new_din_rec")
+                    
+                    monto_mov = st.number_input("Cantidad ($):", min_value=0.00, value=0.00, step=100.0, key="new_din_monto")
+                    detalle_mov = st.text_area("Detalle / Descripción del movimiento:", key="new_din_det")
+                    
                     if st.button("💾 Guardar y Generar Ticket", type="primary"):
                         errores_dinero = []
                         if not quien_entrega: errores_dinero.append("- Falta la persona que entrega.")
@@ -996,6 +1003,9 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
                     st.download_button("🖨️ Imprimir Ticket PDF", st.session_state["dinero_pdf"], st.session_state["dinero_filename"], "application/pdf")
                     if st.button("🔄 Registrar Nuevo Movimiento"):
                         st.session_state["dinero_guardado"] = False
+                        # Limpiamos las llaves
+                        for k in ["new_din_tipo", "new_din_fecha", "new_din_ent", "new_din_rec", "new_din_monto", "new_din_det"]:
+                            st.session_state.pop(k, None)
                         st.rerun()
         else:
             st.warning("🔒 No tienes permiso para registrar movimientos de dinero.")
