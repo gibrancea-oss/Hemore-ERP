@@ -117,19 +117,12 @@ opcion = st.sidebar.radio(
 )
 
 # ==========================================
-# 1. PERSONAL (ACTUALIZADO CON PERMISOS)
+# 1. PERSONAL (CON CONTROL DE ACCESOS Y DIALOG)
 # ==========================================
 if opcion == "Personal":
     st.markdown("### 👥 Gestión de Recursos Humanos y Accesos")
-    try:
-        response = utils.supabase.table("Personal").select("*").order("id").execute()
-        df = pd.DataFrame(response.data)
-        if not df.empty and "fecha_ingreso" in df.columns:
-            df["fecha_ingreso"] = pd.to_datetime(df["fecha_ingreso"], errors='coerce').dt.date
-    except: df = pd.DataFrame()
-    if df.empty: df = pd.DataFrame(columns=["id", "nombre", "puesto", "activo"])
     
-    # LISTA MAESTRA DE OPERACIONES
+    # --- LISTA MAESTRA DE OPERACIONES ---
     lista_permisos = [
         "Configuración: Personal", "Configuración: Insumos", "Configuración: Herramientas", 
         "Configuración: Clientes", "Configuración: Proveedores", "Configuración: Generar QR",
@@ -140,10 +133,24 @@ if opcion == "Personal":
         "Finanzas: Registrar Movimientos Dinero", "Finanzas: Editar/Eliminar Movimientos Dinero"
     ]
 
+    try:
+        response = utils.supabase.table("Personal").select("*").order("id").execute()
+        df_personal = pd.DataFrame(response.data)
+        if not df_personal.empty and "fecha_ingreso" in df_personal.columns:
+            df_personal["fecha_ingreso"] = pd.to_datetime(df_personal["fecha_ingreso"], errors='coerce').dt.date
+    except: df_personal = pd.DataFrame()
+    
+    if df_personal.empty: 
+        df_personal = pd.DataFrame(columns=["id", "nombre", "puesto", "activo", "usuario", "pin", "permisos"])
+
     t1, t2 = st.tabs(["➕ Alta Personal", "📋 Kardex y Accesos"])
+    
+    # -----------------------------------------
+    # PESTAÑA 1: ALTA DE PERSONAL
+    # -----------------------------------------
     with t1:
         with st.form("alta_personal", clear_on_submit=True):
-            st.subheader("Datos Generales")
+            st.subheader("1. Datos Generales")
             c1, c2 = st.columns(2)
             nombre = c1.text_input("Nombre Completo")
             puesto = c2.selectbox("Puesto", ["Operador", "Supervisor", "Almacén", "Mantenimiento", "Administrativo"])
@@ -158,20 +165,19 @@ if opcion == "Personal":
             fecha_ingreso = st.date_input("Fecha de Ingreso", value=datetime.date.today())
             
             st.divider()
-            st.subheader("Control de Accesos")
+            st.subheader("2. Credenciales y Permisos")
             c7, c8 = st.columns(2)
             usuario_login = c7.text_input("Usuario (Para iniciar sesión)")
             pin_login = c8.text_input("Contraseña / PIN", type="password")
             
             permisos_seleccionados = st.multiselect(
-                "Selecciona las operaciones permitidas para este operador:",
+                "Selecciona las operaciones a las que tendrá acceso:",
                 options=lista_permisos,
                 placeholder="Elige los permisos..."
             )
 
-            if st.form_submit_button("Guardar Empleado"):
+            if st.form_submit_button("Guardar Empleado y Accesos", type="primary"):
                 if nombre and usuario_login and pin_login:
-                    # Convertir la lista de permisos a string separado por comas para guardado fácil, o dejarlo como lista si usas JSONB
                     permisos_str = ", ".join(permisos_seleccionados)
                     
                     datos = {
@@ -186,20 +192,109 @@ if opcion == "Personal":
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("El Nombre, Usuario y Contraseña son obligatorios.")
+                    st.error("⚠️ El Nombre, Usuario y Contraseña son obligatorios.")
+
+    # -----------------------------------------
+    # PESTAÑA 2: KARDEX Y EDICIÓN TIPO DIALOG
+    # -----------------------------------------
     with t2:
-        # Mostramos los datos, ocultando contraseñas por seguridad
-        if not df.empty:
-            columnas_mostrar = [col for col in df.columns if col not in ['usuario', 'pin']] 
-            edited_df = st.data_editor(df[columnas_mostrar], num_rows="dynamic", use_container_width=True)
-            if st.button("💾 Actualizar Personal"):
-                for i, r in edited_df.iterrows():
-                    d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                    if pd.notna(r['id']): utils.supabase.table("Personal").update(d).eq("id", r['id']).execute()
-                    else: utils.supabase.table("Personal").insert(d).execute()
-                st.success("✅ Actualizado")
+        @st.dialog("Edición de Personal y Accesos", width="large")
+        def editar_empleado(emp_id, df_source):
+            emp_data = df_source[df_source['id'] == emp_id].iloc[0]
+            
+            st.markdown(f"### ✏️ Editando a: {emp_data.get('nombre', '')}")
+            
+            # Recuperar permisos actuales para pre-llenar el multiselect
+            permisos_actuales_str = emp_data.get('permisos', '')
+            permisos_actuales_lista = [p.strip() for p in permisos_actuales_str.split(",")] if pd.notna(permisos_actuales_str) and permisos_actuales_str else []
+            # Filtrar solo los que existen en la lista maestra (por si alguno cambió de nombre)
+            permisos_validos = [p for p in permisos_actuales_lista if p in lista_permisos]
+
+            # Fechas seguras
+            try: fecha_dt = pd.to_datetime(emp_data['fecha_ingreso']).date()
+            except: fecha_dt = datetime.date.today()
+
+            # --- FORMULARIO DE EDICIÓN ---
+            st.write("**Datos Generales**")
+            col_e1, col_e2 = st.columns(2)
+            n_nombre = col_e1.text_input("Nombre", value=emp_data.get('nombre', ''), key=f"nom_{emp_id}")
+            
+            lista_puestos = ["Operador", "Supervisor", "Almacén", "Mantenimiento", "Administrativo"]
+            puesto_actual = emp_data.get('puesto', 'Operador')
+            idx_puesto = lista_puestos.index(puesto_actual) if puesto_actual in lista_puestos else 0
+            n_puesto = col_e2.selectbox("Puesto", lista_puestos, index=idx_puesto, key=f"pue_{emp_id}")
+            
+            col_e3, col_e4 = st.columns(2)
+            n_nacimiento = col_e3.text_input("Año Nacimiento", value=emp_data.get('anio_nacimiento', ''), key=f"nac_{emp_id}")
+            n_domicilio = col_e4.text_input("Domicilio", value=emp_data.get('domicilio', ''), key=f"dom_{emp_id}")
+            
+            n_fecha = st.date_input("Fecha Ingreso", value=fecha_dt, key=f"fec_{emp_id}")
+            
+            st.divider()
+            st.write("**Control de Accesos**")
+            col_e5, col_e6 = st.columns(2)
+            n_user = col_e5.text_input("Usuario", value=emp_data.get('usuario', ''), key=f"usr_{emp_id}")
+            n_pin = col_e6.text_input("Contraseña", value=emp_data.get('pin', ''), key=f"pin_{emp_id}")
+            
+            n_permisos = st.multiselect(
+                "Operaciones permitidas:",
+                options=lista_permisos,
+                default=permisos_validos,
+                key=f"perm_{emp_id}"
+            )
+            
+            n_activo = st.checkbox("Empleado Activo (Puede iniciar sesión)", value=bool(emp_data.get('activo', True)), key=f"act_{emp_id}")
+            
+            st.divider()
+            col_g, col_b = st.columns(2)
+            
+            # BOTÓN GUARDAR
+            if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True, key=f"btn_g_{emp_id}"):
+                if n_nombre and n_user and n_pin:
+                    permisos_str_update = ", ".join(n_permisos)
+                    datos_update = {
+                        "nombre": n_nombre, "puesto": n_puesto, "anio_nacimiento": n_nacimiento,
+                        "domicilio": n_domicilio, "fecha_ingreso": n_fecha.isoformat(),
+                        "usuario": n_user, "pin": n_pin, "permisos": permisos_str_update,
+                        "activo": n_activo
+                    }
+                    utils.supabase.table("Personal").update(datos_update).eq("id", emp_id).execute()
+                    st.success("✅ Información actualizada correctamente.")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Nombre, Usuario y Contraseña no pueden estar vacíos.")
+            
+            # BOTÓN ELIMINAR DEFINITIVAMENTE
+            if col_b.button("🗑️ ELIMINAR DEL SISTEMA", type="secondary", use_container_width=True, key=f"btn_d_{emp_id}"):
+                utils.supabase.table("Personal").delete().eq("id", emp_id).execute()
+                st.warning("⚠️ Empleado eliminado de la base de datos.")
                 time.sleep(1)
                 st.rerun()
+
+        # --- DIBUJAR LA TABLA ESTILO HISTORIAL ---
+        if not df_personal.empty:
+            c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([1, 3, 2, 2, 2])
+            c_h1.markdown("**ID**")
+            c_h2.markdown("**Nombre**")
+            c_h3.markdown("**Puesto**")
+            c_h4.markdown("**Usuario Login**")
+            c_h5.markdown("**Acciones**")
+            
+            for idx, row in df_personal.iterrows():
+                # Colorear un poco si está inactivo
+                estado_texto = "🔴" if not row.get('activo', True) else "🟢"
+                
+                c1, c2, c3, c4, c5 = st.columns([1, 3, 2, 2, 2])
+                c1.write(str(row.get('id', '')))
+                c2.write(f"{estado_texto} {row.get('nombre', '')}")
+                c3.write(row.get('puesto', ''))
+                c4.write(row.get('usuario', 'S/N'))
+                
+                if c5.button("Ver / Editar", key=f"btn_pers_{row['id']}"):
+                    editar_empleado(row['id'], df_personal)
+        else:
+            st.info("No hay personal registrado en el sistema aún.")
 
 # ==========================================
 # 2. INSUMOS (CON PROTECCIÓN DE COLUMNAS)
