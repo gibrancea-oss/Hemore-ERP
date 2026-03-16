@@ -387,10 +387,17 @@ if opcion_almacen == "Insumos (Consumibles)":
 
         df_personal = pd.DataFrame(supabase.table("Personal").select("nombre").eq("activo", True).execute().data)
         lista_personal = df_personal['nombre'].tolist() if not df_personal.empty else []
+        
+        # --- MEJORA: FETCH DE PROVEEDORES PARA INSUMOS ---
+        df_provs_insumos = pd.DataFrame(supabase.table("Proveedores").select("*").execute().data)
+        col_p_name_ins = 'empresa' if 'empresa' in df_provs_insumos.columns else 'nombre'
+        lista_provs_insumos = df_provs_insumos[col_p_name_ins].tolist() if not df_provs_insumos.empty else []
+        
     except Exception as e: 
         st.error(f"Error cargando base de datos: {e}")
         df_ins = pd.DataFrame()
         lista_personal = []
+        lista_provs_insumos = []
 
     tab_op, tab_exist, tab_hist = st.tabs(["📝 Registrar Movimientos", "📊 Existencias", "📜 Historial"])
     
@@ -420,10 +427,21 @@ if opcion_almacen == "Insumos (Consumibles)":
                                     st.success("✅ Salida registrada"); time.sleep(1); st.rerun()
                                 else: st.error("Stock insuficiente")
                         else:
+                            # --- MEJORA: APARTADO DE PROVEEDORES Y FACTURA ---
+                            st.markdown("**Detalles de la Entrada:**")
+                            prov_in_insumo = st.selectbox("Proveedor:", lista_provs_insumos, index=None, key="prov_re_stock")
+                            c_f1, c_f2 = st.columns(2)
+                            factura_opcion = c_f1.radio("Comprobante:", ["Con factura", "Sin factura"], horizontal=True, key="fac_re_stock")
+                            num_comprobante = c_f2.text_input("No. Factura / Ticket", key="num_re_stock")
+                            
                             if st.button("Confirmar Entrada"):
                                 new_st = float(item_actual['cantidad'] + cant_mov)
                                 supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                                try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": "Almacén"}).execute()
+                                
+                                # Guardamos los datos nuevos dentro de la columna 'responsable' para no alterar la BD
+                                info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante}"
+                                
+                                try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": info_entrada}).execute()
                                 except: pass
                                 st.success("✅ Entrada registrada"); time.sleep(1); st.rerun()
                 
@@ -453,7 +471,9 @@ if opcion_almacen == "Insumos (Consumibles)":
             st.write(f"**Descripción:** {row_info.get('descripcion', '')}")
             st.write(f"**Tipo de Movimiento:** {row_info.get('tipo_movimiento', '')}")
             st.write(f"**Cantidad:** {row_info.get('cantidad', '')}")
-            st.write(f"**Responsable:** {row_info.get('responsable', '')}")
+            
+            # --- MEJORA: AQUI SE MOSTRARÁ LA FACTURA Y EL PROVEEDOR AUTOMÁTICAMENTE ---
+            st.write(f"**Responsable / Detalles:** {row_info.get('responsable', '')}")
             
             st.divider()
             
@@ -604,7 +624,6 @@ elif opcion_almacen == "Recibos de Entrega OC":
             with st.container(border=True):
                 st.subheader("Datos de la Entrega")
                 
-                # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
                 if "recibo_guardado" not in st.session_state:
                     st.session_state["recibo_guardado"] = False
                     st.session_state["recibo_pdf"] = None
@@ -669,7 +688,6 @@ elif opcion_almacen == "Recibos de Entrega OC":
                     if st.button("🔄 Crear Nuevo Recibo"):
                         st.session_state["recibo_guardado"] = False
                         st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
-                        # Limpiamos las llaves de memoria para que los campos regresen a blanco
                         for k in ["new_ro_oc", "new_ro_prov", "new_ro_cli", "new_ro_obs", "new_ro_usr", "new_ro_fecha"]:
                             st.session_state.pop(k, None)
                         st.rerun()
@@ -796,7 +814,6 @@ elif opcion_almacen == "Entrada de Material":
     with tab_ent_new:
         if tiene_permiso("Almacén: Registrar Entrada Material"):
             with st.container(border=True):
-                # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
                 if "entrada_guardada" not in st.session_state:
                     st.session_state["entrada_guardada"] = False
 
@@ -833,7 +850,6 @@ elif opcion_almacen == "Entrada de Material":
                     if st.button("🔄 Crear Nueva Entrada"):
                         st.session_state["entrada_guardada"] = False
                         st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
-                        # Limpiamos las llaves
                         for k in ["new_em_oc", "new_em_fecha", "new_em_prov", "new_em_obs", "new_em_usr"]:
                             st.session_state.pop(k, None)
                         st.rerun()
@@ -951,7 +967,6 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
     with tab_dinero_new:
         if tiene_permiso("Finanzas: Registrar Movimientos Dinero"):
             with st.container(border=True):
-                # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
                 if "dinero_guardado" not in st.session_state:
                     st.session_state["dinero_guardado"] = False
                     st.session_state["dinero_pdf"] = None
@@ -1003,7 +1018,6 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
                     st.download_button("🖨️ Imprimir Ticket PDF", st.session_state["dinero_pdf"], st.session_state["dinero_filename"], "application/pdf")
                     if st.button("🔄 Registrar Nuevo Movimiento"):
                         st.session_state["dinero_guardado"] = False
-                        # Limpiamos las llaves
                         for k in ["new_din_tipo", "new_din_fecha", "new_din_ent", "new_din_rec", "new_din_monto", "new_din_det"]:
                             st.session_state.pop(k, None)
                         st.rerun()
