@@ -403,52 +403,69 @@ if opcion_almacen == "Insumos (Consumibles)":
     
     with tab_op:
         if tiene_permiso("Almacén: Movimientos Insumos"):
-            if df_ins.empty: st.warning("No hay insumos registrados.")
+            if df_ins.empty: 
+                st.warning("No hay insumos registrados.")
             else:
-                tipo_operacion = st.radio("Acción:", ["📤 Entrega (Salida)", "📥 Re-Stock (Entrada)"], horizontal=True)
-                c_form, c_info = st.columns([2, 1])
-                with c_form:
-                    lista_busqueda = [f"{row['codigo']} | {row['descripcion']}" for i, row in df_ins.iterrows()]
-                    seleccion = st.selectbox("Buscar:", lista_busqueda)
-                    
-                    if seleccion:
-                        codigo_sel = seleccion.split(" | ")[0]
-                        item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
-                        cant_mov = st.number_input("Cantidad", min_value=1.0, value=1.0)
-                        
-                        if "Entrega" in tipo_operacion:
-                            responsable = st.selectbox("Entregar a:", lista_personal)
-                            if st.button("Confirmar Salida", type="primary"):
-                                if item_actual['cantidad'] >= cant_mov:
-                                    new_st = float(item_actual['cantidad'] - cant_mov)
-                                    supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                                    try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
-                                    except: pass
-                                    st.success("✅ Salida registrada"); time.sleep(1); st.rerun()
-                                else: st.error("Stock insuficiente")
-                        else:
-                            # --- MEJORA: APARTADO DE PROVEEDORES Y FACTURA ---
-                            st.markdown("**Detalles de la Entrada:**")
-                            prov_in_insumo = st.selectbox("Proveedor:", lista_provs_insumos, index=None, key="prov_re_stock")
-                            c_f1, c_f2 = st.columns(2)
-                            factura_opcion = c_f1.radio("Comprobante:", ["Con factura", "Sin factura"], horizontal=True, key="fac_re_stock")
-                            num_comprobante = c_f2.text_input("No. Factura / Ticket", key="num_re_stock")
-                            
-                            if st.button("Confirmar Entrada"):
-                                new_st = float(item_actual['cantidad'] + cant_mov)
-                                supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                                
-                                # Guardamos los datos nuevos dentro de la columna 'responsable' para no alterar la BD
-                                info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante}"
-                                
-                                try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": info_entrada}).execute()
-                                except: pass
-                                st.success("✅ Entrada registrada"); time.sleep(1); st.rerun()
+                # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
+                if "insumo_mov_guardado" not in st.session_state:
+                    st.session_state["insumo_mov_guardado"] = False
                 
-                with c_info: 
-                    if seleccion: 
-                        st.metric("Stock Actual", item_actual['cantidad'])
-                        st.write(f"📍 Ubicación: {item_actual['ubicacion']}")
+                tipo_operacion = st.radio("Acción:", ["📤 Entrega (Salida)", "📥 Re-Stock (Entrada)"], horizontal=True, key="insumo_tipo_op")
+                
+                if not st.session_state["insumo_mov_guardado"]:
+                    c_form, c_info = st.columns([2, 1])
+                    with c_form:
+                        lista_busqueda = [f"{row['codigo']} | {row['descripcion']}" for i, row in df_ins.iterrows()]
+                        seleccion = st.selectbox("Buscar:", lista_busqueda, key="insumo_sel")
+                        
+                        if seleccion:
+                            codigo_sel = seleccion.split(" | ")[0]
+                            item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
+                            cant_mov = st.number_input("Cantidad", min_value=1.0, value=1.0, key="insumo_cant")
+                            
+                            if "Entrega" in tipo_operacion:
+                                responsable = st.selectbox("Entregar a:", lista_personal, key="insumo_resp")
+                                if st.button("Confirmar Salida", type="primary"):
+                                    if item_actual['cantidad'] >= cant_mov:
+                                        new_st = float(item_actual['cantidad'] - cant_mov)
+                                        supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                        try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
+                                        except: pass
+                                        st.session_state["insumo_mov_guardado"] = True
+                                        st.rerun()
+                                    else: st.error("Stock insuficiente")
+                            else:
+                                # --- MEJORA: APARTADO DE PROVEEDORES Y FACTURA ---
+                                st.markdown("**Detalles de la Entrada:**")
+                                prov_in_insumo = st.selectbox("Proveedor:", lista_provs_insumos, index=None, key="prov_re_stock")
+                                c_f1, c_f2 = st.columns(2)
+                                factura_opcion = c_f1.radio("Comprobante:", ["Con factura", "Sin factura"], horizontal=True, key="fac_re_stock")
+                                num_comprobante = c_f2.text_input("No. Factura / Ticket", key="num_re_stock")
+                                
+                                if st.button("Confirmar Entrada", type="primary"):
+                                    new_st = float(item_actual['cantidad'] + cant_mov)
+                                    supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                    
+                                    # Guardamos los datos nuevos dentro de la columna 'responsable' para no alterar la BD
+                                    info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante}"
+                                    
+                                    try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": info_entrada}).execute()
+                                    except: pass
+                                    st.session_state["insumo_mov_guardado"] = True
+                                    st.rerun()
+                    
+                    with c_info: 
+                        if seleccion: 
+                            st.metric("Stock Actual", item_actual['cantidad'])
+                            st.write(f"📍 Ubicación: {item_actual['ubicacion']}")
+                else:
+                    tipo_str = "Salida" if "Entrega" in tipo_operacion else "Entrada"
+                    st.success(f"✅ {tipo_str} registrada exitosamente. El inventario ha sido actualizado.")
+                    if st.button(f"🔄 Hacer {'salida nueva' if 'Entrega' in tipo_operacion else 'entrada nueva'}"):
+                        st.session_state["insumo_mov_guardado"] = False
+                        for k in ["insumo_sel", "insumo_cant", "insumo_resp", "prov_re_stock", "fac_re_stock", "num_re_stock"]:
+                            st.session_state.pop(k, None)
+                        st.rerun()
         else:
             st.warning("🔒 No tienes permiso para registrar movimientos de insumos.")
 
