@@ -34,33 +34,27 @@ def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
     pdf.set_y(45)
     pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 9)
     
-    # Dibujamos las cabeceras grises de las cajas
     pdf.cell(95, 6, f" {titulo1}", 1, 0, 'L', True)
     pdf.cell(95, 6, f" {titulo2}", 1, 1, 'L', True)
     
     y_cajas = pdf.get_y()
     pdf.set_font('Arial', '', 8)
     
-    # Escribimos el primer bloque midiendo su altura
     pdf.set_xy(12, y_cajas + 2)
     pdf.multi_cell(91, 4, str(texto1))
     h1 = pdf.get_y() - y_cajas
     
-    # Escribimos el segundo bloque midiendo su altura
     pdf.set_xy(107, y_cajas + 2)
     pdf.multi_cell(91, 4, str(texto2))
     h2 = pdf.get_y() - y_cajas
     
-    # Determinamos la caja más alta y aplicamos un padding
     alto_caja = max(h1, h2) + 4
     if alto_caja < 25:
-        alto_caja = 25 # Altura mínima por estética
+        alto_caja = 25 
         
-    # Dibujamos los contornos exteriores de las cajas en base a la altura calculada
     pdf.rect(10, y_cajas, 95, alto_caja)
     pdf.rect(105, y_cajas, 95, alto_caja)
     
-    # Posicionamos el cursor debajo de las cajas dinámicas para que la tabla comience bien
     pdf.set_xy(10, y_cajas + alto_caja + 8)
 
 # ✨ MEJORA: MAYÚSCULAS Y REEMPLAZO POR "CP" ✨
@@ -71,7 +65,6 @@ def _formatear_datos_contacto(nombre_principal, dict_datos):
             nombre_col = str(col).upper()
             if nombre_col == "CODIGO_POSTAL":
                 nombre_col = "CP"
-            # Aseguramos que tanto el título (colonia, dirección) como el valor (el dato) estén en mayúsculas
             lineas.append(f"{nombre_col}: {str(val).upper()}")
     return "\n".join(lineas)
 
@@ -153,7 +146,6 @@ class PDF(FPDF):
         self.set_y(-40)
         self.set_font('Arial', '', 8)
         
-        # Recuperamos el nombre de quien entrega seleccionado en la lista
         nombre_entrega = ""
         if self.info_reporte and 'quien_entrega' in self.info_reporte:
             nombre_entrega = str(self.info_reporte['quien_entrega'])
@@ -162,15 +154,13 @@ class PDF(FPDF):
         self.cell(10, 0, '', 0, 0)
         self.cell(90, 0, '_______________________________', 0, 1, 'C')
         
-        self.ln(2) # Pequeño espacio para bajar los textos
+        self.ln(2) 
         
-        # Fila de nombres (Solo izquierda para quien entrega)
         self.set_font('Arial', 'B', 8)
         self.cell(90, 4, nombre_entrega[:45], 0, 0, 'C')
         self.cell(10, 4, '', 0, 0)
-        self.cell(90, 4, '', 0, 1, 'C') # Vacío en la derecha
+        self.cell(90, 4, '', 0, 1, 'C') 
         
-        # Fila de leyendas solicitadas
         self.set_font('Arial', '', 8)
         self.cell(90, 4, 'Nombre completo de quien entrega y firma', 0, 0, 'C')
         self.cell(10, 4, '', 0, 0)
@@ -186,7 +176,7 @@ def generar_pdf_entrega(datos_cabecera, df_productos, folio):
     pdf.info_reporte = {
         'tipo': 'entrega', 'titulo_doc': 'Recibo de Entrega', 'folio': folio, 'fecha': datos_cabecera['fecha'],
         't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Cliente", 'txt2': datos_cabecera['cli_texto'],
-        'quien_entrega': datos_cabecera.get('quien_entrega', '') # <-- Pasamos quien entrega aquí
+        'quien_entrega': datos_cabecera.get('quien_entrega', '') 
     }
     pdf.add_page() 
     pdf.set_auto_page_break(auto=True, margin=45)
@@ -199,7 +189,7 @@ def generar_pdf_entrada(datos_cabecera, df_productos, folio):
     pdf.info_reporte = {
         'tipo': 'entrada', 'titulo_doc': 'Constancia de Entrada', 'folio': folio, 'fecha': datos_cabecera['fecha'],
         't1': "Proveedor", 'txt1': datos_cabecera['prov_texto'], 't2': "Receptor", 'txt2': datos_cabecera['hemore_texto'],
-        'quien_entrega': datos_cabecera.get('quien_entrega', '') # <-- Pasamos quien entrega aquí
+        'quien_entrega': datos_cabecera.get('quien_entrega', '') 
     }
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=45)
@@ -221,15 +211,13 @@ def _dibujar_filas_productos(pdf, oc, df_productos):
         lineas_por_celda = []
         max_lines_in_row = 1
         
-        # --- 1. PRE-CALCULAR LÍNEAS PARA TODAS LAS COLUMNAS ---
         for i, text in enumerate(textos):
-            max_w = anchos[i] - 2 # 2 mm de margen interno
+            max_w = anchos[i] - 2 
             lines = []
             current_line = ""
             words = str(text).split(" ")
             
             for word in words:
-                # Si una sola palabra es más ancha que la celda (ej. códigos largos sin espacios), la partimos
                 if pdf.get_string_width(word) > max_w:
                     if current_line:
                         lines.append(current_line)
@@ -243,7 +231,6 @@ def _dibujar_filas_productos(pdf, oc, df_productos):
                             temp_word += char
                     current_line = temp_word
                 else:
-                    # Si es una palabra normal, evaluamos si cabe en la línea actual sumando espacios
                     test_line = current_line + " " + word if current_line else word
                     if pdf.get_string_width(test_line) > max_w:
                         lines.append(current_line)
@@ -257,7 +244,6 @@ def _dibujar_filas_productos(pdf, oc, df_productos):
             if not lines:
                 lines = [""]
                 
-            # 🛑 LIMITAR A 3 LÍNEAS MÁXIMO (Si hay más, recorta y agrega "...")
             if len(lines) > 3:
                 lines = lines[:3]
                 if len(lines[2]) > 3:
@@ -267,36 +253,27 @@ def _dibujar_filas_productos(pdf, oc, df_productos):
             if len(lines) > max_lines_in_row:
                 max_lines_in_row = len(lines)
         
-        # --- 2. CALCULAR ALTURA DE LA FILA ---
-        # Si hay 1 línea, la altura es 7.0 (mínima). Si hay 2 o 3, crece.
         altura_fila = max(min_row_height, (max_lines_in_row * line_height) + 2.0)
         
-        # --- 3. CHEQUEO DE SALTO DE PÁGINA SEGURO (Previene el error de 94 hojas) ---
-        # 250 es el margen seguro antes de llegar al footer. Si la fila no cabe, pasamos a la siguiente hoja.
         if pdf.get_y() + altura_fila > 250:
             pdf.add_page()
             
         start_x = pdf.get_x()
         start_y = pdf.get_y()
         
-        # --- 4. DIBUJAR LAS CELDAS ---
         for i in range(5):
             x_celda = start_x + sum(anchos[:i])
             y_celda = start_y
             
-            # Dibujar el rectángulo (Borde visible de la tabla)
             pdf.rect(x_celda, y_celda, anchos[i], altura_fila)
             
-            # Calcular alineación vertical para que el texto quede centrado siempre dentro del cuadro
             espacio_libre_y = altura_fila - (len(lineas_por_celda[i]) * line_height)
             y_texto = y_celda + (espacio_libre_y / 2)
             
-            # Imprimir línea por línea dentro de la celda
             for j, linea in enumerate(lineas_por_celda[i]):
                 pdf.set_xy(x_celda, y_texto + (j * line_height))
                 pdf.cell(anchos[i], line_height, linea, border=0, ln=0, align=alineaciones[i])
                 
-        # Mover el cursor hacia la nueva posición debajo de toda la fila
         pdf.set_xy(start_x, start_y + altura_fila)
 
 def _bloque_observaciones(pdf, texto):
@@ -309,34 +286,29 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=10)
     
-    # 1. Logo
     if os.path.exists("logo.png"):
         pdf.image("logo.png", 10, 8, 25) 
     else:
         pdf.set_font('Arial', 'B', 14)
         pdf.cell(0, 10, 'HEMORE', 0, 1, 'L')
     
-    # 2. Encabezado (Título)
     pdf.set_xy(10, 30)
     pdf.set_font('Arial', 'B', 11)
     pdf.cell(0, 5, "COMPROBANTE DE MOVIMIENTO", 0, 1, 'C')
     pdf.ln(5)
     
-    # 3. Checkboxes de Entrada / Salida
     pdf.set_font('Arial', 'B', 10)
     entrada_check = "[ X ] ENTRADA" if datos['tipo'] == "Entrada" else "[   ] ENTRADA"
     salida_check = "[ X ] SALIDA" if datos['tipo'] == "Salida" else "[   ] SALIDA"
     pdf.cell(0, 5, f"{entrada_check}         {salida_check}", 0, 1, 'C')
     pdf.ln(6)
     
-    # 4. Folio y Fecha
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 5, "Folio:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(30, 5, str(folio), 0, 0)
     pdf.set_font('Arial', 'B', 9)
     pdf.cell(15, 5, "Fecha:", 0, 0); pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['fecha']), 0, 1)
     pdf.ln(6)
     
-    # 5. Nombres
     pdf.set_font('Arial', 'B', 9); pdf.cell(25, 5, "Entrega:", 0, 0)
     pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_entrega'])[:45], 0, 1)
     
@@ -344,7 +316,6 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.set_font('Arial', '', 9); pdf.cell(0, 5, str(datos['quien_recibe'])[:45], 0, 1)
     pdf.ln(6)
     
-    # 6. Cantidad
     pdf.set_font('Arial', 'B', 10); pdf.cell(20, 6, "Cantidad:", 0, 0)
     pdf.set_font('Arial', 'B', 12); pdf.cell(0, 6, f"$ {datos['monto']:,.2f} MXN", 0, 1)
     
@@ -352,12 +323,10 @@ def generar_pdf_ticket_dinero(datos, folio):
     pdf.multi_cell(0, 4, f"({numero_a_letras(datos['monto'])})")
     pdf.ln(6)
     
-    # 7. Detalle
     pdf.set_font('Arial', 'B', 9); pdf.cell(0, 5, "Detalle / Descripcion:", 0, 1)
     pdf.set_font('Arial', '', 8)
     pdf.multi_cell(0, 4, str(datos['descripcion']))
     
-    # 8. Firmas fijadas al fondo
     pdf.set_y(-25)
     pdf.set_font('Arial', '', 7)
     
@@ -383,7 +352,6 @@ def convertir_df_a_excel(df):
 # ==========================================
 st.sidebar.title("🏭 Almacén Central")
 
-# Filtramos las opciones del menú lateral según los permisos del usuario
 opciones_permitidas = []
 if tiene_permiso("Almacén: Movimientos Insumos") or tiene_permiso("Almacén: Ver Existencias Insumos") or tiene_permiso("Almacén: Eliminar Historial Insumos"):
     opciones_permitidas.append("Insumos (Consumibles)")
@@ -396,7 +364,6 @@ if tiene_permiso("Almacén: Registrar Entrada Material") or tiene_permiso("Almac
 if tiene_permiso("Finanzas: Registrar Movimientos Dinero") or tiene_permiso("Finanzas: Editar/Eliminar Movimientos Dinero"):
     opciones_permitidas.append("Entradas y Salidas de Dinero")
 
-# Si no tiene ningún permiso de almacén, lo bloqueamos desde el inicio
 if not opciones_permitidas:
     st.warning("🔒 No tienes permisos asignados para operar en ningún módulo del Almacén.")
     st.stop()
@@ -433,7 +400,6 @@ if opcion_almacen == "Insumos (Consumibles)":
     
     with tab_op:
         if tiene_permiso("Almacén: Movimientos Insumos"):
-            # AQUÍ EMPIEZA TU CÓDIGO ORIGINAL EXACTO
             if df_ins.empty: st.warning("No hay insumos registrados.")
             else:
                 tipo_operacion = st.radio("Acción:", ["📤 Entrega (Salida)", "📥 Re-Stock (Entrada)"], horizontal=True)
@@ -469,7 +435,6 @@ if opcion_almacen == "Insumos (Consumibles)":
                     if seleccion: 
                         st.metric("Stock Actual", item_actual['cantidad'])
                         st.write(f"📍 Ubicación: {item_actual['ubicacion']}")
-            # AQUÍ TERMINA TU CÓDIGO ORIGINAL EXACTO
         else:
             st.warning("🔒 No tienes permiso para registrar movimientos de insumos.")
 
@@ -651,26 +616,19 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 if "data_recibo" not in st.session_state: st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
                 edited_df = st.data_editor(st.session_state["data_recibo"], num_rows="dynamic", use_container_width=True)
                 observaciones = st.text_area("Observaciones:")
-                
-                # ✨ MEJORA: CAMPO ESPECÍFICO DE QUIEN ENTREGA ✨
                 quien_entrega_input = st.selectbox("Quien entrega:", lista_personal)
                 
                 if st.button("💾 Guardar y PDF", type="primary"):
                     items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
 
                     errores = []
-                    if not oc_input:
-                        errores.append("- **Falta Orden de Compra (O.C.)**: Escribe el número de la orden en la parte superior.")
-                    if not prov_input:
-                        errores.append("- **Falta Proveedor**: Selecciona el proveedor (Origen) de la lista desplegable.")
-                    if not cliente_input:
-                        errores.append("- **Falta Cliente**: Selecciona el cliente (Destino) de la lista desplegable.")
-                    if items.empty:
-                        errores.append("- **Tabla vacía**: Debes agregar al menos un producto válido (asegúrate de escribir su Código). Las celdas en blanco se ignoran.")
+                    if not oc_input: errores.append("- **Falta O.C.**")
+                    if not prov_input: errores.append("- **Falta Proveedor**")
+                    if not cliente_input: errores.append("- **Falta Cliente**")
+                    if items.empty: errores.append("- **Tabla vacía**")
 
                     if errores:
-                        mensaje_error = "⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores)
-                        st.error(mensaje_error)
+                        st.error("⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores))
                     else:
                         for _, row in items.iterrows():
                             val_cant = row.get("Cantidad", 0)
@@ -678,16 +636,11 @@ elif opcion_almacen == "Recibos de Entrega OC":
                             except: cant_f = 0.0
 
                             data_to_insert = {
-                                "fecha": str(fecha_input.isoformat()), 
-                                "oc": str(oc_input), 
-                                "cliente": str(cliente_input), 
-                                "proveedor": str(prov_input), 
-                                "codigo": str(row["Código"]), 
-                                "descripcion": str(row["Descripción"]), 
-                                "color": str(row["Color"]), 
-                                "cantidad": cant_f, 
-                                "usuario": str(quien_entrega_input), 
-                                "observaciones": str(observaciones)
+                                "fecha": str(fecha_input.isoformat()), "oc": str(oc_input), 
+                                "cliente": str(cliente_input), "proveedor": str(prov_input), 
+                                "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
+                                "color": str(row["Color"]), "cantidad": cant_f, 
+                                "usuario": str(quien_entrega_input), "observaciones": str(observaciones)
                             }
                             supabase.table("Recibos_OC").insert(data_to_insert).execute()
                         
@@ -695,14 +648,10 @@ elif opcion_almacen == "Recibos de Entrega OC":
                             cli_data = df_clientes[df_clientes['nombre'] == cliente_input].iloc[0]
                             prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
                             last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
-                            
                             prov_text = _formatear_datos_contacto(prov_input, prov_data)
                             cli_text = _formatear_datos_contacto(cliente_input, cli_data)
-                            
-                            # ✨ PASAMOS EL NOMBRE DE QUIEN ENTREGA AL DICCIONARIO PARA EL PDF ✨
                             datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": quien_entrega_input}
                             pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
-                            
                             st.success("✅ Guardado correctamente.")
                             st.download_button("🖨️ Imprimir PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
                         except Exception as e: 
@@ -711,7 +660,7 @@ elif opcion_almacen == "Recibos de Entrega OC":
             st.warning("🔒 No tienes permiso para generar nuevos recibos OC.")
 
     with tab_historial:
-        @st.dialog("Detalles de Orden de Compra")
+        @st.dialog("Detalles de Orden de Compra", width="large")
         def ver_editar_oc(oc_seleccionada, df_source):
             df_oc = df_source[df_source['oc'] == oc_seleccionada].copy()
             if not df_oc.empty:
@@ -726,7 +675,6 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 idx_prov = lista_nombres_prov.index(row_info['proveedor']) if row_info['proveedor'] in lista_nombres_prov else None
                 idx_usr = lista_personal.index(row_info.get('usuario', '')) if row_info.get('usuario', '') in lista_personal else None
                 
-                # ✨ MEJORA: AÑADIDO CAMPO DE QUIEN ENTREGA EN LA EDICIÓN ✨
                 c1, c2, c3, c4 = st.columns(4)
                 n_fecha = c1.date_input("Fecha", value=fecha_dt, key="d_fecha")
                 n_cli = c2.selectbox("Cliente", lista_nombres_cli, index=idx_cli, key="d_cli")
@@ -739,7 +687,9 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 st.write("**Productos:**")
                 df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
                 df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
-                edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], key="d_editor")
+                
+                # ✨ MEJORA: AÑADIDO NUM_ROWS="DYNAMIC" PARA PODER AGREGAR FILAS ✨
+                edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], num_rows="dynamic", key="d_editor")
                 
                 col_g, col_p = st.columns(2)
                 
@@ -750,11 +700,20 @@ elif opcion_almacen == "Recibos de Entrega OC":
                             try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
                             except: cant_f = 0.0
                             
-                            supabase.table("Recibos_OC").update({
+                            datos_update = {
                                 "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
-                                "observaciones": str(n_obs), "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
-                                "color": str(r["Color"]), "cantidad": cant_f, "usuario": str(n_entrega)
-                            }).eq("id", r["id"]).execute()
+                                "observaciones": str(n_obs), "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
+                                "color": str(r.get("Color", "")), "cantidad": cant_f, "usuario": str(n_entrega),
+                                "oc": str(oc_seleccionada) # IMPORTANTE PARA VINCULAR FILAS NUEVAS
+                            }
+                            
+                            # Si tiene ID, actualiza; Si NO tiene ID, inserta como fila nueva
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                supabase.table("Recibos_OC").update(datos_update).eq("id", r["id"]).execute()
+                            else:
+                                if str(r.get("Código", "")).strip() != "": # Valida que la fila no esté vacía
+                                    supabase.table("Recibos_OC").insert(datos_update).execute()
+                                    
                         st.success("Guardado."); time.sleep(0.5); st.rerun()
                 else:
                     col_g.warning("🔒 No tienes permiso para guardar cambios.")
@@ -829,8 +788,6 @@ elif opcion_almacen == "Entrada de Material":
                 if "data_entrada" not in st.session_state: st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
                 edited_df_in = st.data_editor(st.session_state["data_entrada"], num_rows="dynamic", use_container_width=True)
                 observaciones_in = st.text_area("Observaciones:", key="obs_in")
-                
-                # ✨ MEJORA: CAMPO ESPECÍFICO DE QUIEN ENTREGA ✨
                 quien_entrega_in = st.selectbox("Quien entrega:", lista_pers, key="user_in")
                 
                 if st.button("💾 Registrar Entrada", type="primary"):
@@ -842,15 +799,10 @@ elif opcion_almacen == "Entrada de Material":
                             except: cant_f_in = 0.0
 
                             data_in = {
-                                "fecha": str(fecha_in.isoformat()), 
-                                "oc": str(oc_in), 
-                                "proveedor": str(prov_in), 
-                                "codigo": str(row["Código"]), 
-                                "descripcion": str(row["Descripción"]), 
-                                "color": str(row["Color"]), 
-                                "cantidad": cant_f_in, 
-                                "usuario": str(quien_entrega_in), 
-                                "observaciones": str(observaciones_in)
+                                "fecha": str(fecha_in.isoformat()), "oc": str(oc_in), "proveedor": str(prov_in), 
+                                "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
+                                "color": str(row["Color"]), "cantidad": cant_f_in, 
+                                "usuario": str(quien_entrega_in), "observaciones": str(observaciones_in)
                             }
                             supabase.table("Entradas_Material").insert(data_in).execute()
                         
@@ -859,7 +811,7 @@ elif opcion_almacen == "Entrada de Material":
             st.warning("🔒 No tienes permiso para registrar nuevas entradas de material.")
 
     with tab_ent_hist:
-        @st.dialog("Detalles de Entrada de Material")
+        @st.dialog("Detalles de Entrada de Material", width="large")
         def ver_editar_entrada(oc_seleccionada, df_source):
             df_oc = df_source[df_source['oc'] == oc_seleccionada].copy()
             if not df_oc.empty:
@@ -873,7 +825,6 @@ elif opcion_almacen == "Entrada de Material":
                 idx_prov = lista_provs.index(row_info['proveedor']) if row_info['proveedor'] in lista_provs else None
                 idx_usr = lista_pers.index(row_info.get('usuario', '')) if row_info.get('usuario', '') in lista_pers else None
 
-                # ✨ MEJORA: AÑADIDO CAMPO DE QUIEN ENTREGA EN LA EDICIÓN ✨
                 c1, c2, c3 = st.columns(3)
                 n_fecha = c1.date_input("Fecha", value=fecha_dt, key="e_fecha")
                 n_prov = c2.selectbox("Proveedor", lista_provs, index=idx_prov, key="e_prov")
@@ -885,7 +836,9 @@ elif opcion_almacen == "Entrada de Material":
                 st.write("**Productos:**")
                 df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
                 df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
-                edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], key="e_editor")
+                
+                # ✨ MEJORA: AÑADIDO NUM_ROWS="DYNAMIC" PARA PODER AGREGAR FILAS ✨
+                edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], num_rows="dynamic", key="e_editor")
                 
                 col_g, col_p = st.columns(2)
                 
@@ -896,12 +849,21 @@ elif opcion_almacen == "Entrada de Material":
                             try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
                             except: cant_f = 0.0
                             
-                            supabase.table("Entradas_Material").update({
+                            datos_update = {
                                 "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov),
                                 "observaciones": str(n_obs), "usuario": str(n_entrega),
-                                "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
-                                "color": str(r["Color"]), "cantidad": cant_f
-                            }).eq("id", r["id"]).execute()
+                                "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
+                                "color": str(r.get("Color", "")), "cantidad": cant_f,
+                                "oc": str(oc_seleccionada) # IMPORTANTE PARA VINCULAR FILAS NUEVAS
+                            }
+                            
+                            # Si tiene ID, actualiza; Si NO tiene ID, inserta como fila nueva
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                supabase.table("Entradas_Material").update(datos_update).eq("id", r["id"]).execute()
+                            else:
+                                if str(r.get("Código", "")).strip() != "":
+                                    supabase.table("Entradas_Material").insert(datos_update).execute()
+                                    
                         st.success("Guardado."); time.sleep(0.5); st.rerun()
                 else:
                     col_g.warning("🔒 No tienes permiso para editar.")
