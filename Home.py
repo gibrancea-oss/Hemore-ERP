@@ -71,7 +71,19 @@ if not st.session_state["authenticated"]:
     st.stop() 
 
 # --- CONTENIDO DEL SISTEMA (CUANDO YA ENTRASTE) ---
-st.title("🏠 Bienvenido al Panel de Control")
+col_t1, col_t2 = st.columns([8, 2])
+with col_t1:
+    st.title("🏠 Bienvenido al Panel de Control")
+
+with col_t2:
+    # --- MEJORA: BOTÓN PARA CERRAR SESIÓN ---
+    st.write("") # Espaciador ligero
+    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        st.session_state["authenticated"] = False
+        st.session_state["usuario_actual"] = ""
+        st.session_state["es_admin"] = False
+        st.session_state["permisos"] = []
+        st.rerun()
 
 # Mostramos un mensaje diferente si es admin o si es operador
 if st.session_state["es_admin"]:
