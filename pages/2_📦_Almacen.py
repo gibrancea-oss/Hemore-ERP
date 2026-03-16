@@ -16,6 +16,13 @@ utils.validar_login()
 
 supabase = utils.supabase 
 
+# ==========================================
+# FUNCIÓN DE PERMISOS (LA MEJORA)
+# ==========================================
+def tiene_permiso(permiso):
+    if st.session_state.get("es_admin", False): return True
+    return permiso in st.session_state.get("permisos", [])
+
 # --- HELPER FUNCTIONS ---
 def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_font('Arial', 'B', 10)
@@ -372,12 +379,31 @@ def convertir_df_a_excel(df):
     return output.getvalue()
 
 # ==========================================
-# MENÚ LATERAL
+# MENÚ LATERAL (CON CANDADOS DE PERMISO)
 # ==========================================
 st.sidebar.title("🏭 Almacén Central")
+
+# Filtramos las opciones del menú lateral según los permisos del usuario
+opciones_permitidas = []
+if tiene_permiso("Almacén: Movimientos Insumos") or tiene_permiso("Almacén: Ver Existencias Insumos") or tiene_permiso("Almacén: Eliminar Historial Insumos"):
+    opciones_permitidas.append("Insumos (Consumibles)")
+if tiene_permiso("Almacén: Prestar/Devolver Herramientas") or tiene_permiso("Almacén: Eliminar Historial Herramientas"):
+    opciones_permitidas.append("Herramientas (Activos)")
+if tiene_permiso("Almacén: Generar Recibos OC") or tiene_permiso("Almacén: Editar/Eliminar Recibos OC"):
+    opciones_permitidas.append("Recibos de Entrega OC")
+if tiene_permiso("Almacén: Registrar Entrada Material") or tiene_permiso("Almacén: Editar/Eliminar Entrada Material"):
+    opciones_permitidas.append("Entrada de Material")
+if tiene_permiso("Finanzas: Registrar Movimientos Dinero") or tiene_permiso("Finanzas: Editar/Eliminar Movimientos Dinero"):
+    opciones_permitidas.append("Entradas y Salidas de Dinero")
+
+# Si no tiene ningún permiso de almacén, lo bloqueamos desde el inicio
+if not opciones_permitidas:
+    st.warning("🔒 No tienes permisos asignados para operar en ningún módulo del Almacén.")
+    st.stop()
+
 opcion_almacen = st.sidebar.radio(
     "Selecciona Operación:",
-    ["Insumos (Consumibles)", "Herramientas (Activos)", "Recibos de Entrega OC", "Entrada de Material", "Entradas y Salidas de Dinero"]
+    opciones_permitidas
 )
 
 st.title(f"Control de {opcion_almacen.split(' (')[0]}")
@@ -406,47 +432,55 @@ if opcion_almacen == "Insumos (Consumibles)":
     tab_op, tab_exist, tab_hist = st.tabs(["📝 Registrar Movimientos", "📊 Existencias", "📜 Historial"])
     
     with tab_op:
-        if df_ins.empty: st.warning("No hay insumos registrados.")
-        else:
-            tipo_operacion = st.radio("Acción:", ["📤 Entrega (Salida)", "📥 Re-Stock (Entrada)"], horizontal=True)
-            c_form, c_info = st.columns([2, 1])
-            with c_form:
-                lista_busqueda = [f"{row['codigo']} | {row['descripcion']}" for i, row in df_ins.iterrows()]
-                seleccion = st.selectbox("Buscar:", lista_busqueda)
-                
-                if seleccion:
-                    codigo_sel = seleccion.split(" | ")[0]
-                    item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
-                    cant_mov = st.number_input("Cantidad", min_value=1.0, value=1.0)
+        if tiene_permiso("Almacén: Movimientos Insumos"):
+            # AQUÍ EMPIEZA TU CÓDIGO ORIGINAL EXACTO
+            if df_ins.empty: st.warning("No hay insumos registrados.")
+            else:
+                tipo_operacion = st.radio("Acción:", ["📤 Entrega (Salida)", "📥 Re-Stock (Entrada)"], horizontal=True)
+                c_form, c_info = st.columns([2, 1])
+                with c_form:
+                    lista_busqueda = [f"{row['codigo']} | {row['descripcion']}" for i, row in df_ins.iterrows()]
+                    seleccion = st.selectbox("Buscar:", lista_busqueda)
                     
-                    if "Entrega" in tipo_operacion:
-                        responsable = st.selectbox("Entregar a:", lista_personal)
-                        if st.button("Confirmar Salida", type="primary"):
-                            if item_actual['cantidad'] >= cant_mov:
-                                new_st = float(item_actual['cantidad'] - cant_mov)
+                    if seleccion:
+                        codigo_sel = seleccion.split(" | ")[0]
+                        item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
+                        cant_mov = st.number_input("Cantidad", min_value=1.0, value=1.0)
+                        
+                        if "Entrega" in tipo_operacion:
+                            responsable = st.selectbox("Entregar a:", lista_personal)
+                            if st.button("Confirmar Salida", type="primary"):
+                                if item_actual['cantidad'] >= cant_mov:
+                                    new_st = float(item_actual['cantidad'] - cant_mov)
+                                    supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                    try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
+                                    except: pass
+                                    st.success("✅ Salida registrada"); time.sleep(1); st.rerun()
+                                else: st.error("Stock insuficiente")
+                        else:
+                            if st.button("Confirmar Entrada"):
+                                new_st = float(item_actual['cantidad'] + cant_mov)
                                 supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                                try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
+                                try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": "Almacén"}).execute()
                                 except: pass
-                                st.success("✅ Salida registrada"); time.sleep(1); st.rerun()
-                            else: st.error("Stock insuficiente")
-                    else:
-                        if st.button("Confirmar Entrada"):
-                            new_st = float(item_actual['cantidad'] + cant_mov)
-                            supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                            try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": "Almacén"}).execute()
-                            except: pass
-                            st.success("✅ Entrada registrada"); time.sleep(1); st.rerun()
-            
-            with c_info: 
-                if seleccion: 
-                    st.metric("Stock Actual", item_actual['cantidad'])
-                    st.write(f"📍 Ubicación: {item_actual['ubicacion']}")
+                                st.success("✅ Entrada registrada"); time.sleep(1); st.rerun()
+                
+                with c_info: 
+                    if seleccion: 
+                        st.metric("Stock Actual", item_actual['cantidad'])
+                        st.write(f"📍 Ubicación: {item_actual['ubicacion']}")
+            # AQUÍ TERMINA TU CÓDIGO ORIGINAL EXACTO
+        else:
+            st.warning("🔒 No tienes permiso para registrar movimientos de insumos.")
 
     with tab_exist:
-        if not df_ins.empty:
-            df_view = df_ins[["codigo", "descripcion", "cantidad", "unidad", "ubicacion"]].rename(columns={"codigo": "Código", "descripcion": "Descripción", "cantidad": "Stock", "unidad": "Unidad", "ubicacion": "Ubicación"})
-            st.download_button("📥 Descargar Existencias", convertir_df_a_excel(df_view), "Existencias.xlsx")
-            st.dataframe(df_view, use_container_width=True)
+        if tiene_permiso("Almacén: Ver Existencias Insumos"):
+            if not df_ins.empty:
+                df_view = df_ins[["codigo", "descripcion", "cantidad", "unidad", "ubicacion"]].rename(columns={"codigo": "Código", "descripcion": "Descripción", "cantidad": "Stock", "unidad": "Unidad", "ubicacion": "Ubicación"})
+                st.download_button("📥 Descargar Existencias", convertir_df_a_excel(df_view), "Existencias.xlsx")
+                st.dataframe(df_view, use_container_width=True)
+        else:
+            st.warning("🔒 No tienes permiso para ver el stock de existencias.")
 
     with tab_hist:
         @st.dialog("Detalles del Movimiento - Insumos")
@@ -461,9 +495,13 @@ if opcion_almacen == "Insumos (Consumibles)":
             st.write(f"**Responsable:** {row_info.get('responsable', '')}")
             
             st.divider()
-            if st.button("🗑️ ELIMINAR ESTE REGISTRO", type="secondary", use_container_width=True):
-                supabase.table("Historial_Insumos").delete().eq("id", int(mov_id)).execute()
-                st.warning("Registro eliminado exitosamente."); time.sleep(1); st.rerun()
+            
+            if tiene_permiso("Almacén: Eliminar Historial Insumos"):
+                if st.button("🗑️ ELIMINAR ESTE REGISTRO", type="secondary", use_container_width=True):
+                    supabase.table("Historial_Insumos").delete().eq("id", int(mov_id)).execute()
+                    st.warning("Registro eliminado exitosamente."); time.sleep(1); st.rerun()
+            else:
+                st.warning("🔒 No tienes permiso para eliminar registros.")
 
         try:
             res_h = supabase.table("Historial_Insumos").select("*").order("id", desc=True).limit(200).execute()
@@ -505,33 +543,38 @@ elif opcion_almacen == "Herramientas (Activos)":
         df_her["Responsable"].fillna("Bodega", inplace=True)
 
     tab1, tab2, tab3 = st.tabs(["Movimientos", "Inventario", "Historial"])
+    
     with tab1:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.info("Prestar")
-            if not df_her.empty:
-                bodega = df_her[df_her["Responsable"]=="Bodega"]
-                if not bodega.empty:
-                    sel = st.selectbox("Herramienta", bodega["Herramienta"].tolist())
-                    resp = st.selectbox("A quien", lista_personal)
-                    if st.button("Prestar"):
-                        id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
-                        supabase.table("Herramientas").update({"Responsable": str(resp)}).eq("id", int(id_h)).execute()
-                        try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
-                        except: pass
-                        st.success("Prestado"); time.sleep(1); st.rerun()
-        with c2:
-            st.warning("Devolver")
-            if not df_her.empty:
-                prestadas = df_her[df_her["Responsable"]!="Bodega"]
-                if not prestadas.empty:
-                    sel_d = st.selectbox("Devolver", prestadas["Herramienta"].tolist())
-                    if st.button("Devolver"):
-                        id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
-                        supabase.table("Herramientas").update({"Responsable": "Bodega"}).eq("id", int(id_h)).execute()
-                        try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
-                        except: pass
-                        st.success("Devuelto"); time.sleep(1); st.rerun()
+        if tiene_permiso("Almacén: Prestar/Devolver Herramientas"):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.info("Prestar")
+                if not df_her.empty:
+                    bodega = df_her[df_her["Responsable"]=="Bodega"]
+                    if not bodega.empty:
+                        sel = st.selectbox("Herramienta", bodega["Herramienta"].tolist())
+                        resp = st.selectbox("A quien", lista_personal)
+                        if st.button("Prestar"):
+                            id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
+                            supabase.table("Herramientas").update({"Responsable": str(resp)}).eq("id", int(id_h)).execute()
+                            try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
+                            except: pass
+                            st.success("Prestado"); time.sleep(1); st.rerun()
+            with c2:
+                st.warning("Devolver")
+                if not df_her.empty:
+                    prestadas = df_her[df_her["Responsable"]!="Bodega"]
+                    if not prestadas.empty:
+                        sel_d = st.selectbox("Devolver", prestadas["Herramienta"].tolist())
+                        if st.button("Devolver"):
+                            id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
+                            supabase.table("Herramientas").update({"Responsable": "Bodega"}).eq("id", int(id_h)).execute()
+                            try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
+                            except: pass
+                            st.success("Devuelto"); time.sleep(1); st.rerun()
+        else:
+            st.warning("🔒 No tienes permiso para prestar ni devolver herramientas.")
+
     with tab2: st.dataframe(df_her, use_container_width=True)
 
     with tab3:
@@ -545,9 +588,13 @@ elif opcion_almacen == "Herramientas (Activos)":
             st.write(f"**Responsable:** {row_info.get('Responsable', '')}")
             
             st.divider()
-            if st.button("🗑️ ELIMINAR ESTE REGISTRO", type="secondary", use_container_width=True):
-                supabase.table("Historial_Herramientas").delete().eq("id", int(mov_id)).execute()
-                st.warning("Registro eliminado exitosamente."); time.sleep(1); st.rerun()
+            
+            if tiene_permiso("Almacén: Eliminar Historial Herramientas"):
+                if st.button("🗑️ ELIMINAR ESTE REGISTRO", type="secondary", use_container_width=True):
+                    supabase.table("Historial_Herramientas").delete().eq("id", int(mov_id)).execute()
+                    st.warning("Registro eliminado exitosamente."); time.sleep(1); st.rerun()
+            else:
+                st.warning("🔒 No tienes permiso para eliminar registros.")
 
         try:
             res_h = supabase.table("Historial_Herramientas").select("*").order("id", desc=True).limit(200).execute()
@@ -592,73 +639,76 @@ elif opcion_almacen == "Recibos de Entrega OC":
     tab_nuevo, tab_historial = st.tabs(["➕ Nuevo Recibo", "📜 Historial"])
     
     with tab_nuevo:
-        with st.container(border=True):
-            st.subheader("Datos de la Entrega")
-            c1, c2, c3 = st.columns([1, 1, 1])
-            oc_input = c1.text_input("Orden de Compra (O.C.)", placeholder="Ej. 2183")
-            fecha_input = c2.date_input("Fecha", value=datetime.now().date())
-            prov_input = c3.selectbox("Proveedor (Origen):", lista_nombres_prov, index=None, placeholder="Hemore...")
-            cliente_input = st.selectbox("Cliente (Destino):", lista_nombres_cli, index=None)
-            
-            if "data_recibo" not in st.session_state: st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
-            edited_df = st.data_editor(st.session_state["data_recibo"], num_rows="dynamic", use_container_width=True)
-            observaciones = st.text_area("Observaciones:")
-            
-            # ✨ MEJORA: CAMPO ESPECÍFICO DE QUIEN ENTREGA ✨
-            quien_entrega_input = st.selectbox("Quien entrega:", lista_personal)
-            
-            if st.button("💾 Guardar y PDF", type="primary"):
-                items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
+        if tiene_permiso("Almacén: Generar Recibos OC"):
+            with st.container(border=True):
+                st.subheader("Datos de la Entrega")
+                c1, c2, c3 = st.columns([1, 1, 1])
+                oc_input = c1.text_input("Orden de Compra (O.C.)", placeholder="Ej. 2183")
+                fecha_input = c2.date_input("Fecha", value=datetime.now().date())
+                prov_input = c3.selectbox("Proveedor (Origen):", lista_nombres_prov, index=None, placeholder="Hemore...")
+                cliente_input = st.selectbox("Cliente (Destino):", lista_nombres_cli, index=None)
+                
+                if "data_recibo" not in st.session_state: st.session_state["data_recibo"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                edited_df = st.data_editor(st.session_state["data_recibo"], num_rows="dynamic", use_container_width=True)
+                observaciones = st.text_area("Observaciones:")
+                
+                # ✨ MEJORA: CAMPO ESPECÍFICO DE QUIEN ENTREGA ✨
+                quien_entrega_input = st.selectbox("Quien entrega:", lista_personal)
+                
+                if st.button("💾 Guardar y PDF", type="primary"):
+                    items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
 
-                errores = []
-                if not oc_input:
-                    errores.append("- **Falta Orden de Compra (O.C.)**: Escribe el número de la orden en la parte superior.")
-                if not prov_input:
-                    errores.append("- **Falta Proveedor**: Selecciona el proveedor (Origen) de la lista desplegable.")
-                if not cliente_input:
-                    errores.append("- **Falta Cliente**: Selecciona el cliente (Destino) de la lista desplegable.")
-                if items.empty:
-                    errores.append("- **Tabla vacía**: Debes agregar al menos un producto válido (asegúrate de escribir su Código). Las celdas en blanco se ignoran.")
+                    errores = []
+                    if not oc_input:
+                        errores.append("- **Falta Orden de Compra (O.C.)**: Escribe el número de la orden en la parte superior.")
+                    if not prov_input:
+                        errores.append("- **Falta Proveedor**: Selecciona el proveedor (Origen) de la lista desplegable.")
+                    if not cliente_input:
+                        errores.append("- **Falta Cliente**: Selecciona el cliente (Destino) de la lista desplegable.")
+                    if items.empty:
+                        errores.append("- **Tabla vacía**: Debes agregar al menos un producto válido (asegúrate de escribir su Código). Las celdas en blanco se ignoran.")
 
-                if errores:
-                    mensaje_error = "⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores)
-                    st.error(mensaje_error)
-                else:
-                    for _, row in items.iterrows():
-                        val_cant = row.get("Cantidad", 0)
-                        try: cant_f = float(val_cant) if val_cant is not None else 0.0
-                        except: cant_f = 0.0
+                    if errores:
+                        mensaje_error = "⚠️ **No se pudo guardar el recibo debido a los siguientes errores:**\n\n" + "\n".join(errores)
+                        st.error(mensaje_error)
+                    else:
+                        for _, row in items.iterrows():
+                            val_cant = row.get("Cantidad", 0)
+                            try: cant_f = float(val_cant) if val_cant is not None else 0.0
+                            except: cant_f = 0.0
 
-                        data_to_insert = {
-                            "fecha": str(fecha_input.isoformat()), 
-                            "oc": str(oc_input), 
-                            "cliente": str(cliente_input), 
-                            "proveedor": str(prov_input), 
-                            "codigo": str(row["Código"]), 
-                            "descripcion": str(row["Descripción"]), 
-                            "color": str(row["Color"]), 
-                            "cantidad": cant_f, 
-                            "usuario": str(quien_entrega_input), 
-                            "observaciones": str(observaciones)
-                        }
-                        supabase.table("Recibos_OC").insert(data_to_insert).execute()
-                    
-                    try:
-                        cli_data = df_clientes[df_clientes['nombre'] == cliente_input].iloc[0]
-                        prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
-                        last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
+                            data_to_insert = {
+                                "fecha": str(fecha_input.isoformat()), 
+                                "oc": str(oc_input), 
+                                "cliente": str(cliente_input), 
+                                "proveedor": str(prov_input), 
+                                "codigo": str(row["Código"]), 
+                                "descripcion": str(row["Descripción"]), 
+                                "color": str(row["Color"]), 
+                                "cantidad": cant_f, 
+                                "usuario": str(quien_entrega_input), 
+                                "observaciones": str(observaciones)
+                            }
+                            supabase.table("Recibos_OC").insert(data_to_insert).execute()
                         
-                        prov_text = _formatear_datos_contacto(prov_input, prov_data)
-                        cli_text = _formatear_datos_contacto(cliente_input, cli_data)
-                        
-                        # ✨ PASAMOS EL NOMBRE DE QUIEN ENTREGA AL DICCIONARIO PARA EL PDF ✨
-                        datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": quien_entrega_input}
-                        pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
-                        
-                        st.success("✅ Guardado correctamente.")
-                        st.download_button("🖨️ Imprimir PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
-                    except Exception as e: 
-                        st.error(f"Error interno al generar el archivo PDF: {e}")
+                        try:
+                            cli_data = df_clientes[df_clientes['nombre'] == cliente_input].iloc[0]
+                            prov_data = df_proveedores[df_proveedores[col_p_name] == prov_input].iloc[0]
+                            last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
+                            
+                            prov_text = _formatear_datos_contacto(prov_input, prov_data)
+                            cli_text = _formatear_datos_contacto(cliente_input, cli_data)
+                            
+                            # ✨ PASAMOS EL NOMBRE DE QUIEN ENTREGA AL DICCIONARIO PARA EL PDF ✨
+                            datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": quien_entrega_input}
+                            pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
+                            
+                            st.success("✅ Guardado correctamente.")
+                            st.download_button("🖨️ Imprimir PDF", pdf_bytes, f"Recibo_{oc_input}.pdf", "application/pdf")
+                        except Exception as e: 
+                            st.error(f"Error interno al generar el archivo PDF: {e}")
+        else:
+            st.warning("🔒 No tienes permiso para generar nuevos recibos OC.")
 
     with tab_historial:
         @st.dialog("Detalles de Orden de Compra")
@@ -693,18 +743,21 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 
                 col_g, col_p = st.columns(2)
                 
-                if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
-                    for _, r in edited_prods.iterrows():
-                        val_cant = r.get("Cantidad", 0)
-                        try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
-                        except: cant_f = 0.0
-                        
-                        supabase.table("Recibos_OC").update({
-                            "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
-                            "observaciones": str(n_obs), "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
-                            "color": str(r["Color"]), "cantidad": cant_f, "usuario": str(n_entrega)
-                        }).eq("id", r["id"]).execute()
-                    st.success("Guardado."); time.sleep(0.5); st.rerun()
+                if tiene_permiso("Almacén: Editar/Eliminar Recibos OC"):
+                    if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                        for _, r in edited_prods.iterrows():
+                            val_cant = r.get("Cantidad", 0)
+                            try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
+                            except: cant_f = 0.0
+                            
+                            supabase.table("Recibos_OC").update({
+                                "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
+                                "observaciones": str(n_obs), "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
+                                "color": str(r["Color"]), "cantidad": cant_f, "usuario": str(n_entrega)
+                            }).eq("id", r["id"]).execute()
+                        st.success("Guardado."); time.sleep(0.5); st.rerun()
+                else:
+                    col_g.warning("🔒 No tienes permiso para guardar cambios.")
 
                 if n_cli in lista_nombres_cli and n_prov in lista_nombres_prov:
                     try:
@@ -719,9 +772,10 @@ elif opcion_almacen == "Recibos de Entrega OC":
                     except: col_p.error("Error PDF")
                 
                 st.divider()
-                if st.button("🗑️ ELIMINAR ESTA ORDEN DE COMPRA", type="secondary", use_container_width=True):
-                    supabase.table("Recibos_OC").delete().eq("oc", oc_seleccionada).execute()
-                    st.warning("Orden eliminada. Actualizando..."); time.sleep(1); st.rerun()
+                if tiene_permiso("Almacén: Editar/Eliminar Recibos OC"):
+                    if st.button("🗑️ ELIMINAR ESTA ORDEN DE COMPRA", type="secondary", use_container_width=True):
+                        supabase.table("Recibos_OC").delete().eq("oc", oc_seleccionada).execute()
+                        st.warning("Orden eliminada. Actualizando..."); time.sleep(1); st.rerun()
 
         try:
             res_h = supabase.table("Recibos_OC").select("*").order("id", desc=True).limit(500).execute()
@@ -744,7 +798,7 @@ elif opcion_almacen == "Recibos de Entrega OC":
                     c3.write(row['Cliente'])
                     if c4.button("Ver Detalle", key=f"btn_oc_{row['Orden de Compra']}"):
                         ver_editar_oc(row['Orden de Compra'], df_hist)
-                
+            
             else:
                 st.info("No hay recibos registrados.")
         except Exception as e: 
@@ -764,41 +818,45 @@ elif opcion_almacen == "Entrada de Material":
     except: lista_provs = []; lista_pers = []; df_provs = pd.DataFrame()
 
     tab_ent_new, tab_ent_hist = st.tabs(["➕ Nueva Entrada", "📜 Historial"])
+    
     with tab_ent_new:
-        with st.container(border=True):
-            oc_in = st.text_input("Orden de Compra / Remisión")
-            fecha_in = st.date_input("Fecha de Llegada", value=datetime.now().date())
-            prov_in = st.selectbox("Proveedor (Origen):", lista_provs, index=None)
-            
-            if "data_entrada" not in st.session_state: st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
-            edited_df_in = st.data_editor(st.session_state["data_entrada"], num_rows="dynamic", use_container_width=True)
-            observaciones_in = st.text_area("Observaciones:", key="obs_in")
-            
-            # ✨ MEJORA: CAMPO ESPECÍFICO DE QUIEN ENTREGA ✨
-            quien_entrega_in = st.selectbox("Quien entrega:", lista_pers, key="user_in")
-            
-            if st.button("💾 Registrar Entrada", type="primary"):
-                if oc_in and prov_in and not edited_df_in.empty:
-                    items_in = edited_df_in[edited_df_in["Código"].notna() & (edited_df_in["Código"] != "")]
-                    for _, row in items_in.iterrows():
-                        val_cant_in = row.get("Cantidad", 0)
-                        try: cant_f_in = float(val_cant_in) if val_cant_in is not None else 0.0
-                        except: cant_f_in = 0.0
+        if tiene_permiso("Almacén: Registrar Entrada Material"):
+            with st.container(border=True):
+                oc_in = st.text_input("Orden de Compra / Remisión")
+                fecha_in = st.date_input("Fecha de Llegada", value=datetime.now().date())
+                prov_in = st.selectbox("Proveedor (Origen):", lista_provs, index=None)
+                
+                if "data_entrada" not in st.session_state: st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
+                edited_df_in = st.data_editor(st.session_state["data_entrada"], num_rows="dynamic", use_container_width=True)
+                observaciones_in = st.text_area("Observaciones:", key="obs_in")
+                
+                # ✨ MEJORA: CAMPO ESPECÍFICO DE QUIEN ENTREGA ✨
+                quien_entrega_in = st.selectbox("Quien entrega:", lista_pers, key="user_in")
+                
+                if st.button("💾 Registrar Entrada", type="primary"):
+                    if oc_in and prov_in and not edited_df_in.empty:
+                        items_in = edited_df_in[edited_df_in["Código"].notna() & (edited_df_in["Código"] != "")]
+                        for _, row in items_in.iterrows():
+                            val_cant_in = row.get("Cantidad", 0)
+                            try: cant_f_in = float(val_cant_in) if val_cant_in is not None else 0.0
+                            except: cant_f_in = 0.0
 
-                        data_in = {
-                            "fecha": str(fecha_in.isoformat()), 
-                            "oc": str(oc_in), 
-                            "proveedor": str(prov_in), 
-                            "codigo": str(row["Código"]), 
-                            "descripcion": str(row["Descripción"]), 
-                            "color": str(row["Color"]), 
-                            "cantidad": cant_f_in, 
-                            "usuario": str(quien_entrega_in), 
-                            "observaciones": str(observaciones_in)
-                        }
-                        supabase.table("Entradas_Material").insert(data_in).execute()
-                    
-                    st.success("✅ Registrado."); st.rerun()
+                            data_in = {
+                                "fecha": str(fecha_in.isoformat()), 
+                                "oc": str(oc_in), 
+                                "proveedor": str(prov_in), 
+                                "codigo": str(row["Código"]), 
+                                "descripcion": str(row["Descripción"]), 
+                                "color": str(row["Color"]), 
+                                "cantidad": cant_f_in, 
+                                "usuario": str(quien_entrega_in), 
+                                "observaciones": str(observaciones_in)
+                            }
+                            supabase.table("Entradas_Material").insert(data_in).execute()
+                        
+                        st.success("✅ Registrado."); st.rerun()
+        else:
+            st.warning("🔒 No tienes permiso para registrar nuevas entradas de material.")
 
     with tab_ent_hist:
         @st.dialog("Detalles de Entrada de Material")
@@ -831,19 +889,22 @@ elif opcion_almacen == "Entrada de Material":
                 
                 col_g, col_p = st.columns(2)
                 
-                if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
-                    for _, r in edited_prods.iterrows():
-                        val_cant = r.get("Cantidad", 0)
-                        try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
-                        except: cant_f = 0.0
-                        
-                        supabase.table("Entradas_Material").update({
-                            "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov),
-                            "observaciones": str(n_obs), "usuario": str(n_entrega),
-                            "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
-                            "color": str(r["Color"]), "cantidad": cant_f
-                        }).eq("id", r["id"]).execute()
-                    st.success("Guardado."); time.sleep(0.5); st.rerun()
+                if tiene_permiso("Almacén: Editar/Eliminar Entrada Material"):
+                    if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                        for _, r in edited_prods.iterrows():
+                            val_cant = r.get("Cantidad", 0)
+                            try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
+                            except: cant_f = 0.0
+                            
+                            supabase.table("Entradas_Material").update({
+                                "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov),
+                                "observaciones": str(n_obs), "usuario": str(n_entrega),
+                                "codigo": str(r["Código"]), "descripcion": str(r["Descripción"]),
+                                "color": str(r["Color"]), "cantidad": cant_f
+                            }).eq("id", r["id"]).execute()
+                        st.success("Guardado."); time.sleep(0.5); st.rerun()
+                else:
+                    col_g.warning("🔒 No tienes permiso para editar.")
 
                 if n_prov in lista_provs:
                     try:
@@ -857,9 +918,10 @@ elif opcion_almacen == "Entrada de Material":
                     except: col_p.error("Error PDF")
                 
                 st.divider()
-                if st.button("🗑️ ELIMINAR ESTA ENTRADA", type="secondary", use_container_width=True):
-                    supabase.table("Entradas_Material").delete().eq("oc", oc_seleccionada).execute()
-                    st.warning("Entrada eliminada. Actualizando..."); time.sleep(1); st.rerun()
+                if tiene_permiso("Almacén: Editar/Eliminar Entrada Material"):
+                    if st.button("🗑️ ELIMINAR ESTA ENTRADA", type="secondary", use_container_width=True):
+                        supabase.table("Entradas_Material").delete().eq("oc", oc_seleccionada).execute()
+                        st.warning("Entrada eliminada. Actualizando..."); time.sleep(1); st.rerun()
 
         try:
             res_h = supabase.table("Entradas_Material").select("*").order("id", desc=True).limit(500).execute()
@@ -882,7 +944,7 @@ elif opcion_almacen == "Entrada de Material":
                     c3.write(row['Proveedor'])
                     if c4.button("Ver Detalle", key=f"btn_ent_{row['OC / Remisión']}"):
                         ver_editar_entrada(row['OC / Remisión'], df_hist_ent)
-                
+            
             else:
                 st.info("No hay entradas registradas.")
         except Exception as e: 
@@ -897,44 +959,47 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
     tab_dinero_new, tab_dinero_hist = st.tabs(["➕ Nuevo Movimiento", "📜 Historial"])
     
     with tab_dinero_new:
-        with st.container(border=True):
-            tipo_mov = st.radio("Tipo de Movimiento:", ["Entrada", "Salida"], horizontal=True)
-            fecha_mov = st.date_input("Fecha", value=datetime.now().date())
-            
-            c1, c2 = st.columns(2)
-            quien_entrega = c1.text_input("Nombre de quien entrega:")
-            quien_recibe = c2.text_input("Nombre de quien recibe:")
-            
-            monto_mov = st.number_input("Cantidad ($):", min_value=0.00, value=0.00, step=100.0)
-            detalle_mov = st.text_area("Detalle / Descripción del movimiento:")
-            
-            if st.button("💾 Guardar y Generar Ticket", type="primary"):
-                errores_dinero = []
-                if not quien_entrega: errores_dinero.append("- Falta la persona que entrega.")
-                if not quien_recibe: errores_dinero.append("- Falta la persona que recibe.")
-                if monto_mov <= 0: errores_dinero.append("- La cantidad debe ser mayor a cero.")
-                if not detalle_mov: errores_dinero.append("- Escribe el detalle del movimiento.")
+        if tiene_permiso("Finanzas: Registrar Movimientos Dinero"):
+            with st.container(border=True):
+                tipo_mov = st.radio("Tipo de Movimiento:", ["Entrada", "Salida"], horizontal=True)
+                fecha_mov = st.date_input("Fecha", value=datetime.now().date())
+                
+                c1, c2 = st.columns(2)
+                quien_entrega = c1.text_input("Nombre de quien entrega:")
+                quien_recibe = c2.text_input("Nombre de quien recibe:")
+                
+                monto_mov = st.number_input("Cantidad ($):", min_value=0.00, value=0.00, step=100.0)
+                detalle_mov = st.text_area("Detalle / Descripción del movimiento:")
+                
+                if st.button("💾 Guardar y Generar Ticket", type="primary"):
+                    errores_dinero = []
+                    if not quien_entrega: errores_dinero.append("- Falta la persona que entrega.")
+                    if not quien_recibe: errores_dinero.append("- Falta la persona que recibe.")
+                    if monto_mov <= 0: errores_dinero.append("- La cantidad debe ser mayor a cero.")
+                    if not detalle_mov: errores_dinero.append("- Escribe el detalle del movimiento.")
 
-                if errores_dinero:
-                    st.error("⚠️ **Faltan datos:**\n\n" + "\n".join(errores_dinero))
-                else:
-                    data_insert = {
-                        "fecha": str(fecha_mov.isoformat()),
-                        "tipo": str(tipo_mov),
-                        "quien_entrega": str(quien_entrega),
-                        "quien_recibe": str(quien_recibe),
-                        "monto": float(monto_mov),
-                        "descripcion": str(detalle_mov)
-                    }
-                    
-                    supabase.table("Entradas_Salidas_Dinero").insert(data_insert).execute()
-                    
-                    try: last_id = supabase.table("Entradas_Salidas_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
-                    except: last_id = 1
-                    
-                    pdf_bytes_ticket = generar_pdf_ticket_dinero(data_insert, last_id)
-                    st.success("✅ Movimiento guardado correctamente.")
-                    st.download_button("🖨️ Imprimir Ticket PDF", pdf_bytes_ticket, f"Ticket_{tipo_mov}_{last_id}.pdf", "application/pdf")
+                    if errores_dinero:
+                        st.error("⚠️ **Faltan datos:**\n\n" + "\n".join(errores_dinero))
+                    else:
+                        data_insert = {
+                            "fecha": str(fecha_mov.isoformat()),
+                            "tipo": str(tipo_mov),
+                            "quien_entrega": str(quien_entrega),
+                            "quien_recibe": str(quien_recibe),
+                            "monto": float(monto_mov),
+                            "descripcion": str(detalle_mov)
+                        }
+                        
+                        supabase.table("Entradas_Salidas_Dinero").insert(data_insert).execute()
+                        
+                        try: last_id = supabase.table("Entradas_Salidas_Dinero").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
+                        except: last_id = 1
+                        
+                        pdf_bytes_ticket = generar_pdf_ticket_dinero(data_insert, last_id)
+                        st.success("✅ Movimiento guardado correctamente.")
+                        st.download_button("🖨️ Imprimir Ticket PDF", pdf_bytes_ticket, f"Ticket_{tipo_mov}_{last_id}.pdf", "application/pdf")
+        else:
+            st.warning("🔒 No tienes permiso para registrar movimientos de dinero.")
 
     with tab_dinero_hist:
         @st.dialog("Detalle del Movimiento de Dinero")
@@ -958,13 +1023,16 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
             st.divider()
             col_g, col_p = st.columns(2)
             
-            if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
-                supabase.table("Entradas_Salidas_Dinero").update({
-                    "fecha": str(n_fecha.isoformat()), "tipo": str(n_tipo),
-                    "quien_entrega": str(n_entrega), "quien_recibe": str(n_recibe),
-                    "monto": float(n_monto), "descripcion": str(n_detalle)
-                }).eq("id", id_mov).execute()
-                st.success("Guardado."); time.sleep(0.5); st.rerun()
+            if tiene_permiso("Finanzas: Editar/Eliminar Movimientos Dinero"):
+                if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                    supabase.table("Entradas_Salidas_Dinero").update({
+                        "fecha": str(n_fecha.isoformat()), "tipo": str(n_tipo),
+                        "quien_entrega": str(n_entrega), "quien_recibe": str(n_recibe),
+                        "monto": float(n_monto), "descripcion": str(n_detalle)
+                    }).eq("id", id_mov).execute()
+                    st.success("Guardado."); time.sleep(0.5); st.rerun()
+            else:
+                col_g.warning("🔒 No tienes permiso para editar.")
                 
             datos_act = {
                 "fecha": n_fecha.strftime("%d/%m/%Y"), "tipo": n_tipo,
@@ -976,11 +1044,12 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
                 col_p.download_button("🖨️ Reimprimir Ticket", pdf_bytes_upd, f"Ticket_{n_tipo}_{id_mov}.pdf", "application/pdf", use_container_width=True)
             except Exception as e:
                 col_p.error("Error PDF")
-                
-            st.divider()
-            if st.button("🗑️ ELIMINAR ESTE MOVIMIENTO", type="secondary", use_container_width=True):
-                supabase.table("Entradas_Salidas_Dinero").delete().eq("id", id_mov).execute()
-                st.warning("Movimiento eliminado."); time.sleep(1); st.rerun()
+            
+            if tiene_permiso("Finanzas: Editar/Eliminar Movimientos Dinero"):
+                st.divider()
+                if st.button("🗑️ ELIMINAR ESTE MOVIMIENTO", type="secondary", use_container_width=True):
+                    supabase.table("Entradas_Salidas_Dinero").delete().eq("id", id_mov).execute()
+                    st.warning("Movimiento eliminado."); time.sleep(1); st.rerun()
 
         try:
             res_h = supabase.table("Entradas_Salidas_Dinero").select("*").order("id", desc=True).limit(200).execute()
