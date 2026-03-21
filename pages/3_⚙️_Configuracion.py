@@ -18,7 +18,7 @@ utils.validar_login()
 supabase = utils.supabase
 
 # ==========================================
-# FUNCIÓN DE PERMISOS (LA MEJORA)
+# FUNCIÓN DE PERMISOS
 # ==========================================
 def tiene_permiso(permiso):
     if st.session_state.get("es_admin", False): return True
@@ -357,14 +357,13 @@ elif opcion == "Herramientas":
             estado_h = c4.selectbox("Estado", ["NUEVO", "BUEN ESTADO", "REGULAR", "BAJA"])
             ubicacion_h = c5.text_input("Ubicación")
             
-            # ⬇️ AQUÍ ESTÁ LA CORRECCIÓN DE LA INSERCIÓN ⬇️
             if st.form_submit_button("Guardar"):
                 if sku_h and nombre_h:
                     try:
-                        # Si te marca error aquí, fíjate en el mensaje rojo. Seguramente alguna columna en 
-                        # Supabase está en minúsculas (ej: 'herramienta' en vez de 'Herramienta').
+                        # ⬇️ AQUÍ ESTÁ LA SOLUCIÓN AL ERROR DE ID_Herramienta ⬇️
                         datos_herramienta = {
                             "codigo": sku_h, 
+                            "ID_Herramienta": sku_h,  # Esta línea evita el constraint not-null
                             "Herramienta": nombre_h, 
                             "descripcion": desc_h, 
                             "marca": marca_h, 
@@ -378,14 +377,12 @@ elif opcion == "Herramientas":
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ Error al guardar en base de datos: {e}")
-                        st.info("💡 Revisa que en Supabase las columnas se llamen exactamente: codigo, Herramienta, descripcion, marca, Estado, ubicacion, Responsable")
                 else:
                     st.warning("⚠️ Código SKU y Nombre Herramienta son obligatorios.")
 
     with t2:
         edited_h = st.data_editor(df, num_rows="dynamic", use_container_width=True)
         
-        # ⬇️ AQUÍ ESTÁ LA CORRECCIÓN DE LA ACTUALIZACIÓN ⬇️
         if st.button("💾 Actualizar Catálogo"):
             try:
                 for i, r in edited_h.iterrows():
