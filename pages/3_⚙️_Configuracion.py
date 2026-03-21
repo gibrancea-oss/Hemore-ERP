@@ -350,23 +350,17 @@ elif opcion == "Herramientas":
             sku_h = c1.text_input("Código SKU")
             nombre_h = c2.text_input("Nombre Herramienta")
             
-            desc_h = st.text_area("Descripción")
-            
-            c3, c4, c5 = st.columns(3)
-            marca_h = c3.text_input("Marca")
+            c4, c5 = st.columns(2)
             estado_h = c4.selectbox("Estado", ["NUEVO", "BUEN ESTADO", "REGULAR", "BAJA"])
             ubicacion_h = c5.text_input("Ubicación")
             
             if st.form_submit_button("Guardar"):
                 if sku_h and nombre_h:
                     try:
-                        # ⬇️ AQUÍ ESTÁ LA SOLUCIÓN AL ERROR DE ID_Herramienta ⬇️
                         datos_herramienta = {
                             "codigo": sku_h, 
-                            "ID_Herramienta": sku_h,  # Esta línea evita el constraint not-null
+                            "ID_Herramienta": sku_h,  
                             "Herramienta": nombre_h, 
-                            "descripcion": desc_h, 
-                            "marca": marca_h, 
                             "Estado": estado_h, 
                             "ubicacion": ubicacion_h, 
                             "Responsable": "BODEGA"
@@ -381,22 +375,29 @@ elif opcion == "Herramientas":
                     st.warning("⚠️ Código SKU y Nombre Herramienta son obligatorios.")
 
     with t2:
-        edited_h = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        
-        if st.button("💾 Actualizar Catálogo"):
-            try:
-                for i, r in edited_h.iterrows():
-                    d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                    if pd.notna(r['id']): 
-                        utils.supabase.table("Herramientas").update(d).eq("id", r['id']).execute()
-                    else: 
-                        if "Responsable" not in d: d["Responsable"] = "BODEGA"
-                        utils.supabase.table("Herramientas").insert(d).execute()
-                st.success("✅ Sincronizado")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Error al actualizar: {e}")
+        if not df.empty:
+            df_view = df.copy()
+            columnas_a_quitar = ["descripcion", "Descripcion", "marca", "Marca"]
+            for col in columnas_a_quitar:
+                if col in df_view.columns:
+                    df_view = df_view.drop(columns=[col])
+                    
+            edited_h = st.data_editor(df_view, num_rows="dynamic", use_container_width=True)
+            
+            if st.button("💾 Actualizar Catálogo"):
+                try:
+                    for i, r in edited_h.iterrows():
+                        d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
+                        if pd.notna(r['id']): 
+                            utils.supabase.table("Herramientas").update(d).eq("id", r['id']).execute()
+                        else: 
+                            if "Responsable" not in d: d["Responsable"] = "BODEGA"
+                            utils.supabase.table("Herramientas").insert(d).execute()
+                    st.success("✅ Sincronizado")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error al actualizar: {e}")
 
 # ==========================================
 # 4. CLIENTES
