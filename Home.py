@@ -1,6 +1,7 @@
 import streamlit as st
 import utils
 import time 
+import os # Añadido para poder leer el logo
 
 st.set_page_config(page_title="Inicio", layout="wide")
 
@@ -16,6 +17,10 @@ if "permisos" not in st.session_state:
 
 if not st.session_state["authenticated"]:
     # MODO BLOQUEADO
+    # --- MOSTRAR LOGO EN LA PANTALLA DE ACCESO ---
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=300)
+        
     st.title("🔐 Acceso al Sistema ERP")
     st.markdown("El sistema está protegido. Por favor ingresa tus credenciales.")
     
@@ -71,12 +76,17 @@ if not st.session_state["authenticated"]:
     st.stop() 
 
 # --- CONTENIDO DEL SISTEMA (CUANDO YA ENTRASTE) ---
+
+# --- MOSTRAR LOGO EN EL MENÚ LATERAL ---
+if os.path.exists("logo.png"):
+    st.sidebar.image("logo.png", use_container_width=True)
+
 col_t1, col_t2 = st.columns([8, 2])
 with col_t1:
     st.title("🏠 Bienvenido al Panel de Control")
 
 with col_t2:
-    # --- MEJORA: BOTÓN PARA CERRAR SESIÓN ---
+    # --- BOTÓN PARA CERRAR SESIÓN ---
     st.write("") # Espaciador ligero
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state["authenticated"] = False
