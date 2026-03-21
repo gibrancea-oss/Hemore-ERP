@@ -77,10 +77,6 @@ if not st.session_state["authenticated"]:
 
 # --- CONTENIDO DEL SISTEMA (CUANDO YA ENTRASTE) ---
 
-# --- MOSTRAR LOGO EN EL MENÚ LATERAL ---
-if os.path.exists("logo.png"):
-    st.sidebar.image("logo.png", use_container_width=True)
-
 # --- MOSTRAR LOGO EN EL PANEL PRINCIPAL ---
 if os.path.exists("logo.png"):
     st.image("logo.png", width=300) # <- Ajusta este número si lo quieres más grande o pequeño
