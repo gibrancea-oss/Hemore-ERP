@@ -375,25 +375,56 @@ elif opcion == "Herramientas":
 # ==========================================
 elif opcion == "Clientes":
     st.markdown("### 🏢 Gestión de Clientes")
-    try: df = pd.DataFrame(utils.supabase.table("Clientes").select("*").order("id").execute().data)
-    except: df = pd.DataFrame()
+    try: 
+        df = pd.DataFrame(utils.supabase.table("Clientes").select("*").order("id").execute().data)
+    except: 
+        df = pd.DataFrame()
+
     t1, t2 = st.tabs(["➕ Alta Cliente", "📋 Lista de Clientes"])
     with t1:
         with st.form("alta_cliente_new", clear_on_submit=True):
-            c1, c2 = st.columns(2); nombre_cli = c1.text_input("Nombre / Empresa"); rfc_cli = c2.text_input("RFC")
-            direccion_cli = st.text_input("Dirección"); c3, c4 = st.columns(2)
-            colonia_cli = c3.text_input("Colonia"); cp_cli = c4.text_input("Código Postal")
-            if st.form_submit_button("Guardar Cliente"):
+            c1, c2 = st.columns(2)
+            nombre_cli = c1.text_input("Nombre / Empresa")
+            rfc_cli = c2.text_input("RFC")
+            
+            c3, c4 = st.columns(2)
+            telefono_cli = c3.text_input("Teléfono")
+            email_cli = c4.text_input("E-mail")
+            
+            direccion_cli = st.text_input("Dirección (Calle y Número)")
+            
+            c5, c6, c7 = st.columns(3)
+            colonia_cli = c5.text_input("Colonia")
+            cp_cli = c6.text_input("Código Postal")
+            estado_cli = c7.text_input("Estado (Provincia)")
+            
+            if st.form_submit_button("Guardar Cliente", type="primary"):
                 if nombre_cli:
-                    utils.supabase.table("Clientes").insert({"nombre": nombre_cli, "rfc": rfc_cli, "direccion": direccion_cli, "colonia": colonia_cli, "codigo_postal": cp_cli}).execute()
-                    st.success("✅ Registrado."); time.sleep(1); st.rerun()
+                    datos_cli = {
+                        "nombre": nombre_cli, 
+                        "rfc": rfc_cli, 
+                        "telefono": telefono_cli,
+                        "email": email_cli,
+                        "direccion": direccion_cli, 
+                        "colonia": colonia_cli, 
+                        "codigo_postal": cp_cli,
+                        "estado": estado_cli
+                    }
+                    utils.supabase.table("Clientes").insert(datos_cli).execute()
+                    st.success("✅ Cliente registrado correctamente.")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("⚠️ El nombre del cliente es obligatorio.")
     with t2:
         edited_c = st.data_editor(df, num_rows="dynamic", use_container_width=True)
         if st.button("💾 Actualizar Clientes"):
             for i, r in edited_c.iterrows():
                 d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                if pd.notna(r['id']): utils.supabase.table("Clientes").update(d).eq("id", r['id']).execute()
-                else: utils.supabase.table("Clientes").insert(d).execute()
+                if pd.notna(r['id']): 
+                    utils.supabase.table("Clientes").update(d).eq("id", r['id']).execute()
+                else: 
+                    utils.supabase.table("Clientes").insert(d).execute()
             st.rerun()
 
 # ==========================================
@@ -401,25 +432,56 @@ elif opcion == "Clientes":
 # ==========================================
 elif opcion == "Proveedores":
     st.markdown("### 🚚 Gestión de Proveedores")
-    try: df = pd.DataFrame(utils.supabase.table("Proveedores").select("*").order("id").execute().data)
-    except: df = pd.DataFrame()
+    try: 
+        df = pd.DataFrame(utils.supabase.table("Proveedores").select("*").order("id").execute().data)
+    except: 
+        df = pd.DataFrame()
+
     t1, t2 = st.tabs(["➕ Alta Proveedor", "📋 Lista de Proveedores"])
     with t1:
         with st.form("alta_prov_new", clear_on_submit=True):
-            c1, c2 = st.columns(2); nombre_prov = c1.text_input("Nombre / Empresa"); rfc_prov = c2.text_input("RFC")
-            domicilio_prov = st.text_input("Domicilio")
-            if st.form_submit_button("Guardar Proveedor"):
+            c1, c2 = st.columns(2)
+            nombre_prov = c1.text_input("Nombre / Empresa")
+            rfc_prov = c2.text_input("RFC")
+            
+            c3, c4 = st.columns(2)
+            contacto_prov = c3.text_input("Persona de Contacto")
+            telefono_prov = c4.text_input("Teléfono")
+            
+            domicilio_prov = st.text_input("Calle y Número")
+            
+            c5, c6 = st.columns(2)
+            colonia_prov = c5.text_input("Colonia")
+            cp_prov = c6.text_input("Código Postal")
+            
+            if st.form_submit_button("Guardar Proveedor", type="primary"):
                 if nombre_prov:
-                    utils.supabase.table("Proveedores").insert({"nombre": nombre_prov, "empresa": nombre_prov, "rfc": rfc_prov, "domicilio": domicilio_prov}).execute()
-                    st.success("✅ Registrado."); time.sleep(1); st.rerun()
+                    datos_prov = {
+                        "nombre": nombre_prov, 
+                        "empresa": nombre_prov, 
+                        "rfc": rfc_prov, 
+                        "contacto": contacto_prov,
+                        "telefono": telefono_prov,
+                        "domicilio": domicilio_prov,
+                        "colonia": colonia_prov,
+                        "codigo_postal": cp_prov
+                    }
+                    utils.supabase.table("Proveedores").insert(datos_prov).execute()
+                    st.success("✅ Proveedor registrado correctamente.")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("⚠️ El nombre de la empresa es obligatorio.")
     with t2:
         edited_p = st.data_editor(df, num_rows="dynamic", use_container_width=True)
         if st.button("💾 Actualizar Proveedores"):
             for i, r in edited_p.iterrows():
                 d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
                 d["empresa"] = d.get("nombre", "")
-                if pd.notna(r['id']): utils.supabase.table("Proveedores").update(d).eq("id", r['id']).execute()
-                else: utils.supabase.table("Proveedores").insert(d).execute()
+                if pd.notna(r['id']): 
+                    utils.supabase.table("Proveedores").update(d).eq("id", r['id']).execute()
+                else: 
+                    utils.supabase.table("Proveedores").insert(d).execute()
             st.rerun()
 
 # ==========================================
