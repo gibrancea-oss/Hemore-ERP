@@ -3,6 +3,7 @@ import utils
 import time 
 import os 
 
+# Configuración inicial en modo "wide" para aprovechar todo el ancho
 st.set_page_config(page_title="Inicio", layout="wide")
 
 # --- SISTEMA DE LOGIN Y SESIONES ---
@@ -16,21 +17,28 @@ if "permisos" not in st.session_state:
     st.session_state["permisos"] = []
 
 if not st.session_state["authenticated"]:
-    # MODO BLOQUEADO
-    # --- MOSTRAR LOGO EN LA PANTALLA DE ACCESO ---
-    if os.path.exists("logo.png"):
-        st.image("logo.png", width=300)
-        
-    st.title("🔐 Acceso al Sistema ERP")
-    st.markdown("El sistema está protegido. Por favor ingresa tus credenciales.")
+    # ==========================================
+    # PANTALLA DE LOGIN COMPACTA (SIN SCROLL)
+    # ==========================================
+    st.write("<br><br>", unsafe_allow_html=True) # Espacio ligero superior
     
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        # Ahora pedimos Usuario y Contraseña
+    col_logo, col_login = st.columns([1, 1.5], gap="large")
+    
+    with col_logo:
+        # Mostramos el logo centrado en la columna izquierda
+        if os.path.exists("logo.png"):
+            st.image("logo.png", use_container_width=True)
+            
+    with col_login:
+        st.title("🔐 Acceso al Sistema ERP")
+        st.markdown("El sistema está protegido. Por favor ingresa tus credenciales.")
+        
+        # Formulario compacto
         usuario_input = st.text_input("Usuario")
         password_input = st.text_input("Contraseña", type="password")
         
-        if st.button("Ingresar al Sistema", type="primary"):
+        st.write("<br>", unsafe_allow_html=True) # Espacio antes del botón
+        if st.button("Ingresar al Sistema", type="primary", use_container_width=True):
             if not usuario_input or not password_input:
                 st.warning("⚠️ Ingresa usuario y contraseña.")
             else:
@@ -39,16 +47,15 @@ if not st.session_state["authenticated"]:
                     st.session_state["authenticated"] = True
                     st.session_state["usuario_actual"] = "Administrador"
                     st.session_state["es_admin"] = True
-                    st.session_state["permisos"] = ["TODO"] # El admin tiene llave maestra
+                    st.session_state["permisos"] = ["TODO"]
                     
                     st.toast("✅ Acceso Concedido (Admin)")
                     time.sleep(1) 
                     st.rerun()
                 
-                # 👷‍♂️ 2. VALIDACIÓN OPERADORES EN SUPABASE
+                # 👷‍♂️ 2. VALIDACIÓN OPERADORES
                 else:
                     try:
-                        # Buscamos en la tabla Personal si coincide el usuario, el PIN y si está activo
                         res = utils.supabase.table("Personal").select("*").eq("usuario", usuario_input).eq("pin", password_input).eq("activo", True).execute()
                         datos_usuario = res.data
                         
@@ -58,7 +65,6 @@ if not st.session_state["authenticated"]:
                             st.session_state["usuario_actual"] = usuario_db["nombre"]
                             st.session_state["es_admin"] = False
                             
-                            # Recuperamos los permisos y los convertimos en una lista
                             permisos_str = usuario_db.get("permisos", "")
                             if permisos_str:
                                 st.session_state["permisos"] = [p.strip() for p in permisos_str.split(",")]
@@ -75,19 +81,21 @@ if not st.session_state["authenticated"]:
     
     st.stop() 
 
-# --- CONTENIDO DEL SISTEMA (CUANDO YA ENTRASTE) ---
+# ==========================================
+# PANTALLA PRINCIPAL COMPACTA (SIN SCROLL)
+# ==========================================
 
-# --- MOSTRAR LOGO EN EL PANEL PRINCIPAL ---
+# Logo en el menú lateral
 if os.path.exists("logo.png"):
-    st.image("logo.png", width=300) # <- Ajusta este número si lo quieres más grande o pequeño
+    st.sidebar.image("logo.png", use_container_width=True)
 
+# Cabecera
 col_t1, col_t2 = st.columns([8, 2])
 with col_t1:
     st.title("🏠 Bienvenido al Panel de Control")
 
 with col_t2:
-    # --- BOTÓN PARA CERRAR SESIÓN ---
-    st.write("") # Espaciador ligero
+    st.write("") # Alineación vertical
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state["authenticated"] = False
         st.session_state["usuario_actual"] = ""
@@ -95,24 +103,34 @@ with col_t2:
         st.session_state["permisos"] = []
         st.rerun()
 
-# Mostramos un mensaje diferente si es admin o si es operador
+# Barra de estado
 if st.session_state["es_admin"]:
-    st.success(f"👤 Sesión Activa: {st.session_state['usuario_actual']} | 👑 Acceso Total Habilitado")
+    st.success(f"👤 Sesión Activa: **{st.session_state['usuario_actual']}** | 👑 Acceso Total Habilitado")
 else:
-    st.info(f"👤 Sesión Activa: {st.session_state['usuario_actual']} | 🔒 Accesos Restringidos")
+    st.info(f"👤 Sesión Activa: **{st.session_state['usuario_actual']}** | 🔒 Accesos Restringidos")
 
-st.markdown("""
-### 🚀 Accesos Directos
-Selecciona una opción en el menú de la izquierda:
-- **📦 Almacén:** Control de inventarios, entradas, salidas y préstamos.
-- **⚙️ Configuración:** Alta de productos, clientes, personal y catálogos maestros.
-""")
+st.divider()
 
-# Le mostramos al operador a qué cosas tiene acceso para que no haya dudas
-if not st.session_state["es_admin"]:
-    st.markdown("#### Tus permisos habilitados:")
-    if st.session_state["permisos"]:
-        for p in st.session_state["permisos"]:
-            st.write(f"- ✅ {p}")
+# División en dos columnas para evitar el scroll vertical
+col_info1, col_info2 = st.columns(2, gap="large")
+
+with col_info1:
+    st.markdown("### 🚀 Accesos Directos")
+    st.markdown("Selecciona una opción en el menú de la izquierda:")
+    
+    # Usamos contenedores o alertas para que se vea como botones o tarjetas
+    st.info("**📦 Almacén:** Control de inventarios, entradas, salidas, recibos y préstamos.")
+    st.info("**⚙️ Configuración:** Alta de productos, clientes, proveedores, personal y catálogos QR.")
+
+with col_info2:
+    if st.session_state["es_admin"]:
+         st.markdown("### 🛡️ Nivel de Acceso")
+         st.success("Eres Administrador del Sistema. Tienes control total sobre los módulos de Almacén y Configuración, así como la gestión de finanzas e historiales.")
     else:
-        st.warning("No tienes permisos asignados actualmente. Contacta al administrador para que te habilite módulos.")
+        st.markdown("### 🛡️ Tus permisos habilitados:")
+        if st.session_state["permisos"]:
+            # Unimos los permisos horizontalmente separados por un " | " para no hacer lista vertical
+            permisos_texto = " | ".join([f"✅ {p}" for p in st.session_state["permisos"]])
+            st.success(permisos_texto)
+        else:
+            st.warning("No tienes permisos asignados actualmente. Contacta al administrador para que te habilite módulos.")
