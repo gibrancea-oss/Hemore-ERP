@@ -134,7 +134,6 @@ opcion = st.sidebar.radio("Selecciona Módulo:", opciones_config)
 if opcion == "Personal":
     st.markdown("### 👥 Gestión de Recursos Humanos y Accesos")
     
-    # --- LISTA MAESTRA DE OPERACIONES ---
     lista_permisos = [
         "Configuración: Personal", "Configuración: Insumos", "Configuración: Herramientas", 
         "Configuración: Clientes", "Configuración: Proveedores", "Configuración: Generar QR",
@@ -157,9 +156,6 @@ if opcion == "Personal":
 
     t1, t2 = st.tabs(["➕ Alta Personal", "📋 Kardex y Accesos"])
     
-    # -----------------------------------------
-    # PESTAÑA 1: ALTA DE PERSONAL
-    # -----------------------------------------
     with t1:
         with st.form("alta_personal", clear_on_submit=True):
             st.subheader("1. Datos Generales")
@@ -206,9 +202,6 @@ if opcion == "Personal":
                 else:
                     st.error("⚠️ El Nombre, Usuario y Contraseña son obligatorios.")
 
-    # -----------------------------------------
-    # PESTAÑA 2: KARDEX Y EDICIÓN TIPO DIALOG
-    # -----------------------------------------
     with t2:
         @st.dialog("Edición de Personal y Accesos", width="large")
         def editar_empleado(emp_id, df_source):
@@ -216,7 +209,6 @@ if opcion == "Personal":
             
             st.markdown(f"### ✏️ Editando a: {emp_data.get('nombre', '')}")
             
-            # Recuperar permisos actuales para pre-llenar el multiselect
             permisos_actuales_str = emp_data.get('permisos', '')
             permisos_actuales_lista = [p.strip() for p in permisos_actuales_str.split(",")] if pd.notna(permisos_actuales_str) and permisos_actuales_str else []
             permisos_validos = [p for p in permisos_actuales_lista if p in lista_permisos]
@@ -354,21 +346,60 @@ elif opcion == "Herramientas":
     t1, t2 = st.tabs(["➕ Alta de Herramienta", "📋 Inventario de Activos"])
     with t1:
         with st.form("alta_herramienta_form", clear_on_submit=True):
-            c1, c2 = st.columns([1, 2]); sku_h = c1.text_input("Código SKU"); nombre_h = c2.text_input("Nombre Herramienta")
-            desc_h = st.text_area("Descripción"); c3, c4, c5 = st.columns(3)
-            marca_h = c3.text_input("Marca"); estado_h = c4.selectbox("Estado", ["NUEVO", "BUEN ESTADO", "REGULAR", "BAJA"]); ubicacion_h = c5.text_input("Ubicación")
+            c1, c2 = st.columns([1, 2])
+            sku_h = c1.text_input("Código SKU")
+            nombre_h = c2.text_input("Nombre Herramienta")
+            
+            desc_h = st.text_area("Descripción")
+            
+            c3, c4, c5 = st.columns(3)
+            marca_h = c3.text_input("Marca")
+            estado_h = c4.selectbox("Estado", ["NUEVO", "BUEN ESTADO", "REGULAR", "BAJA"])
+            ubicacion_h = c5.text_input("Ubicación")
+            
+            # ⬇️ AQUÍ ESTÁ LA CORRECCIÓN DE LA INSERCIÓN ⬇️
             if st.form_submit_button("Guardar"):
                 if sku_h and nombre_h:
-                    utils.supabase.table("Herramientas").insert({"codigo": sku_h, "Herramienta": nombre_h, "descripcion": desc_h, "marca": marca_h, "Estado": estado_h, "ubicacion": ubicacion_h, "Responsable": "BODEGA"}).execute()
-                    st.success("✅ Registrado."); time.sleep(1); st.rerun()
+                    try:
+                        # Si te marca error aquí, fíjate en el mensaje rojo. Seguramente alguna columna en 
+                        # Supabase está en minúsculas (ej: 'herramienta' en vez de 'Herramienta').
+                        datos_herramienta = {
+                            "codigo": sku_h, 
+                            "Herramienta": nombre_h, 
+                            "descripcion": desc_h, 
+                            "marca": marca_h, 
+                            "Estado": estado_h, 
+                            "ubicacion": ubicacion_h, 
+                            "Responsable": "BODEGA"
+                        }
+                        utils.supabase.table("Herramientas").insert(datos_herramienta).execute()
+                        st.success("✅ Registrado.")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error al guardar en base de datos: {e}")
+                        st.info("💡 Revisa que en Supabase las columnas se llamen exactamente: codigo, Herramienta, descripcion, marca, Estado, ubicacion, Responsable")
+                else:
+                    st.warning("⚠️ Código SKU y Nombre Herramienta son obligatorios.")
+
     with t2:
         edited_h = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+        
+        # ⬇️ AQUÍ ESTÁ LA CORRECCIÓN DE LA ACTUALIZACIÓN ⬇️
         if st.button("💾 Actualizar Catálogo"):
-            for i, r in edited_h.iterrows():
-                d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                if pd.notna(r['id']): utils.supabase.table("Herramientas").update(d).eq("id", r['id']).execute()
-                else: d["Responsable"] = "BODEGA"; utils.supabase.table("Herramientas").insert(d).execute()
-            st.success("✅ Sincronizado"); time.sleep(1); st.rerun()
+            try:
+                for i, r in edited_h.iterrows():
+                    d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
+                    if pd.notna(r['id']): 
+                        utils.supabase.table("Herramientas").update(d).eq("id", r['id']).execute()
+                    else: 
+                        if "Responsable" not in d: d["Responsable"] = "BODEGA"
+                        utils.supabase.table("Herramientas").insert(d).execute()
+                st.success("✅ Sincronizado")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error al actualizar: {e}")
 
 # ==========================================
 # 4. CLIENTES
