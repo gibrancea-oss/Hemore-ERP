@@ -1,7 +1,7 @@
 import streamlit as st
 import utils
 import time 
-import os # Añadido para poder leer el logo
+import os 
 
 st.set_page_config(page_title="Inicio", layout="wide")
 
@@ -80,6 +80,10 @@ if not st.session_state["authenticated"]:
 # --- MOSTRAR LOGO EN EL MENÚ LATERAL ---
 if os.path.exists("logo.png"):
     st.sidebar.image("logo.png", use_container_width=True)
+
+# --- MOSTRAR LOGO EN EL PANEL PRINCIPAL ---
+if os.path.exists("logo.png"):
+    st.image("logo.png", width=300) # <- Ajusta este número si lo quieres más grande o pequeño
 
 col_t1, col_t2 = st.columns([8, 2])
 with col_t1:
