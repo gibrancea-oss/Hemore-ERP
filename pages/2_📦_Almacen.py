@@ -537,8 +537,8 @@ elif opcion_almacen == "Herramientas (Activos)":
     except: df_her = pd.DataFrame(); lista_personal = []
 
     if not df_her.empty:
-        if "Responsable" not in df_her.columns: df_her["Responsable"] = "Bodega"
-        df_her["Responsable"].fillna("Bodega", inplace=True)
+        if "Responsable" not in df_her.columns: df_her["Responsable"] = "BODEGA"
+        df_her["Responsable"].fillna("BODEGA", inplace=True)
 
     tab1, tab2, tab3 = st.tabs(["Movimientos", "Inventario", "Historial"])
     
@@ -546,34 +546,66 @@ elif opcion_almacen == "Herramientas (Activos)":
         if tiene_permiso("Almacén: Prestar/Devolver Herramientas"):
             c1, c2 = st.columns(2)
             with c1:
-                st.info("Prestar")
-                if not df_her.empty:
-                    bodega = df_her[df_her["Responsable"]=="Bodega"]
-                    if not bodega.empty:
-                        sel = st.selectbox("Herramienta", bodega["Herramienta"].tolist())
-                        resp = st.selectbox("A quien", lista_personal)
-                        if st.button("Prestar"):
-                            id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
-                            supabase.table("Herramientas").update({"Responsable": str(resp)}).eq("id", int(id_h)).execute()
-                            try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
-                            except: pass
-                            st.success("Prestado"); time.sleep(1); st.rerun()
+                with st.container(border=True):
+                    st.info("📤 Prestar Herramienta")
+                    if not df_her.empty:
+                        bodega = df_her[df_her["Responsable"] == "BODEGA"]
+                        if not bodega.empty:
+                            sel = st.selectbox("Selecciona Herramienta", bodega["Herramienta"].tolist(), key="prest_herr")
+                            resp = st.selectbox("Prestar a:", lista_personal, key="prest_resp")
+                            if st.button("Confirmar Préstamo", type="primary"):
+                                id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
+                                
+                                # Solo actualizamos al responsable. La ubicación original se queda guardada intacta en la BD.
+                                supabase.table("Herramientas").update({
+                                    "Responsable": str(resp)
+                                }).eq("id", int(id_h)).execute()
+                                
+                                try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
+                                except: pass
+                                st.success("✅ Prestado exitosamente"); time.sleep(1); st.rerun()
+                        else:
+                            st.warning("No hay herramientas disponibles en BODEGA.")
             with c2:
-                st.warning("Devolver")
-                if not df_her.empty:
-                    prestadas = df_her[df_her["Responsable"]!="Bodega"]
-                    if not prestadas.empty:
-                        sel_d = st.selectbox("Devolver", prestadas["Herramienta"].tolist())
-                        if st.button("Devolver"):
-                            id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
-                            supabase.table("Herramientas").update({"Responsable": "Bodega"}).eq("id", int(id_h)).execute()
-                            try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
-                            except: pass
-                            st.success("Devuelto"); time.sleep(1); st.rerun()
+                with st.container(border=True):
+                    st.warning("📥 Devolver Herramienta")
+                    if not df_her.empty:
+                        prestadas = df_her[df_her["Responsable"] != "BODEGA"]
+                        if not prestadas.empty:
+                            sel_d = st.selectbox("Selecciona Herramienta a devolver", prestadas["Herramienta"].tolist(), key="dev_herr")
+                            
+                            # Ya no te pide la ubicación física. Solo le das al botón.
+                            if st.button("Confirmar Devolución", type="primary"):
+                                id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
+                                
+                                # Al devolver el responsable a "BODEGA", su ubicación física original volverá a aparecer en la tabla automáticamente.
+                                supabase.table("Herramientas").update({
+                                    "Responsable": "BODEGA"
+                                }).eq("id", int(id_h)).execute()
+                                
+                                try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "BODEGA"}).execute()
+                                except: pass
+                                st.success("✅ Devuelto exitosamente"); time.sleep(1); st.rerun()
+                        else:
+                            st.info("Todas las herramientas están actualmente en bodega.")
         else:
             st.warning("🔒 No tienes permiso para prestar ni devolver herramientas.")
 
-    with tab2: st.dataframe(df_her, use_container_width=True)
+    with tab2:
+        if not df_her.empty:
+            df_view = df_her.copy()
+            
+            # TRUCO VISUAL: Si no está en bodega, reemplazamos el texto de la ubicación por el nombre de la persona, 
+            # pero esto solo pasa en la tabla de Streamlit, la base de datos real sigue guardando el estante.
+            df_view.loc[df_view['Responsable'] != 'BODEGA', 'ubicacion'] = "En uso - " + df_view['Responsable']
+            
+            cols_mostrar = ["codigo", "ID_Herramienta", "Herramienta", "Estado", "Responsable", "ubicacion"]
+            for col in cols_mostrar:
+                if col not in df_view.columns: df_view[col] = ""
+            
+            st.dataframe(df_view[cols_mostrar], use_container_width=True, hide_index=True)
+        else:
+            st.info("No hay inventario registrado.")
 
     with tab3:
         @st.dialog("Detalles del Movimiento - Herramientas")
