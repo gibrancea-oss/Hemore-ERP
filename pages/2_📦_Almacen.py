@@ -24,15 +24,8 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
-# MANUAL DE AYUDA NATIVO (SÚPER DETALLADO Y CON SOPORTE DE IMÁGENES ⚡)
+# MANUAL DE AYUDA NATIVO (TEXTO LIMPIO ⚡)
 # ==========================================
-def mostrar_imagen_ayuda(nombre_archivo, caption_texto):
-    """Muestra una imagen si existe en la carpeta, si no, muestra un recuadro de instrucción."""
-    if os.path.exists(nombre_archivo):
-        st.image(nombre_archivo, caption=caption_texto, use_container_width=True)
-    else:
-        st.info(f"📸 **Espacio para imagen:** (Para que aparezca aquí, guarda una captura de pantalla en la carpeta de tu programa con el nombre exacto: `{nombre_archivo}`)")
-
 def renderizar_manual(modulo):
     if modulo == "Insumos" or modulo == "Todos":
         st.markdown("## 📦 Módulo: Control de Insumos (Consumibles)")
@@ -47,10 +40,7 @@ def renderizar_manual(modulo):
         4. Escribe la **Cantidad** física que vas a entregar.
         5. Selecciona al trabajador responsable que se lleva el material.
         6. Haz clic en **Confirmar Salida**.
-        """)
-        mostrar_imagen_ayuda("ayuda_insumos_salida.png", "Ejemplo de registro de salida de material.")
         
-        st.markdown("""
         **📥 Para hacer una ENTRADA (Re-Stock de proveedor):**
         1. Selecciona la opción superior **Re-Stock (Entrada)**.
         2. Busca y selecciona el insumo que acaba de llegar.
@@ -58,7 +48,6 @@ def renderizar_manual(modulo):
         4. Llena los detalles de la compra: Selecciona el **Proveedor**, marca si trae factura o ticket, y anota el número de folio.
         5. Haz clic en **Confirmar Entrada**.
         """)
-        mostrar_imagen_ayuda("ayuda_insumos_entrada.png", "Ejemplo de registro de re-stock.")
         
         st.markdown("### 📊 Existencias y 📜 Historial")
         st.markdown("""
@@ -84,7 +73,6 @@ def renderizar_manual(modulo):
         1. Al final del turno, selecciona la herramienta que te están regresando. *Nota: Solo aparecen las que están marcadas como prestadas.*
         2. Da clic en **Confirmar Devolución**. El sistema la regresará al estatus de BODEGA.
         """)
-        mostrar_imagen_ayuda("ayuda_herramientas.png", "Panel de préstamos y devoluciones.")
         
         st.markdown("### 📋 Inventario y 📜 Historial")
         st.markdown("""
@@ -107,7 +95,6 @@ def renderizar_manual(modulo):
         3. Agrega **Observaciones** (ej. *Se entrega material emplayado*).
         4. Haz clic en **Guardar y PDF**. Se generará el botón para descargar tu archivo listo para firmas.
         """)
-        mostrar_imagen_ayuda("ayuda_recibos_nuevo.png", "Llenado de una salida a cliente.")
         
         st.markdown("### 📜 Pestaña: Historial (Centro de Corrección)")
         st.markdown("""
@@ -117,7 +104,6 @@ def renderizar_manual(modulo):
         2. Edita directamente las celdas de la tabla o los textos.
         3. Haz clic en **Guardar Cambios** e inmediatamente después en **PDF** para descargar tu recibo corregido.
         """)
-        mostrar_imagen_ayuda("ayuda_recibos_detalle.png", "Ventana de corrección y reimpresión.")
         if modulo != "Todos": return
 
     if modulo == "Todos": st.divider()
@@ -135,7 +121,6 @@ def renderizar_manual(modulo):
         4. Anota anomalías en **Observaciones** (ej. *Material rayado*).
         5. Haz clic en **Registrar Entrada** y descarga tu PDF de constancia.
         """)
-        mostrar_imagen_ayuda("ayuda_entradas_nuevo.png", "Recepción de material de proveedor.")
         
         st.markdown("### 📜 Pestaña: Historial")
         st.markdown("""
@@ -157,7 +142,6 @@ def renderizar_manual(modulo):
         4. Detalla exactamente para qué es el dinero en la caja de descripción.
         5. Haz clic en **Guardar y Generar Ticket**. El sistema escribirá automáticamente el importe con letras y generará las líneas para las firmas físicas.
         """)
-        mostrar_imagen_ayuda("ayuda_dinero_nuevo.png", "Registro de gasto de caja chica.")
         
         st.markdown("### 📜 Pestaña: Historial")
         st.markdown("""
@@ -659,6 +643,7 @@ if opcion_almacen == "Insumos (Consumibles)":
             st.write(f"**Descripción:** {row_info.get('descripcion', '')}")
             st.write(f"**Tipo de Movimiento:** {row_info.get('tipo_movimiento', '')}")
             st.write(f"**Cantidad:** {row_info.get('cantidad', '')}")
+            
             st.write(f"**Responsable / Detalles:** {row_info.get('responsable', '')}")
             
             st.divider()
