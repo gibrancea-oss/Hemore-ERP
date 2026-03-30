@@ -81,7 +81,8 @@ def renderizar_manual_config(modulo):
         st.markdown("""
         Esta es tu base de datos central en formato de tabla editable (como Excel).
         * Si notas que un insumo tiene una falta de ortografía, o si decidieron cambiar de pasillo un material, simplemente **haz doble clic en la celda**, escribe el nuevo dato y presiona Enter.
-        * Haz clic en **💾 Guardar Cambios** al fondo para que el sistema actualice toda la base de datos de un solo golpe.
+        * 🚨 **ELIMINAR UN INSUMO:** Si deseas borrar de manera perpetua un material del sistema, desplázate a la última columna de la tabla y **marca la casilla `🗑️ Eliminar`** correspondiente a esa fila.
+        * Haz clic en **💾 Guardar Cambios** al fondo para que el sistema actualice toda la base de datos y borre permanentemente los registros que hayas marcado.
         """)
         if modulo != "Todos": return
 
@@ -152,13 +153,11 @@ def renderizar_manual_config(modulo):
         
         st.markdown("### 🖨️ ¿Cómo imprimir tus etiquetas?")
         st.markdown("""
-        1. Selecciona la pestaña superior dependiendo de lo que quieras etiquetar (**Insumos** o **Herramientas**).
-        2. Verás tu catálogo completo. El sistema ya generó la imagen del QR para cada fila automáticamente.
-        3. En la primera columna de la izquierda verás una casilla de verificación (Checkbox). **Marca las casillas** de los materiales a los que les quieras imprimir etiqueta.
+        1. Entra a la pestaña de Insumos o Herramientas.
+        2. Verás tu catálogo completo y el código QR generado automáticamente por el sistema.
+        3. En la columna de la izquierda, marca la casilla (**Seleccionar**) de todas las etiquetas que necesites imprimir.
         4. Haz clic en el botón azul **🖨️ Generar PDF**.
-        5. El sistema compilará las etiquetas seleccionadas y te dará un botón para **Descargar PDF**.
-        
-        > 📐 **Formato Profesional:** El PDF está calibrado milimétricamente para generar etiquetas de **3.0 cm de ancho por 2.3 cm de alto**. Contiene el Código QR al centro, el Código SKU en texto, y la descripción del material. Está listo para mandarse directo a una impresora de etiquetas térmicas (tipo Zebra o Brother).
+        5. Descarga el archivo. Está configurado con las medidas exactas (3.0 x 2.3 cm) para mandarse a una impresora de etiquetas térmicas (tipo Zebra o Brother).
         """)
 
 @st.dialog("📖 Manual de Configuración", width="large")
@@ -523,14 +522,39 @@ elif opcion == "Insumos":
         if not df.empty:
             cols_base = ["id", "codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo"]
             if "ubicacion" in df.columns: cols_base.append("ubicacion")
-            edited = st.data_editor(df[cols_base], num_rows="dynamic", use_container_width=True)
+            
+            df_view = df[cols_base].copy()
+            df_view["🗑️ Eliminar"] = False  # Columna para borrar perpetuamente
+            
+            # Configuramos el editor para que muestre la casilla de eliminar correctamente
+            edited = st.data_editor(
+                df_view, 
+                num_rows="dynamic", 
+                use_container_width=True,
+                column_config={
+                    "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                }
+            )
+            
             if st.button("💾 Guardar Cambios"):
                 for i, r in edited.iterrows():
-                    d = {"codigo": r["codigo"], "Descripcion": r["Descripcion"], "Insumo": r["Descripcion"], "Cantidad": r["Cantidad"], "Unidad": r["Unidad"], "stock_minimo": r["stock_minimo"]}
-                    if "ubicacion" in r: d["ubicacion"] = r["ubicacion"]
-                    if pd.notna(r["id"]): utils.supabase.table("Insumos").update(d).eq("id", r["id"]).execute()
-                    else: utils.supabase.table("Insumos").insert(d).execute()
-                st.success("✅ Inventario actualizado"); time.sleep(1); st.rerun()
+                    # Si el usuario marcó la casilla de "Eliminar", lo borramos de Supabase
+                    if r.get("🗑️ Eliminar", False):
+                        if pd.notna(r["id"]):
+                            utils.supabase.table("Insumos").delete().eq("id", r["id"]).execute()
+                    else:
+                        # Si no está marcada, hacemos la actualización o inserción normal
+                        d = {"codigo": r["codigo"], "Descripcion": r["Descripcion"], "Insumo": r["Descripcion"], "Cantidad": r["Cantidad"], "Unidad": r["Unidad"], "stock_minimo": r["stock_minimo"]}
+                        if "ubicacion" in r: d["ubicacion"] = r["ubicacion"]
+                        
+                        if pd.notna(r["id"]): 
+                            utils.supabase.table("Insumos").update(d).eq("id", r["id"]).execute()
+                        else: 
+                            utils.supabase.table("Insumos").insert(d).execute()
+                            
+                st.success("✅ Inventario actualizado (se eliminaron los registros marcados si aplica).")
+                time.sleep(1)
+                st.rerun()
 
 # ==========================================
 # 3. HERRAMIENTAS (Módulo Configuración)
