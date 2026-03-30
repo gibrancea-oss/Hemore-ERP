@@ -540,6 +540,7 @@ elif opcion == "Proveedores":
 elif "Etiquetas" in opcion:
     st.markdown("### 📂 Catálogos y Etiquetas QR")
     tab_ins, tab_her = st.tabs(["📦 Etiquetas Insumos", "🛠️ Etiquetas Herramientas"])
+    
     with tab_ins:
         try:
             res = utils.supabase.table("Insumos").select("*").order("id").execute()
@@ -561,11 +562,15 @@ elif "Etiquetas" in opcion:
             res = utils.supabase.table("Herramientas").select("*").order("id").execute()
             df_her = pd.DataFrame(res.data)
             if not df_her.empty:
-                df_her["QR_Img"] = df_her["codigo"].apply(get_qr_data_url)
-                df_her["Seleccionar"] = False
+                # 1. Filtramos SOLO las columnas que necesitamos para evitar duplicados con la base de datos
+                df_her_clean = df_her[["codigo", "Herramienta"]].copy()
                 
-                # Renombramos 'Herramienta' a 'descripcion' para que el generador PDF funcione igual que con Insumos
-                df_her_tag = df_her.rename(columns={"Herramienta": "descripcion"})
+                # 2. Generamos el QR y la columna de selección
+                df_her_clean["QR_Img"] = df_her_clean["codigo"].apply(get_qr_data_url)
+                df_her_clean["Seleccionar"] = False
+                
+                # 3. Renombramos 'Herramienta' a 'descripcion' con total seguridad
+                df_her_tag = df_her_clean.rename(columns={"Herramienta": "descripcion"})
                 
                 edited_her = st.data_editor(
                     df_her_tag[["Seleccionar", "QR_Img", "codigo", "descripcion"]], 
