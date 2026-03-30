@@ -334,68 +334,76 @@ elif opcion == "Insumos":
                 st.success("✅ Actualizado"); time.sleep(1); st.rerun()
 
 # ==========================================
-# 3. HERRAMIENTAS
+# 3. HERRAMIENTAS (Módulo Configuración)
 # ==========================================
 elif opcion == "Herramientas":
     st.markdown("### 🛠️ Gestión de Herramientas (Activos)")
     try:
         response = utils.supabase.table("Herramientas").select("*").order("id").execute()
         df = pd.DataFrame(response.data)
-    except: df = pd.DataFrame()
+        
+        # Obtener personal para la lista de responsables
+        res_pers = utils.supabase.table("Personal").select("nombre").eq("activo", True).execute()
+        lista_personal = ["BODEGA"] + [p["nombre"] for p in res_pers.data] if res_pers.data else ["BODEGA"]
+    except: 
+        df = pd.DataFrame()
+        lista_personal = ["BODEGA"]
     
     t1, t2 = st.tabs(["➕ Alta de Herramienta", "📋 Inventario de Activos"])
+    
     with t1:
         with st.form("alta_herramienta_form", clear_on_submit=True):
-            c1, c2 = st.columns([1, 2])
+            st.write("**Datos de Identificación**")
+            c1, c2, c3 = st.columns(3)
             sku_h = c1.text_input("Código SKU")
-            nombre_h = c2.text_input("Nombre Herramienta")
+            id_h_input = c2.text_input("ID de la Herramienta") # NUEVO CAMPO
+            nombre_h = c3.text_input("Nombre Herramienta")
             
-            c4, c5 = st.columns(2)
+            st.write("**Estado y Localización**")
+            c4, c5, c6 = st.columns(3)
             estado_h = c4.selectbox("Estado", ["NUEVO", "BUEN ESTADO", "REGULAR", "BAJA"])
-            ubicacion_h = c5.text_input("Ubicación")
+            responsable_h = c5.selectbox("Responsable Inicial", lista_personal, index=0)
+            ubicacion_h = c6.text_input("Ubicación (Ej. Estante A1)")
             
-            if st.form_submit_button("Guardar"):
-                if sku_h and nombre_h:
-                    try:
-                        datos_herramienta = {
-                            "codigo": sku_h, 
-                            "ID_Herramienta": sku_h,  
-                            "Herramienta": nombre_h, 
-                            "Estado": estado_h, 
-                            "ubicacion": ubicacion_h, 
-                            "Responsable": "BODEGA"
-                        }
-                        utils.supabase.table("Herramientas").insert(datos_herramienta).execute()
-                        st.success("✅ Registrado.")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Error al guardar en base de datos: {e}")
+            if st.form_submit_button("Guardar Herramienta", type="primary"):
+                if sku_h and id_h_input and nombre_h:
+                    datos_herramienta = {
+                        "codigo": sku_h, 
+                        "ID_Herramienta": id_h_input,  
+                        "Herramienta": nombre_h, 
+                        "Estado": estado_h, 
+                        "Responsable": responsable_h,
+                        "ubicacion": ubicacion_h
+                    }
+                    utils.supabase.table("Herramientas").insert(datos_herramienta).execute()
+                    st.success("✅ Herramienta registrada con éxito.")
+                    time.sleep(1); st.rerun()
                 else:
-                    st.warning("⚠️ Código SKU y Nombre Herramienta son obligatorios.")
+                    st.warning("⚠️ Código SKU, ID y Nombre son obligatorios.")
 
     with t2:
         if not df.empty:
-            df_view = df.copy()
-            columnas_a_quitar = ["descripcion", "Descripcion", "marca", "Marca"]
-            for col in columnas_a_quitar:
-                if col in df_view.columns:
-                    df_view = df_view.drop(columns=[col])
-                    
+            # Estandarizamos las columnas a mostrar
+            cols_mostrar = ["id", "codigo", "ID_Herramienta", "Herramienta", "Estado", "Responsable", "ubicacion"]
+            
+            # Evitamos errores si alguna columna aún no existe en Supabase
+            for col in cols_mostrar:
+                if col not in df.columns: df[col] = ""
+            
+            df_view = df[cols_mostrar]
+            
             edited_h = st.data_editor(df_view, num_rows="dynamic", use_container_width=True)
             
-            if st.button("💾 Actualizar Catálogo"):
+            if st.button("💾 Actualizar Catálogo", type="primary"):
                 try:
                     for i, r in edited_h.iterrows():
                         d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
                         if pd.notna(r['id']): 
                             utils.supabase.table("Herramientas").update(d).eq("id", r['id']).execute()
                         else: 
-                            if "Responsable" not in d: d["Responsable"] = "BODEGA"
                             utils.supabase.table("Herramientas").insert(d).execute()
-                    st.success("✅ Sincronizado")
-                    time.sleep(1)
-                    st.rerun()
+                    st.success("✅ Catálogo sincronizado.")
+                    time.sleep(1); st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error al actualizar: {e}")
 
@@ -536,7 +544,13 @@ elif "Etiquetas" in opcion:
             if not df_her.empty:
                 df_her["QR_Img"] = df_her["codigo"].apply(get_qr_data_url); df_her["Seleccionar"] = False
                 df_her_tag = df_her.rename(columns={"Herramienta": "descripcion"})
-                edited_her = st.data_editor(df_her_tag[["Seleccionar", "QR_Img", "codigo", "descripcion", "marca"]], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
+                
+                # Manejamos de forma segura si 'marca' ya no existe en la BD para el generador QR
+                cols_to_show = ["Seleccionar", "QR_Img", "codigo", "descripcion"]
+                if "marca" in df_her_tag.columns:
+                    cols_to_show.append("marca")
+                    
+                edited_her = st.data_editor(df_her_tag[cols_to_show], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
                 if st.button("🖨️ Generar PDF Herramientas"):
                     sel = edited_her[edited_her["Seleccionar"] == True]
                     if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Herramientas"); st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Herramientas.pdf")
