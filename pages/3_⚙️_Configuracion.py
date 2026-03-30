@@ -368,7 +368,7 @@ elif opcion == "Herramientas":
                 if sku_id_h and nombre_h:
                     datos_herramienta = {
                         "codigo": sku_id_h, 
-                        "ID_Herramienta": sku_id_h, 
+                        "ID_Herramienta": sku_id_h,  # Se guarda el mismo valor en ambas columnas
                         "Herramienta": nombre_h, 
                         "Estado": estado_h, 
                         "Responsable": responsable_h,
@@ -382,25 +382,39 @@ elif opcion == "Herramientas":
 
     with t2:
         if not df.empty:
-            # Estandarizamos las columnas a mostrar
-            cols_mostrar = ["id", "codigo", "ID_Herramienta", "Herramienta", "Estado", "Responsable", "ubicacion"]
-            
-            # Evitamos errores si alguna columna aún no existe en Supabase
-            for col in cols_mostrar:
+            # Seleccionamos solo una columna de código para mostrar
+            cols_base = ["id", "codigo", "Herramienta", "Estado", "Responsable", "ubicacion"]
+            for col in cols_base:
                 if col not in df.columns: df[col] = ""
             
-            df_view = df[cols_mostrar]
+            df_view = df[cols_base].copy()
+            # Renombramos visualmente para que sea más intuitivo
+            df_view.rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"}, inplace=True)
             
-            edited_h = st.data_editor(df_view, num_rows="dynamic", use_container_width=True)
+            edited_h = st.data_editor(df_view, num_rows="dynamic", use_container_width=True, hide_index=True)
             
             if st.button("💾 Actualizar Catálogo", type="primary"):
                 try:
                     for i, r in edited_h.iterrows():
-                        d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                        if pd.notna(r['id']): 
-                            utils.supabase.table("Herramientas").update(d).eq("id", r['id']).execute()
+                        # Reconstruimos el diccionario mapeando los nombres visuales a los de la BD
+                        d = {
+                            "codigo": r.get("Código / ID"),
+                            "ID_Herramienta": r.get("Código / ID"), # Replicamos la actualización en la BD
+                            "Herramienta": r.get("Herramienta"),
+                            "Estado": r.get("Estado"),
+                            "Responsable": r.get("Responsable"),
+                            "ubicacion": r.get("Ubicación")
+                        }
+                        
+                        # Filtramos valores nulos
+                        d = {k: v for k, v in d.items() if pd.notna(v)}
+                        
+                        id_row = r.get("id")
+                        if pd.notna(id_row) and str(id_row).strip() != "": 
+                            utils.supabase.table("Herramientas").update(d).eq("id", id_row).execute()
                         else: 
                             utils.supabase.table("Herramientas").insert(d).execute()
+                            
                     st.success("✅ Catálogo sincronizado.")
                     time.sleep(1); st.rerun()
                 except Exception as e:
