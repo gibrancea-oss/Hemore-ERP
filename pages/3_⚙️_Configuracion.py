@@ -25,21 +25,39 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
-# MANUAL DE AYUDA NATIVO (CONFIGURACIÓN ⚡)
+# MANUAL DE AYUDA NATIVO (SÚPER DETALLADO ⚡)
 # ==========================================
 def renderizar_manual_config(modulo):
     if modulo == "Personal" or modulo == "Todos":
         st.markdown("## 👥 Módulo: Personal y Accesos")
-        st.markdown("Exclusivo para administradores. Aquí controlas quién entra al sistema y qué puede hacer.")
-        st.markdown("""
-        **➕ Alta Personal:**
-        1. Llena los datos generales del empleado.
-        2. Crea su **Usuario** y **Contraseña / PIN** (con estos datos iniciará sesión).
-        3. En la lista desplegable de **Permisos**, selecciona exactamente qué botones y pantallas podrá usar en el Almacén o Finanzas. 
-        4. Haz clic en Guardar.
+        st.markdown("Este es el panel de control de Recursos Humanos y Seguridad. Desde aquí decides quién puede entrar al sistema HEMORE y a qué pantallas exactas tiene acceso.")
         
-        **📋 Kardex y Accesos:**
-        Muestra a todo el personal. Dando clic en **Ver / Editar** puedes cambiar contraseñas, agregarle nuevos permisos, o dar de baja (eliminar) a un usuario que ya no labora en la empresa.
+        st.markdown("### ➕ Pestaña: Alta Personal")
+        st.markdown("""
+        **Paso 1: Datos Generales**
+        * Llena el **Nombre Completo** del empleado. Este nombre es crítico porque aparecerá en las listas desplegables cuando entreguen material o reciban herramientas.
+        * Selecciona su **Puesto** (Operador, Supervisor, Almacén, etc.).
+        * Llena los datos administrativos como Año de Nacimiento, Domicilio, CURP, RFC y la Fecha exacta en la que ingresó a la fábrica.
+
+        **Paso 2: Credenciales y Permisos (¡Muy Importante!)**
+        * **Usuario:** Crea el nombre corto con el que el empleado iniciará sesión (Ej. *juan.perez*).
+        * **Contraseña / PIN:** Asigna una clave segura.
+        * **Control de Accesos (Multiselect):** Haz clic en la caja para desplegar la lista de permisos. 
+            * *Ejemplo:* Si es un almacenista, dale permisos de *Almacén: Movimientos Insumos* y *Almacén: Ver Existencias*. No le des permisos de *Configuración* ni de *Finanzas* por seguridad.
+        * Una vez verificado todo, da clic en **Guardar Empleado y Accesos**.
+        """)
+
+        st.markdown("### 📋 Pestaña: Kardex y Accesos")
+        st.markdown("""
+        Aquí verás una lista de toda tu plantilla. El círculo 🟢 indica que el empleado está activo y puede entrar al sistema; el círculo 🔴 indica que está desactivado.
+        
+        **Para modificar a un empleado:**
+        1. Busca al empleado en la lista y haz clic en **Ver / Editar**.
+        2. Se abrirá una ventana donde puedes actualizar su domicilio, cambiarle la contraseña si la olvidó, o agregarle/quitarle permisos de acceso.
+        3. **Casilla 'Empleado Activo':** Si un trabajador renuncia o es despedido, desmarca esta casilla y guarda los cambios. El sistema le bloqueará el acceso inmediatamente, pero mantendrá su nombre en el historial antiguo para auditorías.
+        4. Haz clic en **Guardar Cambios**.
+        
+        > ⚠️ **Botón de Peligro (Eliminar del Sistema):** Úsalo *solo* si diste de alta a alguien por error. Si eliminas a un empleado que ya tiene historial de movimientos, podrías causar errores en las bitácoras pasadas.
         """)
         if modulo != "Todos": return
 
@@ -47,13 +65,23 @@ def renderizar_manual_config(modulo):
 
     if modulo == "Insumos" or modulo == "Todos":
         st.markdown("## 📦 Módulo: Catálogo de Insumos")
-        st.markdown("Aquí se 'bautizan' los materiales nuevos. **Ojo:** Aquí no se mete stock, solo se crea el nombre oficial para que el almacén lo pueda usar.")
-        st.markdown("""
-        **➕ Alta Manual:**
-        Escribe el Código/SKU, la descripción exacta, la unidad de medida (Pzas, Kg, Mts) y el stock mínimo ideal. Da clic en Guardar.
+        st.markdown("Este es el 'Diccionario' de tu almacén. Aquí bautizas la materia prima nueva (Ej. perfiles PTR, cajas de soldadura 6013, pintura) para que el almacenista pueda hacer entradas y salidas.")
         
-        **📋 Inventario Maestro:**
-        Aquí puedes ver la lista completa. Si escribiste mal un nombre o quieres cambiar el stock mínimo, modifica la celda directamente y da clic en **Guardar Cambios**.
+        st.markdown("### ➕ Pestaña: Alta Manual")
+        st.markdown("""
+        1. **Código / SKU:** Asigna un código único e irrepetible. Puede ser el código de barras del proveedor o uno interno de la fábrica (Ej. *PTR-2X2-C14*).
+        2. **Descripción:** Sé muy específico para evitar confusiones en producción (Ej. *Perfil PTR 2x2 C14 6mts*).
+        3. **Unidad:** Selecciona cómo se cuenta este material (Pzas, Kg, Mts, Litros).
+        4. **Cantidad Inicial:** Si estás subiendo el sistema por primera vez, pon el inventario físico actual. Si es un producto totalmente nuevo, déjalo en 0 (el almacenista le dará entrada después).
+        5. **Stock Min:** Define la cantidad de alerta. ¿A las cuántas piezas deberíamos comprar más para no parar la producción?
+        6. **Ubicación:** Anota el pasillo o estante (Ej. *Estante B, Nivel 2*).
+        """)
+
+        st.markdown("### 📋 Pestaña: Inventario Maestro")
+        st.markdown("""
+        Esta es tu base de datos central en formato de tabla editable (como Excel).
+        * Si notas que un insumo tiene una falta de ortografía, o si decidieron cambiar de pasillo un material, simplemente **haz doble clic en la celda**, escribe el nuevo dato y presiona Enter.
+        * Haz clic en **💾 Guardar Cambios** al fondo para que el sistema actualice toda la base de datos de un solo golpe.
         """)
         if modulo != "Todos": return
 
@@ -61,41 +89,58 @@ def renderizar_manual_config(modulo):
 
     if modulo == "Herramientas" or modulo == "Todos":
         st.markdown("## 🛠️ Módulo: Catálogo de Herramientas")
-        st.markdown("Registro maestro de la maquinaria y equipo de la empresa.")
-        st.markdown("""
-        **➕ Alta de Herramienta:**
-        Asigna un Código (ID), el nombre del equipo, su estado físico y quién la tiene inicialmente (usualmente BODEGA).
+        st.markdown("El registro oficial de los activos fijos de la empresa (maquinaria, taladros, esmeriladoras, equipo de soldar).")
         
-        **📋 Inventario de Activos:**
-        Catálogo completo editable. Aquí puedes corregir nombres o estatus directamente en la tabla y dar clic en **Actualizar Catálogo**.
+        st.markdown("### ➕ Pestaña: Alta de Herramienta")
+        st.markdown("""
+        1. **Código SKU / ID:** Escribe el número de serie de la máquina o el grabado interno de la fábrica (Ej. *ESM-001* para Esmeriladora 1).
+        2. **Nombre Herramienta:** Describe el activo (Ej. *Esmeriladora angular 4 1/2 Makita*).
+        3. **Estado:** Determina cómo se encuentra físicamente al momento de registrarla (NUEVO, BUEN ESTADO, REGULAR, BAJA).
+        4. **Responsable Inicial:** Por defecto debe ser **BODEGA** para que el almacenista pueda prestarla. Si la herramienta se compra y se le asigna permanentemente a un operador específico, búscalo en la lista.
+        5. **Ubicación:** Describe dónde se guarda (Ej. *Gabinete Herrería*).
+        """)
+
+        st.markdown("### 📋 Pestaña: Inventario de Activos")
+        st.markdown("""
+        Al igual que con los insumos, esta tabla te permite corregir errores masivos de forma rápida. 
+        * **Uso común:** Cada cierto tiempo, el supervisor puede entrar a esta tabla, revisar las herramientas y cambiarles el "Estado" de *BUEN ESTADO* a *REGULAR* o darlas de *BAJA* si ya no sirven.
+        * Después de hacer las modificaciones en las celdas, haz clic en el botón azul **Actualizar Catálogo**.
         """)
         if modulo != "Todos": return
 
     if modulo == "Todos": st.divider()
 
     if modulo == "Clientes" or modulo == "Todos":
-        st.markdown("## 🏢 Módulo: Clientes")
-        st.markdown("Directorio para las salidas de almacén.")
-        st.markdown("""
-        **➕ Alta Cliente:**
-        Llena el Nombre de la empresa o persona, RFC y datos de contacto. El nombre es obligatorio porque es el que aparecerá en los Recibos de Entrega PDF.
+        st.markdown("## 🏢 Módulo: Directorio de Clientes")
+        st.markdown("El listado de las empresas o personas a las que HEMORE les entrega mobiliario urbano o proyectos terminados.")
         
-        **📋 Lista de Clientes:**
-        Edita la información de contacto o fiscal directamente en la tabla y guarda los cambios.
+        st.markdown("### ➕ Pestaña: Alta Cliente")
+        st.markdown("""
+        * **Nombre / Empresa (Obligatorio):** Escribe la razón social o nombre comercial. *Nota: Este es el texto exacto que aparecerá en los Recibos de Entrega PDF como "Cliente (Destino)".*
+        * **Datos Fiscales y de Contacto:** Llena el RFC, Teléfono, Correo y la Dirección completa (Calle, Colonia, CP, Estado). Estos datos también se imprimirán en los recibos, dándole una imagen muy profesional a la empresa.
+        """)
+
+        st.markdown("### 📋 Pestaña: Lista de Clientes")
+        st.markdown("""
+        Directorio editable. Si un cliente cambia de domicilio o de teléfono, simplemente busca su fila, edita la celda correspondiente y guarda los cambios para que todos los futuros Recibos de Entrega salgan con la información actualizada.
         """)
         if modulo != "Todos": return
 
     if modulo == "Todos": st.divider()
     
     if modulo == "Proveedores" or modulo == "Todos":
-        st.markdown("## 🚚 Módulo: Proveedores")
-        st.markdown("Directorio para las entradas de almacén.")
-        st.markdown("""
-        **➕ Alta Proveedor:**
-        Registra a las empresas que surten a HEMORE. Este nombre será el que el Almacén seleccione al registrar llegadas de material o compras.
+        st.markdown("## 🚚 Módulo: Directorio de Proveedores")
+        st.markdown("El padrón de todas las empresas que surten materia prima a la fábrica (acereros, ferreterías, proveedores de pintura, etc.).")
         
-        **📋 Lista de Proveedores:**
-        Mantén el directorio actualizado modificando las celdas directamente.
+        st.markdown("### ➕ Pestaña: Alta Proveedor")
+        st.markdown("""
+        * **Nombre / Empresa (Obligatorio):** Escribe el nombre del proveedor. Este nombre alimentará el menú de opciones cuando el Almacenista esté capturando la "Entrada de Material" en la rampa de descarga.
+        * **Datos de Contacto:** Registra el RFC, el nombre del vendedor (Persona de Contacto), teléfono y domicilio. Esto es fundamental para los reclamos de calidad o para realizar nuevos pedidos.
+        """)
+
+        st.markdown("### 📋 Pestaña: Lista de Proveedores")
+        st.markdown("""
+        Mantén tu base de proveedores al día. Haz doble clic en cualquier celda para corregir un teléfono o cambiar al contacto de ventas. Da clic en guardar para actualizar la base de datos al instante.
         """)
         if modulo != "Todos": return
 
@@ -103,13 +148,17 @@ def renderizar_manual_config(modulo):
 
     if modulo == "Etiquetas" or modulo == "Todos":
         st.markdown("## 📂 Módulo: Catálogos y Etiquetas QR")
-        st.markdown("Generador automático de etiquetas para el inventario físico.")
+        st.markdown("Esta es tu herramienta de automatización para inventarios físicos. El sistema convierte todos los códigos (SKU) de tus insumos y herramientas en códigos QR escaneables.")
+        
+        st.markdown("### 🖨️ ¿Cómo imprimir tus etiquetas?")
         st.markdown("""
-        1. Entra a la pestaña de Insumos o Herramientas.
-        2. Verás tu catálogo completo y el código QR generado automáticamente por el sistema.
-        3. En la columna de la izquierda, marca la casilla (**Seleccionar**) de todas las etiquetas que necesites imprimir.
-        4. Haz clic en **Generar PDF**.
-        5. Descarga el archivo. Está configurado con las medidas exactas (3.0 x 2.3 cm) para mandarse a una impresora de etiquetas térmicas.
+        1. Selecciona la pestaña superior dependiendo de lo que quieras etiquetar (**Insumos** o **Herramientas**).
+        2. Verás tu catálogo completo. El sistema ya generó la imagen del QR para cada fila automáticamente.
+        3. En la primera columna de la izquierda verás una casilla de verificación (Checkbox). **Marca las casillas** de los materiales a los que les quieras imprimir etiqueta.
+        4. Haz clic en el botón azul **🖨️ Generar PDF**.
+        5. El sistema compilará las etiquetas seleccionadas y te dará un botón para **Descargar PDF**.
+        
+        > 📐 **Formato Profesional:** El PDF está calibrado milimétricamente para generar etiquetas de **3.0 cm de ancho por 2.3 cm de alto**. Contiene el Código QR al centro, el Código SKU en texto, y la descripción del material. Está listo para mandarse directo a una impresora de etiquetas térmicas (tipo Zebra o Brother).
         """)
 
 @st.dialog("📖 Manual de Configuración", width="large")
