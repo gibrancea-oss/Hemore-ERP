@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components # <--- AGREGADO PARA EVITAR QUE SE TRABE
 import pandas as pd
 from datetime import datetime, timedelta, date
 import time
@@ -25,11 +26,11 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
-# FUNCIONES DEL MANUAL PDF (OPTIMIZADO CON CACHÉ ⚡)
+# FUNCIONES DEL MANUAL PDF (AISLADAS PARA QUE NO SE TRABE ⚡)
 # ==========================================
 @st.cache_data
 def cargar_pdf_en_memoria(ruta_archivo):
-    """Lee el PDF una sola vez y lo guarda en la RAM ultrarrápida de Streamlit"""
+    """Lee el PDF una sola vez y lo guarda en la RAM ultrarrápida"""
     with open(ruta_archivo, "rb") as f:
         return base64.b64encode(f.read()).decode('utf-8')
 
@@ -37,9 +38,13 @@ def mostrar_pdf(ruta_archivo, pagina=1):
     try:
         base64_pdf = cargar_pdf_en_memoria(ruta_archivo)
         
-        # El parámetro #page=X hace que el PDF se abra exactamente en esa página de inicio
-        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}#page={pagina}" width="100%" height="700" type="application/pdf"></iframe>'
-        st.markdown(pdf_display, unsafe_allow_html=True)
+        # Usamos components.html en lugar de st.markdown. 
+        # Esto encapsula el PDF y evita que la página colapse.
+        html_code = f'''
+            <iframe src="data:application/pdf;base64,{base64_pdf}#page={pagina}" width="100%" height="650" style="border: none;"></iframe>
+        '''
+        components.html(html_code, height=660)
+        
     except FileNotFoundError:
         st.error("⚠️ No se encontró el archivo del manual. Asegúrate de que 'manual_hemore.pdf' esté en la misma carpeta que este código.")
 
@@ -403,7 +408,13 @@ if st.sidebar.button("📖 Leer Manual Completo", use_container_width=True):
 # --- TÍTULO Y BOTÓN DE AYUDA DINÁMICO ---
 c_tit, c_ayu = st.columns([9, 1])
 with c_tit:
-    st.title(f"Control de {opcion_almacen.split(' (')[0]}")
+    if opcion_almacen == "Insumos (Consumibles)": st.title("📦 CONTROL DE INSUMOS")
+    elif opcion_almacen == "Herramientas (Activos)": st.title("🛠️ CONTROL DE HERRAMIENTAS")
+    elif opcion_almacen == "Recibos de Entrega OC": st.title("📑 CONTROL DE RECIBOS DE ENTREGA OC")
+    elif opcion_almacen == "Entrada de Material": st.title("📥 CONTROL DE ENTRADA DE MATERIAL")
+    elif opcion_almacen == "Entradas y Salidas de Dinero": st.title("💰 CONTROL DE ENTRADAS Y SALIDAS DE DINERO")
+    else: st.title(f"Control de {opcion_almacen.split(' (')[0]}")
+    
 with c_ayu:
     if opcion_almacen == "Insumos (Consumibles)":
         if st.button("❓ Ayuda", key="ayu_ins"): modal_ayuda_modulo(19)
