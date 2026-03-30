@@ -82,7 +82,7 @@ def renderizar_manual_config(modulo):
         Esta es tu base de datos central en formato de tabla editable (como Excel).
         * Si notas que un insumo tiene una falta de ortografía, o si decidieron cambiar de pasillo un material, simplemente **haz doble clic en la celda**, escribe el nuevo dato y presiona Enter.
         * 🚨 **ELIMINAR UN INSUMO:** Si deseas borrar de manera perpetua un material del sistema, desplázate a la última columna de la tabla y **marca la casilla `🗑️ Eliminar`** correspondiente a esa fila.
-        * Haz clic en **💾 Guardar Cambios** al fondo para que el sistema actualice toda la base de datos y borre permanentemente los registros que hayas marcado.
+        * Haz clic en **💾 Guardar Cambios** al fondo para que el sistema actualice toda la base de datos y borre permanentemente los registros que hayas marcado al instante.
         """)
         if modulo != "Todos": return
 
@@ -105,7 +105,8 @@ def renderizar_manual_config(modulo):
         st.markdown("""
         Al igual que con los insumos, esta tabla te permite corregir errores masivos de forma rápida. 
         * **Uso común:** Cada cierto tiempo, el supervisor puede entrar a esta tabla, revisar las herramientas y cambiarles el "Estado" de *BUEN ESTADO* a *REGULAR* o darlas de *BAJA* si ya no sirven.
-        * Después de hacer las modificaciones en las celdas, haz clic en el botón azul **Actualizar Catálogo**.
+        * 🚨 **ELIMINAR:** Si marcaste una herramienta por error, marca la casilla `🗑️ Eliminar` al final de la fila.
+        * Después de hacer las modificaciones, haz clic en el botón azul **Actualizar Catálogo**.
         """)
         if modulo != "Todos": return
 
@@ -123,7 +124,7 @@ def renderizar_manual_config(modulo):
 
         st.markdown("### 📋 Pestaña: Lista de Clientes")
         st.markdown("""
-        Directorio editable. Si un cliente cambia de domicilio o de teléfono, simplemente busca su fila, edita la celda correspondiente y guarda los cambios para que todos los futuros Recibos de Entrega salgan con la información actualizada.
+        Directorio editable. Si un cliente cambia de domicilio o de teléfono, simplemente busca su fila, edita la celda correspondiente y guarda los cambios para que todos los futuros Recibos de Entrega salgan con la información actualizada. También puedes usar la columna `🗑️ Eliminar` para borrar un cliente de forma definitiva.
         """)
         if modulo != "Todos": return
 
@@ -141,7 +142,7 @@ def renderizar_manual_config(modulo):
 
         st.markdown("### 📋 Pestaña: Lista de Proveedores")
         st.markdown("""
-        Mantén tu base de proveedores al día. Haz doble clic en cualquier celda para corregir un teléfono o cambiar al contacto de ventas. Da clic en guardar para actualizar la base de datos al instante.
+        Mantén tu base de proveedores al día. Haz doble clic en cualquier celda para corregir un teléfono o cambiar al contacto de ventas. Al final de la tabla puedes usar la casilla `🗑️ Eliminar` para borrar proveedores inactivos. Da clic en guardar para actualizar la base de datos al instante.
         """)
         if modulo != "Todos": return
 
@@ -439,17 +440,17 @@ if opcion == "Personal":
                         "usuario": n_user, "pin": n_pin, "permisos": permisos_str_update,
                         "activo": n_activo
                     }
-                    utils.supabase.table("Personal").update(datos_update).eq("id", emp_id).execute()
-                    st.success("✅ Información actualizada correctamente.")
-                    time.sleep(1)
+                    utils.supabase.table("Personal").update(datos_update).eq("id", int(emp_id)).execute()
+                    st.toast("✅ Información actualizada al momento.", icon="✅")
+                    time.sleep(0.5)
                     st.rerun()
                 else:
                     st.error("Nombre, Usuario y Contraseña no pueden estar vacíos.")
             
             if col_b.button("🗑️ ELIMINAR DEL SISTEMA", type="secondary", use_container_width=True, key=f"btn_d_{emp_id}"):
-                utils.supabase.table("Personal").delete().eq("id", emp_id).execute()
-                st.warning("⚠️ Empleado eliminado de la base de datos.")
-                time.sleep(1)
+                utils.supabase.table("Personal").delete().eq("id", int(emp_id)).execute()
+                st.toast("⚠️ Empleado eliminado.", icon="🗑️")
+                time.sleep(0.5)
                 st.rerun()
 
         if not df_personal.empty:
@@ -504,8 +505,8 @@ elif opcion == "Insumos":
                 
                 if st.form_submit_button("Guardar Insumo", type="primary"):
                     if cod and nom:
-                        datos = {"codigo": cod, "Descripcion": nom, "Insumo": nom, "Unidad": uni, "Cantidad": cant, "stock_minimo": mini}
-                        if "ubicacion" in df.columns or df.empty: datos["ubicacion"] = ubi
+                        datos = {"codigo": str(cod), "Descripcion": str(nom), "Insumo": str(nom), "Unidad": str(uni), "Cantidad": float(cant), "stock_minimo": float(mini)}
+                        if "ubicacion" in df.columns or df.empty: datos["ubicacion"] = str(ubi)
                         try:
                             utils.supabase.table("Insumos").insert(datos).execute()
                             st.session_state["alta_insumo_exito"] = True
@@ -524,9 +525,8 @@ elif opcion == "Insumos":
             if "ubicacion" in df.columns: cols_base.append("ubicacion")
             
             df_view = df[cols_base].copy()
-            df_view["🗑️ Eliminar"] = False  # Columna para borrar perpetuamente
+            df_view["🗑️ Eliminar"] = False  # Columna de borrado instantáneo
             
-            # Configuramos el editor para que muestre la casilla de eliminar correctamente
             edited = st.data_editor(
                 df_view, 
                 num_rows="dynamic", 
@@ -538,22 +538,21 @@ elif opcion == "Insumos":
             
             if st.button("💾 Guardar Cambios"):
                 for i, r in edited.iterrows():
-                    # Si el usuario marcó la casilla de "Eliminar", lo borramos de Supabase
                     if r.get("🗑️ Eliminar", False):
                         if pd.notna(r["id"]):
-                            utils.supabase.table("Insumos").delete().eq("id", r["id"]).execute()
+                            utils.supabase.table("Insumos").delete().eq("id", int(r["id"])).execute()
                     else:
-                        # Si no está marcada, hacemos la actualización o inserción normal
-                        d = {"codigo": r["codigo"], "Descripcion": r["Descripcion"], "Insumo": r["Descripcion"], "Cantidad": r["Cantidad"], "Unidad": r["Unidad"], "stock_minimo": r["stock_minimo"]}
-                        if "ubicacion" in r: d["ubicacion"] = r["ubicacion"]
+                        d = {"codigo": str(r["codigo"]), "Descripcion": str(r["Descripcion"]), "Insumo": str(r["Descripcion"]), "Cantidad": float(r["Cantidad"]), "Unidad": str(r["Unidad"]), "stock_minimo": float(r["stock_minimo"])}
+                        if "ubicacion" in r: d["ubicacion"] = str(r["ubicacion"])
                         
                         if pd.notna(r["id"]): 
-                            utils.supabase.table("Insumos").update(d).eq("id", r["id"]).execute()
+                            utils.supabase.table("Insumos").update(d).eq("id", int(r["id"])).execute()
                         else: 
-                            utils.supabase.table("Insumos").insert(d).execute()
-                            
-                st.success("✅ Inventario actualizado (se eliminaron los registros marcados si aplica).")
-                time.sleep(1)
+                            if str(r["codigo"]).strip() != "" and str(r["Descripcion"]).strip() != "":
+                                utils.supabase.table("Insumos").insert(d).execute()
+                                
+                st.toast("✅ Lista actualizada al momento", icon="✅")
+                time.sleep(0.4) # Retardo milimétrico para que la base de datos procese antes de recargar
                 st.rerun()
 
 # ==========================================
@@ -592,12 +591,12 @@ elif opcion == "Herramientas":
                 if st.form_submit_button("Guardar Herramienta", type="primary"):
                     if sku_id_h and nombre_h:
                         datos_herramienta = {
-                            "codigo": sku_id_h, 
-                            "ID_Herramienta": sku_id_h,
-                            "Herramienta": nombre_h, 
-                            "Estado": estado_h, 
-                            "Responsable": responsable_h,
-                            "ubicacion": ubicacion_h
+                            "codigo": str(sku_id_h), 
+                            "ID_Herramienta": str(sku_id_h),
+                            "Herramienta": str(nombre_h), 
+                            "Estado": str(estado_h), 
+                            "Responsable": str(responsable_h),
+                            "ubicacion": str(ubicacion_h)
                         }
                         utils.supabase.table("Herramientas").insert(datos_herramienta).execute()
                         st.session_state["alta_herr_exito"] = True
@@ -618,29 +617,45 @@ elif opcion == "Herramientas":
             
             df_view = df[cols_base].copy()
             df_view.rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"}, inplace=True)
+            df_view["🗑️ Eliminar"] = False # Columna de borrado instantáneo
             
-            edited_h = st.data_editor(df_view, num_rows="dynamic", use_container_width=True, hide_index=True)
+            edited_h = st.data_editor(
+                df_view, 
+                num_rows="dynamic", 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                }
+            )
             
             if st.button("💾 Actualizar Catálogo", type="primary"):
                 try:
                     for i, r in edited_h.iterrows():
-                        d = {
-                            "codigo": r.get("Código / ID"),
-                            "ID_Herramienta": r.get("Código / ID"), 
-                            "Herramienta": r.get("Herramienta"),
-                            "Estado": r.get("Estado"),
-                            "Responsable": r.get("Responsable"),
-                            "ubicacion": r.get("Ubicación")
-                        }
-                        d = {k: v for k, v in d.items() if pd.notna(v)}
-                        id_row = r.get("id")
-                        if pd.notna(id_row) and str(id_row).strip() != "": 
-                            utils.supabase.table("Herramientas").update(d).eq("id", id_row).execute()
-                        else: 
-                            utils.supabase.table("Herramientas").insert(d).execute()
+                        if r.get("🗑️ Eliminar", False):
+                            if pd.notna(r["id"]):
+                                utils.supabase.table("Herramientas").delete().eq("id", int(r["id"])).execute()
+                        else:
+                            d = {
+                                "codigo": str(r.get("Código / ID", "")),
+                                "ID_Herramienta": str(r.get("Código / ID", "")), 
+                                "Herramienta": str(r.get("Herramienta", "")),
+                                "Estado": str(r.get("Estado", "")),
+                                "Responsable": str(r.get("Responsable", "")),
+                                "ubicacion": str(r.get("Ubicación", ""))
+                            }
+                            d = {k: v for k, v in d.items() if pd.notna(v)}
                             
-                    st.success("✅ Catálogo sincronizado.")
-                    time.sleep(1); st.rerun()
+                            id_row = r.get("id")
+                            if pd.notna(id_row) and str(id_row).strip() != "": 
+                                utils.supabase.table("Herramientas").update(d).eq("id", int(id_row)).execute()
+                            else: 
+                                if str(r.get("Código / ID", "")).strip() != "" and str(r.get("Herramienta", "")).strip() != "":
+                                    utils.supabase.table("Herramientas").insert(d).execute()
+                            
+                    st.toast("✅ Catálogo sincronizado al momento.", icon="✅")
+                    time.sleep(0.4)
+                    st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error al actualizar: {e}")
 
@@ -678,8 +693,8 @@ elif opcion == "Clientes":
                 if st.form_submit_button("Guardar Cliente", type="primary"):
                     if nombre_cli:
                         datos_cli = {
-                            "nombre": nombre_cli, "rfc": rfc_cli, "telefono": telefono_cli, "email": email_cli,
-                            "direccion": direccion_cli, "colonia": colonia_cli, "codigo_postal": cp_cli, "estado": estado_cli
+                            "nombre": str(nombre_cli), "rfc": str(rfc_cli), "telefono": str(telefono_cli), "email": str(email_cli),
+                            "direccion": str(direccion_cli), "colonia": str(colonia_cli), "codigo_postal": str(cp_cli), "estado": str(estado_cli)
                         }
                         utils.supabase.table("Clientes").insert(datos_cli).execute()
                         st.session_state["alta_cli_exito"] = True
@@ -693,13 +708,35 @@ elif opcion == "Clientes":
                 st.rerun()
 
     with t2:
-        edited_c = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Actualizar Clientes"):
-            for i, r in edited_c.iterrows():
-                d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                if pd.notna(r['id']): utils.supabase.table("Clientes").update(d).eq("id", r['id']).execute()
-                else: utils.supabase.table("Clientes").insert(d).execute()
-            st.success("✅ Clientes actualizados."); time.sleep(1); st.rerun()
+        df_cli_view = df.copy()
+        if not df_cli_view.empty:
+            df_cli_view["🗑️ Eliminar"] = False
+            
+            edited_c = st.data_editor(
+                df_cli_view, 
+                num_rows="dynamic", 
+                use_container_width=True,
+                column_config={
+                    "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                }
+            )
+            
+            if st.button("💾 Actualizar Clientes"):
+                for i, r in edited_c.iterrows():
+                    if r.get("🗑️ Eliminar", False):
+                        if pd.notna(r["id"]):
+                            utils.supabase.table("Clientes").delete().eq("id", int(r["id"])).execute()
+                    else:
+                        d = {k: str(v) for k, v in r.items() if k not in ['id', '🗑️ Eliminar', 'created_at'] and pd.notna(v)}
+                        if pd.notna(r['id']): 
+                            utils.supabase.table("Clientes").update(d).eq("id", int(r['id'])).execute()
+                        else: 
+                            if d.get("nombre", "").strip() != "":
+                                utils.supabase.table("Clientes").insert(d).execute()
+                                
+                st.toast("✅ Clientes actualizados al momento.", icon="✅")
+                time.sleep(0.4)
+                st.rerun()
 
 # ==========================================
 # 5. PROVEEDORES
@@ -734,8 +771,8 @@ elif opcion == "Proveedores":
                 if st.form_submit_button("Guardar Proveedor", type="primary"):
                     if nombre_prov:
                         datos_prov = {
-                            "nombre": nombre_prov, "empresa": nombre_prov, "rfc": rfc_prov, "contacto": contacto_prov,
-                            "telefono": telefono_prov, "domicilio": domicilio_prov, "colonia": colonia_prov, "codigo_postal": cp_prov
+                            "nombre": str(nombre_prov), "empresa": str(nombre_prov), "rfc": str(rfc_prov), "contacto": str(contacto_prov),
+                            "telefono": str(telefono_prov), "domicilio": str(domicilio_prov), "colonia": str(colonia_prov), "codigo_postal": str(cp_prov)
                         }
                         utils.supabase.table("Proveedores").insert(datos_prov).execute()
                         st.session_state["alta_prov_exito"] = True
@@ -749,14 +786,37 @@ elif opcion == "Proveedores":
                 st.rerun()
 
     with t2:
-        edited_p = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Actualizar Proveedores"):
-            for i, r in edited_p.iterrows():
-                d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                d["empresa"] = d.get("nombre", "")
-                if pd.notna(r['id']): utils.supabase.table("Proveedores").update(d).eq("id", r['id']).execute()
-                else: utils.supabase.table("Proveedores").insert(d).execute()
-            st.success("✅ Proveedores actualizados."); time.sleep(1); st.rerun()
+        df_prov_view = df.copy()
+        if not df_prov_view.empty:
+            df_prov_view["🗑️ Eliminar"] = False
+            
+            edited_p = st.data_editor(
+                df_prov_view, 
+                num_rows="dynamic", 
+                use_container_width=True,
+                column_config={
+                    "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                }
+            )
+            
+            if st.button("💾 Actualizar Proveedores"):
+                for i, r in edited_p.iterrows():
+                    if r.get("🗑️ Eliminar", False):
+                        if pd.notna(r["id"]):
+                            utils.supabase.table("Proveedores").delete().eq("id", int(r["id"])).execute()
+                    else:
+                        d = {k: str(v) for k, v in r.items() if k not in ['id', '🗑️ Eliminar', 'created_at'] and pd.notna(v)}
+                        d["empresa"] = d.get("nombre", "")
+                        
+                        if pd.notna(r['id']): 
+                            utils.supabase.table("Proveedores").update(d).eq("id", int(r['id'])).execute()
+                        else: 
+                            if d.get("nombre", "").strip() != "":
+                                utils.supabase.table("Proveedores").insert(d).execute()
+                                
+                st.toast("✅ Proveedores actualizados al momento.", icon="✅")
+                time.sleep(0.4)
+                st.rerun()
 
 # ==========================================
 # 6. CATÁLOGOS & ETIQUETAS QR
