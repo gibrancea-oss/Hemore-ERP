@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, date
 import time
 import io
 import os
-import base64 # <-- AGREGADO PARA EL MANUAL PDF
+import base64
 import utils 
 from fpdf import FPDF
 
@@ -25,13 +25,19 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
-# FUNCIONES DEL MANUAL PDF (AGREGADAS)
+# FUNCIONES DEL MANUAL PDF (OPTIMIZADO CON CACHÉ ⚡)
 # ==========================================
+@st.cache_data
+def cargar_pdf_en_memoria(ruta_archivo):
+    """Lee el PDF una sola vez y lo guarda en la RAM ultrarrápida de Streamlit"""
+    with open(ruta_archivo, "rb") as f:
+        return base64.b64encode(f.read()).decode('utf-8')
+
 def mostrar_pdf(ruta_archivo, pagina=1):
     try:
-        with open(ruta_archivo, "rb") as f:
-            base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+        base64_pdf = cargar_pdf_en_memoria(ruta_archivo)
         
+        # El parámetro #page=X hace que el PDF se abra exactamente en esa página de inicio
         pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}#page={pagina}" width="100%" height="700" type="application/pdf"></iframe>'
         st.markdown(pdf_display, unsafe_allow_html=True)
     except FileNotFoundError:
@@ -51,7 +57,6 @@ def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
     pdf.set_xy(140, 31); pdf.set_font('Arial', 'B', 10); pdf.cell(25, 6, "Fecha:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(fecha), 0, 1, 'L')
 
-# ✨ MEJORA: CAJAS DINÁMICAS QUE SE AJUSTAN AL TEXTO ✨
 def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
     pdf.set_y(45)
     pdf.set_fill_color(230, 230, 230); pdf.set_font('Arial', 'B', 9)
@@ -79,7 +84,6 @@ def _bloque_cajas_prov_cli(pdf, titulo1, texto1, titulo2, texto2):
     
     pdf.set_xy(10, y_cajas + alto_caja + 8)
 
-# ✨ MEJORA: MAYÚSCULAS Y REEMPLAZO POR "CP" ✨
 def _formatear_datos_contacto(nombre_principal, dict_datos):
     lineas = [str(nombre_principal).upper()]
     for col, val in dict_datos.items():
@@ -90,7 +94,6 @@ def _formatear_datos_contacto(nombre_principal, dict_datos):
             lineas.append(f"{nombre_col}: {str(val).upper()}")
     return "\n".join(lineas)
 
-# ✨ HELPER: NÚMERO A LETRAS (PARA DINERO) ✨
 def numero_a_letras(numero):
     unidades = ["", "UN ", "DOS ", "TRES ", "CUATRO ", "CINCO ", "SEIS ", "SIETE ", "OCHO ", "NUEVE ", "DIEZ ", "ONCE ", "DOCE ", "TRECE ", "CATORCE ", "QUINCE ", "DIECISEIS ", "DIECISIETE ", "DIECIOCHO ", "DIECINUEVE ", "VEINTE ", "VEINTIUN ", "VEINTIDOS ", "VEINTITRES ", "VEINTICUATRO ", "VEINTICINCO ", "VEINTISEIS ", "VEINTISIETE ", "VEINTIOCHO ", "VEINTINUEVE "]
     decenas = ["", "DIEZ ", "VEINTE ", "TREINTA ", "CUARENTA ", "CINCUENTA ", "SESENTA ", "SETENTA ", "OCHENTA ", "NOVENTA "]
@@ -391,13 +394,13 @@ opcion_almacen = st.sidebar.radio(
     opciones_permitidas
 )
 
-# --- BOTÓN DE MANUAL COMPLETO (AGREGADO) ---
+# --- BOTÓN DE MANUAL COMPLETO ---
 st.sidebar.divider()
 if st.sidebar.button("📖 Leer Manual Completo", use_container_width=True):
     modal_manual_completo()
-# -------------------------------------------
+# --------------------------------
 
-# --- TÍTULO Y BOTÓN DE AYUDA DINÁMICO (AGREGADO SIN BORRAR LÓGICA) ---
+# --- TÍTULO Y BOTÓN DE AYUDA DINÁMICO ---
 c_tit, c_ayu = st.columns([9, 1])
 with c_tit:
     st.title(f"Control de {opcion_almacen.split(' (')[0]}")
@@ -431,7 +434,6 @@ if opcion_almacen == "Insumos (Consumibles)":
         df_personal = pd.DataFrame(supabase.table("Personal").select("nombre").eq("activo", True).execute().data)
         lista_personal = df_personal['nombre'].tolist() if not df_personal.empty else []
         
-        # --- MEJORA: FETCH DE PROVEEDORES PARA INSUMOS ---
         df_provs_insumos = pd.DataFrame(supabase.table("Proveedores").select("*").execute().data)
         col_p_name_ins = 'empresa' if 'empresa' in df_provs_insumos.columns else 'nombre'
         lista_provs_insumos = df_provs_insumos[col_p_name_ins].tolist() if not df_provs_insumos.empty else []
@@ -449,7 +451,6 @@ if opcion_almacen == "Insumos (Consumibles)":
             if df_ins.empty: 
                 st.warning("No hay insumos registrados.")
             else:
-                # --- MEJORA: PROTECCIÓN CONTRA MULTI-CLIC ---
                 if "insumo_mov_guardado" not in st.session_state:
                     st.session_state["insumo_mov_guardado"] = False
                 
@@ -478,7 +479,6 @@ if opcion_almacen == "Insumos (Consumibles)":
                                         st.rerun()
                                     else: st.error("Stock insuficiente")
                             else:
-                                # --- MEJORA: APARTADO DE PROVEEDORES Y FACTURA ---
                                 st.markdown("**Detalles de la Entrada:**")
                                 prov_in_insumo = st.selectbox("Proveedor:", lista_provs_insumos, index=None, key="prov_re_stock")
                                 c_f1, c_f2 = st.columns(2)
@@ -489,7 +489,6 @@ if opcion_almacen == "Insumos (Consumibles)":
                                     new_st = float(item_actual['cantidad'] + cant_mov)
                                     supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                     
-                                    # Guardamos los datos nuevos dentro de la columna 'responsable' para no alterar la BD
                                     info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante}"
                                     
                                     try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": info_entrada}).execute()
@@ -531,8 +530,6 @@ if opcion_almacen == "Insumos (Consumibles)":
             st.write(f"**Descripción:** {row_info.get('descripcion', '')}")
             st.write(f"**Tipo de Movimiento:** {row_info.get('tipo_movimiento', '')}")
             st.write(f"**Cantidad:** {row_info.get('cantidad', '')}")
-            
-            # --- MEJORA: AQUI SE MOSTRARÁ LA FACTURA Y EL PROVEEDOR AUTOMÁTICAMENTE ---
             st.write(f"**Responsable / Detalles:** {row_info.get('responsable', '')}")
             
             st.divider()
@@ -589,34 +586,63 @@ elif opcion_almacen == "Herramientas (Activos)":
         if tiene_permiso("Almacén: Prestar/Devolver Herramientas"):
             c1, c2 = st.columns(2)
             with c1:
-                st.info("Prestar")
-                if not df_her.empty:
-                    bodega = df_her[df_her["Responsable"]=="Bodega"]
-                    if not bodega.empty:
-                        sel = st.selectbox("Herramienta", bodega["Herramienta"].tolist())
-                        resp = st.selectbox("A quien", lista_personal)
-                        if st.button("Prestar"):
-                            id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
-                            supabase.table("Herramientas").update({"Responsable": str(resp)}).eq("id", int(id_h)).execute()
-                            try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
-                            except: pass
-                            st.success("Prestado"); time.sleep(1); st.rerun()
+                with st.container(border=True):
+                    st.info("📤 Prestar Herramienta")
+                    if not df_her.empty:
+                        bodega = df_her[df_her["Responsable"] == "Bodega"]
+                        if not bodega.empty:
+                            sel = st.selectbox("Selecciona Herramienta", bodega["Herramienta"].tolist(), key="prest_herr")
+                            resp = st.selectbox("Prestar a:", lista_personal, key="prest_resp")
+                            if st.button("Confirmar Préstamo", type="primary"):
+                                id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
+                                
+                                supabase.table("Herramientas").update({
+                                    "Responsable": str(resp)
+                                }).eq("id", int(id_h)).execute()
+                                
+                                try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
+                                except: pass
+                                st.success("✅ Prestado exitosamente"); time.sleep(1); st.rerun()
+                        else:
+                            st.warning("No hay herramientas disponibles en BODEGA.")
             with c2:
-                st.warning("Devolver")
-                if not df_her.empty:
-                    prestadas = df_her[df_her["Responsable"]!="Bodega"]
-                    if not prestadas.empty:
-                        sel_d = st.selectbox("Devolver", prestadas["Herramienta"].tolist())
-                        if st.button("Devolver"):
-                            id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
-                            supabase.table("Herramientas").update({"Responsable": "Bodega"}).eq("id", int(id_h)).execute()
-                            try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
-                            except: pass
-                            st.success("Devuelto"); time.sleep(1); st.rerun()
+                with st.container(border=True):
+                    st.warning("📥 Devolver Herramienta")
+                    if not df_her.empty:
+                        prestadas = df_her[df_her["Responsable"] != "Bodega"]
+                        if not prestadas.empty:
+                            sel_d = st.selectbox("Selecciona Herramienta a devolver", prestadas["Herramienta"].tolist(), key="dev_herr")
+                            
+                            if st.button("Confirmar Devolución", type="primary"):
+                                id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
+                                
+                                supabase.table("Herramientas").update({
+                                    "Responsable": "Bodega"
+                                }).eq("id", int(id_h)).execute()
+                                
+                                try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
+                                except: pass
+                                st.success("✅ Devuelto exitosamente"); time.sleep(1); st.rerun()
+                        else:
+                            st.info("Todas las herramientas están actualmente en bodega.")
         else:
             st.warning("🔒 No tienes permiso para prestar ni devolver herramientas.")
 
-    with tab2: st.dataframe(df_her, use_container_width=True)
+    with tab2:
+        if not df_her.empty:
+            df_view = df_her.copy()
+            
+            df_view.loc[df_view['Responsable'] != 'Bodega', 'ubicacion'] = "En uso - " + df_view['Responsable']
+            
+            cols_mostrar = ["codigo", "Herramienta", "Estado", "Responsable", "ubicacion"]
+            for col in cols_mostrar:
+                if col not in df_view.columns: df_view[col] = ""
+            
+            df_display = df_view[cols_mostrar].rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"})
+            
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+        else:
+            st.info("No hay inventario registrado.")
 
     with tab3:
         @st.dialog("Detalles del Movimiento - Herramientas")
@@ -666,7 +692,6 @@ elif opcion_almacen == "Herramientas (Activos)":
 # 📑 OPCIÓN 3: RECIBOS DE ENTREGA OC 
 # ==================================================
 elif opcion_almacen == "Recibos de Entrega OC":
-    st.markdown("### 📑 Recibos de Entrega (Salidas a Clientes)")
     try:
         res_cli = supabase.table("Clientes").select("*").execute(); df_clientes = pd.DataFrame(res_cli.data)
         lista_nombres_cli = df_clientes['nombre'].tolist() if not df_clientes.empty else []
@@ -860,7 +885,6 @@ elif opcion_almacen == "Recibos de Entrega OC":
 # 📥 OPCIÓN 4: ENTRADA DE MATERIAL
 # ==================================================
 elif opcion_almacen == "Entrada de Material":
-    st.markdown("### 📥 Registro de Entrada de Material")
     try:
         res_prov = supabase.table("Proveedores").select("*").execute(); df_provs = pd.DataFrame(res_prov.data)
         col_p_name = 'empresa' if 'empresa' in df_provs.columns else 'nombre'
@@ -1020,8 +1044,6 @@ elif opcion_almacen == "Entrada de Material":
 # 💰 OPCIÓN 5: ENTRADAS Y SALIDAS DE DINERO
 # ==================================================
 elif opcion_almacen == "Entradas y Salidas de Dinero":
-    st.markdown("### 💰 Entradas y Salidas de Dinero")
-    
     tab_dinero_new, tab_dinero_hist = st.tabs(["➕ Nuevo Movimiento", "📜 Historial"])
     
     with tab_dinero_new:
