@@ -25,7 +25,7 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
-# MANUAL DE AYUDA NATIVO (SÚPER DETALLADO ⚡)
+# MANUAL DE AYUDA NATIVO (TEXTO LIMPIO ⚡)
 # ==========================================
 def renderizar_manual_config(modulo):
     if modulo == "Personal" or modulo == "Todos":
@@ -44,7 +44,7 @@ def renderizar_manual_config(modulo):
         * **Contraseña / PIN:** Asigna una clave segura.
         * **Control de Accesos (Multiselect):** Haz clic en la caja para desplegar la lista de permisos. 
             * *Ejemplo:* Si es un almacenista, dale permisos de *Almacén: Movimientos Insumos* y *Almacén: Ver Existencias*. No le des permisos de *Configuración* ni de *Finanzas* por seguridad.
-        * Una vez verificado todo, da clic en **Guardar Empleado y Accesos**.
+        * Una vez verificado todo, da clic en **Guardar Empleado y Accesos**. Al guardar, el formulario desaparecerá para evitar clics dobles, y podrás usar el botón "Agregar otro" si lo necesitas.
         """)
 
         st.markdown("### 📋 Pestaña: Kardex y Accesos")
@@ -96,7 +96,7 @@ def renderizar_manual_config(modulo):
         1. **Código SKU / ID:** Escribe el número de serie de la máquina o el grabado interno de la fábrica (Ej. *ESM-001* para Esmeriladora 1).
         2. **Nombre Herramienta:** Describe el activo (Ej. *Esmeriladora angular 4 1/2 Makita*).
         3. **Estado:** Determina cómo se encuentra físicamente al momento de registrarla (NUEVO, BUEN ESTADO, REGULAR, BAJA).
-        4. **Responsable Inicial:** Por defecto debe ser **BODEGA** para que el almacenista pueda prestarla. Si la herramienta se compra y se le asigna permanentemente a un operador específico, búscalo en la lista.
+        4. **Responsable Inicial:** Por defecto debe ser **Bodega** para que el almacenista pueda prestarla. Si la herramienta se compra y se le asigna permanentemente a un operador específico, búscalo en la lista.
         5. **Ubicación:** Describe dónde se guarda (Ej. *Gabinete Herrería*).
         """)
 
@@ -168,7 +168,6 @@ def modal_manual_completo_config():
 @st.dialog("❓ Ayuda del Módulo", width="large")
 def modal_ayuda_modulo_config(modulo):
     renderizar_manual_config(modulo)
-
 
 # ==========================================
 # FUNCIONES AUXILIARES (QR y PDF)
@@ -332,50 +331,58 @@ if opcion == "Personal":
     t1, t2 = st.tabs(["➕ Alta Personal", "📋 Kardex y Accesos"])
     
     with t1:
-        with st.form("alta_personal", clear_on_submit=True):
-            st.subheader("1. Datos Generales")
-            c1, c2 = st.columns(2)
-            nombre = c1.text_input("Nombre Completo")
-            puesto = c2.selectbox("Puesto", ["Operador", "Supervisor", "Almacén", "Mantenimiento", "Administrativo"])
-            
-            c3, c4 = st.columns(2)
-            nacimiento = c3.text_input("Año Nacimiento")
-            domicilio = c4.text_input("Domicilio")
-            
-            c5, c6 = st.columns(2)
-            curp = c5.text_input("CURP")
-            rfc = c6.text_input("RFC")
-            fecha_ingreso = st.date_input("Fecha de Ingreso", value=datetime.date.today())
-            
-            st.divider()
-            st.subheader("2. Credenciales y Permisos")
-            c7, c8 = st.columns(2)
-            usuario_login = c7.text_input("Usuario (Para iniciar sesión)")
-            pin_login = c8.text_input("Contraseña / PIN", type="password")
-            
-            permisos_seleccionados = st.multiselect(
-                "Selecciona las operaciones a las que tendrá acceso:",
-                options=lista_permisos,
-                placeholder="Elige los permisos..."
-            )
+        if "alta_pers_exito" not in st.session_state:
+            st.session_state["alta_pers_exito"] = False
 
-            if st.form_submit_button("Guardar Empleado y Accesos", type="primary"):
-                if nombre and usuario_login and pin_login:
-                    permisos_str = ", ".join(permisos_seleccionados)
-                    
-                    datos = {
-                        "nombre": nombre, "puesto": puesto, "anio_nacimiento": nacimiento, 
-                        "domicilio": domicilio, "curp": curp, "rfc": rfc, 
-                        "fecha_ingreso": fecha_ingreso.isoformat(), "activo": True,
-                        "usuario": usuario_login, "pin": pin_login, 
-                        "permisos": permisos_str
-                    }
-                    utils.supabase.table("Personal").insert(datos).execute()
-                    st.success(f"✅ Registrado con permisos asignados.")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("⚠️ El Nombre, Usuario y Contraseña son obligatorios.")
+        if not st.session_state["alta_pers_exito"]:
+            with st.form("alta_personal", clear_on_submit=True):
+                st.subheader("1. Datos Generales")
+                c1, c2 = st.columns(2)
+                nombre = c1.text_input("Nombre Completo")
+                puesto = c2.selectbox("Puesto", ["Operador", "Supervisor", "Almacén", "Mantenimiento", "Administrativo"])
+                
+                c3, c4 = st.columns(2)
+                nacimiento = c3.text_input("Año Nacimiento")
+                domicilio = c4.text_input("Domicilio")
+                
+                c5, c6 = st.columns(2)
+                curp = c5.text_input("CURP")
+                rfc = c6.text_input("RFC")
+                fecha_ingreso = st.date_input("Fecha de Ingreso", value=datetime.date.today())
+                
+                st.divider()
+                st.subheader("2. Credenciales y Permisos")
+                c7, c8 = st.columns(2)
+                usuario_login = c7.text_input("Usuario (Para iniciar sesión)")
+                pin_login = c8.text_input("Contraseña / PIN", type="password")
+                
+                permisos_seleccionados = st.multiselect(
+                    "Selecciona las operaciones a las que tendrá acceso:",
+                    options=lista_permisos,
+                    placeholder="Elige los permisos..."
+                )
+
+                if st.form_submit_button("Guardar Empleado y Accesos", type="primary"):
+                    if nombre and usuario_login and pin_login:
+                        permisos_str = ", ".join(permisos_seleccionados)
+                        
+                        datos = {
+                            "nombre": nombre, "puesto": puesto, "anio_nacimiento": nacimiento, 
+                            "domicilio": domicilio, "curp": curp, "rfc": rfc, 
+                            "fecha_ingreso": fecha_ingreso.isoformat(), "activo": True,
+                            "usuario": usuario_login, "pin": pin_login, 
+                            "permisos": permisos_str
+                        }
+                        utils.supabase.table("Personal").insert(datos).execute()
+                        st.session_state["alta_pers_exito"] = True
+                        st.rerun()
+                    else:
+                        st.error("⚠️ El Nombre, Usuario y Contraseña son obligatorios.")
+        else:
+            st.success("✅ Empleado registrado correctamente con sus permisos asignados.")
+            if st.button("➕ Agregar otro Empleado", type="primary"):
+                st.session_state["alta_pers_exito"] = False
+                st.rerun()
 
     with t2:
         @st.dialog("Edición de Personal y Accesos", width="large")
@@ -480,20 +487,38 @@ elif opcion == "Insumos":
     t1, t2 = st.tabs(["➕ Alta Manual", "📋 Inventario Maestro"])
     
     with t1:
-        with st.form("alta_insumo"):
-            c1, c2 = st.columns([1, 3]); cod = c1.text_input("Código / SKU"); nom = c2.text_input("Descripción")
-            c3, c4, c5 = st.columns(3); uni = c3.selectbox("Unidad", lista_unidades); cant = c4.number_input("Cantidad Inicial (Opcional)", min_value=0.0); mini = c5.number_input("Stock Min", value=5.0)
-            ubi = st.text_input("Ubicación")
-            
-            if st.form_submit_button("Guardar Insumo"):
-                if cod and nom:
-                    datos = {"codigo": cod, "Descripcion": nom, "Insumo": nom, "Unidad": uni, "Cantidad": cant, "stock_minimo": mini}
-                    if "ubicacion" in df.columns or df.empty: datos["ubicacion"] = ubi
-                    try:
-                        utils.supabase.table("Insumos").insert(datos).execute()
-                        st.success("✅ Guardado correctamente"); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Error: {e}.")
-                else: st.warning("Código y Descripción obligatorios.")
+        if "alta_insumo_exito" not in st.session_state:
+            st.session_state["alta_insumo_exito"] = False
+
+        if not st.session_state["alta_insumo_exito"]:
+            with st.form("alta_insumo", clear_on_submit=True):
+                c1, c2 = st.columns([1, 3])
+                cod = c1.text_input("Código / SKU")
+                nom = c2.text_input("Descripción")
+                
+                c3, c4, c5 = st.columns(3)
+                uni = c3.selectbox("Unidad", lista_unidades)
+                cant = c4.number_input("Cantidad Inicial (Opcional)", min_value=0.0)
+                mini = c5.number_input("Stock Min", value=5.0)
+                
+                ubi = st.text_input("Ubicación")
+                
+                if st.form_submit_button("Guardar Insumo", type="primary"):
+                    if cod and nom:
+                        datos = {"codigo": cod, "Descripcion": nom, "Insumo": nom, "Unidad": uni, "Cantidad": cant, "stock_minimo": mini}
+                        if "ubicacion" in df.columns or df.empty: datos["ubicacion"] = ubi
+                        try:
+                            utils.supabase.table("Insumos").insert(datos).execute()
+                            st.session_state["alta_insumo_exito"] = True
+                            st.rerun()
+                        except Exception as e: st.error(f"Error: {e}.")
+                    else: st.warning("Código y Descripción obligatorios.")
+        else:
+            st.success("✅ Insumo guardado correctamente en la base de datos.")
+            if st.button("➕ Agregar otro Insumo", type="primary"):
+                st.session_state["alta_insumo_exito"] = False
+                st.rerun()
+
     with t2:
         if not df.empty:
             cols_base = ["id", "codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo"]
@@ -505,7 +530,7 @@ elif opcion == "Insumos":
                     if "ubicacion" in r: d["ubicacion"] = r["ubicacion"]
                     if pd.notna(r["id"]): utils.supabase.table("Insumos").update(d).eq("id", r["id"]).execute()
                     else: utils.supabase.table("Insumos").insert(d).execute()
-                st.success("✅ Actualizado"); time.sleep(1); st.rerun()
+                st.success("✅ Inventario actualizado"); time.sleep(1); st.rerun()
 
 # ==========================================
 # 3. HERRAMIENTAS (Módulo Configuración)
@@ -516,41 +541,50 @@ elif opcion == "Herramientas":
         df = pd.DataFrame(response.data)
         
         res_pers = utils.supabase.table("Personal").select("nombre").eq("activo", True).execute()
-        lista_personal = ["BODEGA"] + [p["nombre"] for p in res_pers.data] if res_pers.data else ["BODEGA"]
+        lista_personal = ["Bodega"] + [p["nombre"] for p in res_pers.data] if res_pers.data else ["Bodega"]
     except: 
         df = pd.DataFrame()
-        lista_personal = ["BODEGA"]
+        lista_personal = ["Bodega"]
     
     t1, t2 = st.tabs(["➕ Alta de Herramienta", "📋 Inventario de Activos"])
     
     with t1:
-        with st.form("alta_herramienta_form", clear_on_submit=True):
-            st.write("**Datos de Identificación**")
-            c1, c2 = st.columns(2)
-            sku_id_h = c1.text_input("Código SKU / ID de la Herramienta")
-            nombre_h = c2.text_input("Nombre Herramienta")
-            
-            st.write("**Estado y Localización**")
-            c4, c5, c6 = st.columns(3)
-            estado_h = c4.selectbox("Estado", ["NUEVO", "BUEN ESTADO", "REGULAR", "BAJA"])
-            responsable_h = c5.selectbox("Responsable Inicial", lista_personal, index=0)
-            ubicacion_h = c6.text_input("Ubicación (Ej. Estante A1)")
-            
-            if st.form_submit_button("Guardar Herramienta", type="primary"):
-                if sku_id_h and nombre_h:
-                    datos_herramienta = {
-                        "codigo": sku_id_h, 
-                        "ID_Herramienta": sku_id_h,
-                        "Herramienta": nombre_h, 
-                        "Estado": estado_h, 
-                        "Responsable": responsable_h,
-                        "ubicacion": ubicacion_h
-                    }
-                    utils.supabase.table("Herramientas").insert(datos_herramienta).execute()
-                    st.success("✅ Herramienta registrada con éxito.")
-                    time.sleep(1); st.rerun()
-                else:
-                    st.warning("⚠️ El Código/ID y Nombre son obligatorios.")
+        if "alta_herr_exito" not in st.session_state:
+            st.session_state["alta_herr_exito"] = False
+
+        if not st.session_state["alta_herr_exito"]:
+            with st.form("alta_herramienta_form", clear_on_submit=True):
+                st.write("**Datos de Identificación**")
+                c1, c2 = st.columns(2)
+                sku_id_h = c1.text_input("Código SKU / ID de la Herramienta")
+                nombre_h = c2.text_input("Nombre Herramienta")
+                
+                st.write("**Estado y Localización**")
+                c4, c5, c6 = st.columns(3)
+                estado_h = c4.selectbox("Estado", ["NUEVO", "BUEN ESTADO", "REGULAR", "BAJA"])
+                responsable_h = c5.selectbox("Responsable Inicial", lista_personal, index=0)
+                ubicacion_h = c6.text_input("Ubicación (Ej. Estante A1)")
+                
+                if st.form_submit_button("Guardar Herramienta", type="primary"):
+                    if sku_id_h and nombre_h:
+                        datos_herramienta = {
+                            "codigo": sku_id_h, 
+                            "ID_Herramienta": sku_id_h,
+                            "Herramienta": nombre_h, 
+                            "Estado": estado_h, 
+                            "Responsable": responsable_h,
+                            "ubicacion": ubicacion_h
+                        }
+                        utils.supabase.table("Herramientas").insert(datos_herramienta).execute()
+                        st.session_state["alta_herr_exito"] = True
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ El Código/ID y Nombre son obligatorios.")
+        else:
+            st.success("✅ Herramienta registrada con éxito en el catálogo.")
+            if st.button("➕ Agregar otra Herramienta", type="primary"):
+                st.session_state["alta_herr_exito"] = False
+                st.rerun()
 
     with t2:
         if not df.empty:
@@ -597,33 +631,43 @@ elif opcion == "Clientes":
 
     t1, t2 = st.tabs(["➕ Alta Cliente", "📋 Lista de Clientes"])
     with t1:
-        with st.form("alta_cliente_new", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            nombre_cli = c1.text_input("Nombre / Empresa")
-            rfc_cli = c2.text_input("RFC")
-            
-            c3, c4 = st.columns(2)
-            telefono_cli = c3.text_input("Teléfono")
-            email_cli = c4.text_input("E-mail")
-            
-            direccion_cli = st.text_input("Dirección (Calle y Número)")
-            
-            c5, c6, c7 = st.columns(3)
-            colonia_cli = c5.text_input("Colonia")
-            cp_cli = c6.text_input("Código Postal")
-            estado_cli = c7.text_input("Estado (Provincia)")
-            
-            if st.form_submit_button("Guardar Cliente", type="primary"):
-                if nombre_cli:
-                    datos_cli = {
-                        "nombre": nombre_cli, "rfc": rfc_cli, "telefono": telefono_cli, "email": email_cli,
-                        "direccion": direccion_cli, "colonia": colonia_cli, "codigo_postal": cp_cli, "estado": estado_cli
-                    }
-                    utils.supabase.table("Clientes").insert(datos_cli).execute()
-                    st.success("✅ Cliente registrado correctamente.")
-                    time.sleep(1); st.rerun()
-                else:
-                    st.warning("⚠️ El nombre del cliente es obligatorio.")
+        if "alta_cli_exito" not in st.session_state:
+            st.session_state["alta_cli_exito"] = False
+
+        if not st.session_state["alta_cli_exito"]:
+            with st.form("alta_cliente_new", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                nombre_cli = c1.text_input("Nombre / Empresa")
+                rfc_cli = c2.text_input("RFC")
+                
+                c3, c4 = st.columns(2)
+                telefono_cli = c3.text_input("Teléfono")
+                email_cli = c4.text_input("E-mail")
+                
+                direccion_cli = st.text_input("Dirección (Calle y Número)")
+                
+                c5, c6, c7 = st.columns(3)
+                colonia_cli = c5.text_input("Colonia")
+                cp_cli = c6.text_input("Código Postal")
+                estado_cli = c7.text_input("Estado (Provincia)")
+                
+                if st.form_submit_button("Guardar Cliente", type="primary"):
+                    if nombre_cli:
+                        datos_cli = {
+                            "nombre": nombre_cli, "rfc": rfc_cli, "telefono": telefono_cli, "email": email_cli,
+                            "direccion": direccion_cli, "colonia": colonia_cli, "codigo_postal": cp_cli, "estado": estado_cli
+                        }
+                        utils.supabase.table("Clientes").insert(datos_cli).execute()
+                        st.session_state["alta_cli_exito"] = True
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ El nombre del cliente es obligatorio.")
+        else:
+            st.success("✅ Cliente registrado correctamente en el directorio.")
+            if st.button("➕ Agregar otro Cliente", type="primary"):
+                st.session_state["alta_cli_exito"] = False
+                st.rerun()
+
     with t2:
         edited_c = st.data_editor(df, num_rows="dynamic", use_container_width=True)
         if st.button("💾 Actualizar Clientes"):
@@ -631,7 +675,7 @@ elif opcion == "Clientes":
                 d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
                 if pd.notna(r['id']): utils.supabase.table("Clientes").update(d).eq("id", r['id']).execute()
                 else: utils.supabase.table("Clientes").insert(d).execute()
-            st.rerun()
+            st.success("✅ Clientes actualizados."); time.sleep(1); st.rerun()
 
 # ==========================================
 # 5. PROVEEDORES
@@ -644,32 +688,42 @@ elif opcion == "Proveedores":
 
     t1, t2 = st.tabs(["➕ Alta Proveedor", "📋 Lista de Proveedores"])
     with t1:
-        with st.form("alta_prov_new", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            nombre_prov = c1.text_input("Nombre / Empresa")
-            rfc_prov = c2.text_input("RFC")
-            
-            c3, c4 = st.columns(2)
-            contacto_prov = c3.text_input("Persona de Contacto")
-            telefono_prov = c4.text_input("Teléfono")
-            
-            domicilio_prov = st.text_input("Calle y Número")
-            
-            c5, c6 = st.columns(2)
-            colonia_prov = c5.text_input("Colonia")
-            cp_prov = c6.text_input("Código Postal")
-            
-            if st.form_submit_button("Guardar Proveedor", type="primary"):
-                if nombre_prov:
-                    datos_prov = {
-                        "nombre": nombre_prov, "empresa": nombre_prov, "rfc": rfc_prov, "contacto": contacto_prov,
-                        "telefono": telefono_prov, "domicilio": domicilio_prov, "colonia": colonia_prov, "codigo_postal": cp_prov
-                    }
-                    utils.supabase.table("Proveedores").insert(datos_prov).execute()
-                    st.success("✅ Proveedor registrado correctamente.")
-                    time.sleep(1); st.rerun()
-                else:
-                    st.warning("⚠️ El nombre de la empresa es obligatorio.")
+        if "alta_prov_exito" not in st.session_state:
+            st.session_state["alta_prov_exito"] = False
+
+        if not st.session_state["alta_prov_exito"]:
+            with st.form("alta_prov_new", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                nombre_prov = c1.text_input("Nombre / Empresa")
+                rfc_prov = c2.text_input("RFC")
+                
+                c3, c4 = st.columns(2)
+                contacto_prov = c3.text_input("Persona de Contacto")
+                telefono_prov = c4.text_input("Teléfono")
+                
+                domicilio_prov = st.text_input("Calle y Número")
+                
+                c5, c6 = st.columns(2)
+                colonia_prov = c5.text_input("Colonia")
+                cp_prov = c6.text_input("Código Postal")
+                
+                if st.form_submit_button("Guardar Proveedor", type="primary"):
+                    if nombre_prov:
+                        datos_prov = {
+                            "nombre": nombre_prov, "empresa": nombre_prov, "rfc": rfc_prov, "contacto": contacto_prov,
+                            "telefono": telefono_prov, "domicilio": domicilio_prov, "colonia": colonia_prov, "codigo_postal": cp_prov
+                        }
+                        utils.supabase.table("Proveedores").insert(datos_prov).execute()
+                        st.session_state["alta_prov_exito"] = True
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ El nombre de la empresa es obligatorio.")
+        else:
+            st.success("✅ Proveedor registrado correctamente en el directorio.")
+            if st.button("➕ Agregar otro Proveedor", type="primary"):
+                st.session_state["alta_prov_exito"] = False
+                st.rerun()
+
     with t2:
         edited_p = st.data_editor(df, num_rows="dynamic", use_container_width=True)
         if st.button("💾 Actualizar Proveedores"):
@@ -678,7 +732,7 @@ elif opcion == "Proveedores":
                 d["empresa"] = d.get("nombre", "")
                 if pd.notna(r['id']): utils.supabase.table("Proveedores").update(d).eq("id", r['id']).execute()
                 else: utils.supabase.table("Proveedores").insert(d).execute()
-            st.rerun()
+            st.success("✅ Proveedores actualizados."); time.sleep(1); st.rerun()
 
 # ==========================================
 # 6. CATÁLOGOS & ETIQUETAS QR
