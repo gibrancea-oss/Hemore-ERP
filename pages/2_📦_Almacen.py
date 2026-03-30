@@ -17,7 +17,7 @@ utils.validar_login()
 supabase = utils.supabase 
 
 # ==========================================
-# FUNCIÓN DE PERMISOS (LA MEJORA)
+# FUNCIÓN DE PERMISOS
 # ==========================================
 def tiene_permiso(permiso):
     if st.session_state.get("es_admin", False): return True
@@ -556,7 +556,6 @@ elif opcion_almacen == "Herramientas (Activos)":
                             if st.button("Confirmar Préstamo", type="primary"):
                                 id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
                                 
-                                # Solo actualizamos al responsable. La ubicación original se queda guardada intacta en la BD.
                                 supabase.table("Herramientas").update({
                                     "Responsable": str(resp)
                                 }).eq("id", int(id_h)).execute()
@@ -574,11 +573,9 @@ elif opcion_almacen == "Herramientas (Activos)":
                         if not prestadas.empty:
                             sel_d = st.selectbox("Selecciona Herramienta a devolver", prestadas["Herramienta"].tolist(), key="dev_herr")
                             
-                            # Ya no te pide la ubicación física. Solo le das al botón.
                             if st.button("Confirmar Devolución", type="primary"):
                                 id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
                                 
-                                # Al devolver el responsable a "BODEGA", su ubicación física original volverá a aparecer en la tabla automáticamente.
                                 supabase.table("Herramientas").update({
                                     "Responsable": "BODEGA"
                                 }).eq("id", int(id_h)).execute()
@@ -595,15 +592,16 @@ elif opcion_almacen == "Herramientas (Activos)":
         if not df_her.empty:
             df_view = df_her.copy()
             
-            # TRUCO VISUAL: Si no está en bodega, reemplazamos el texto de la ubicación por el nombre de la persona, 
-            # pero esto solo pasa en la tabla de Streamlit, la base de datos real sigue guardando el estante.
+            # TRUCO VISUAL: Si no está en bodega, reemplazamos el texto de la ubicación por el nombre de la persona
             df_view.loc[df_view['Responsable'] != 'BODEGA', 'ubicacion'] = "En uso - " + df_view['Responsable']
             
-            cols_mostrar = ["codigo", "ID_Herramienta", "Herramienta", "Estado", "Responsable", "ubicacion"]
+            cols_mostrar = ["codigo", "Herramienta", "Estado", "Responsable", "ubicacion"]
             for col in cols_mostrar:
                 if col not in df_view.columns: df_view[col] = ""
             
-            st.dataframe(df_view[cols_mostrar], use_container_width=True, hide_index=True)
+            df_display = df_view[cols_mostrar].rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"})
+            
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
         else:
             st.info("No hay inventario registrado.")
 
