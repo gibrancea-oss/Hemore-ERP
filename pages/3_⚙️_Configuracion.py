@@ -354,10 +354,9 @@ elif opcion == "Herramientas":
     with t1:
         with st.form("alta_herramienta_form", clear_on_submit=True):
             st.write("**Datos de Identificación**")
-            c1, c2, c3 = st.columns(3)
-            sku_h = c1.text_input("Código SKU")
-            id_h_input = c2.text_input("ID de la Herramienta") # NUEVO CAMPO
-            nombre_h = c3.text_input("Nombre Herramienta")
+            c1, c2 = st.columns(2)
+            sku_id_h = c1.text_input("Código SKU / ID de la Herramienta")
+            nombre_h = c2.text_input("Nombre Herramienta")
             
             st.write("**Estado y Localización**")
             c4, c5, c6 = st.columns(3)
@@ -366,10 +365,10 @@ elif opcion == "Herramientas":
             ubicacion_h = c6.text_input("Ubicación (Ej. Estante A1)")
             
             if st.form_submit_button("Guardar Herramienta", type="primary"):
-                if sku_h and id_h_input and nombre_h:
+                if sku_id_h and nombre_h:
                     datos_herramienta = {
-                        "codigo": sku_h, 
-                        "ID_Herramienta": id_h_input,  
+                        "codigo": sku_id_h, 
+                        "ID_Herramienta": sku_id_h, 
                         "Herramienta": nombre_h, 
                         "Estado": estado_h, 
                         "Responsable": responsable_h,
@@ -379,7 +378,7 @@ elif opcion == "Herramientas":
                     st.success("✅ Herramienta registrada con éxito.")
                     time.sleep(1); st.rerun()
                 else:
-                    st.warning("⚠️ Código SKU, ID y Nombre son obligatorios.")
+                    st.warning("⚠️ El Código/ID y Nombre son obligatorios.")
 
     with t2:
         if not df.empty:
