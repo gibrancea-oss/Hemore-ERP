@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, date
 import time
 import io
 import os
+import base64 # <-- AGREGADO PARA EL MANUAL PDF
 import utils 
 from fpdf import FPDF
 
@@ -22,6 +23,27 @@ supabase = utils.supabase
 def tiene_permiso(permiso):
     if st.session_state.get("es_admin", False): return True
     return permiso in st.session_state.get("permisos", [])
+
+# ==========================================
+# FUNCIONES DEL MANUAL PDF (AGREGADAS)
+# ==========================================
+def mostrar_pdf(ruta_archivo, pagina=1):
+    try:
+        with open(ruta_archivo, "rb") as f:
+            base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+        
+        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}#page={pagina}" width="100%" height="700" type="application/pdf"></iframe>'
+        st.markdown(pdf_display, unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.error("⚠️ No se encontró el archivo del manual. Asegúrate de que 'manual_hemore.pdf' esté en la misma carpeta que este código.")
+
+@st.dialog("📖 Manual de Usuario Completo", width="large")
+def modal_manual_completo():
+    mostrar_pdf("manual_hemore.pdf", pagina=1)
+
+@st.dialog("❓ Ayuda del Procedimiento", width="large")
+def modal_ayuda_modulo(pagina):
+    mostrar_pdf("manual_hemore.pdf", pagina=pagina)
 
 # --- HELPER FUNCTIONS ---
 def _bloque_folio_fecha(pdf, folio, fecha):
@@ -369,7 +391,28 @@ opcion_almacen = st.sidebar.radio(
     opciones_permitidas
 )
 
-st.title(f"Control de {opcion_almacen.split(' (')[0]}")
+# --- BOTÓN DE MANUAL COMPLETO (AGREGADO) ---
+st.sidebar.divider()
+if st.sidebar.button("📖 Leer Manual Completo", use_container_width=True):
+    modal_manual_completo()
+# -------------------------------------------
+
+# --- TÍTULO Y BOTÓN DE AYUDA DINÁMICO (AGREGADO SIN BORRAR LÓGICA) ---
+c_tit, c_ayu = st.columns([9, 1])
+with c_tit:
+    st.title(f"Control de {opcion_almacen.split(' (')[0]}")
+with c_ayu:
+    if opcion_almacen == "Insumos (Consumibles)":
+        if st.button("❓ Ayuda", key="ayu_ins"): modal_ayuda_modulo(19)
+    elif opcion_almacen == "Herramientas (Activos)":
+        if st.button("❓ Ayuda", key="ayu_herr"): modal_ayuda_modulo(22)
+    elif opcion_almacen == "Recibos de Entrega OC":
+        if st.button("❓ Ayuda", key="ayu_rec"): modal_ayuda_modulo(25)
+    elif opcion_almacen == "Entrada de Material":
+        if st.button("❓ Ayuda", key="ayu_ent"): modal_ayuda_modulo(28)
+    elif opcion_almacen == "Entradas y Salidas de Dinero":
+        if st.button("❓ Ayuda", key="ayu_din"): modal_ayuda_modulo(31)
+# ---------------------------------------------------------------------
 
 # ==================================================
 # 🧱 OPCIÓN 1: INSUMOS
@@ -537,8 +580,8 @@ elif opcion_almacen == "Herramientas (Activos)":
     except: df_her = pd.DataFrame(); lista_personal = []
 
     if not df_her.empty:
-        if "Responsable" not in df_her.columns: df_her["Responsable"] = "BODEGA"
-        df_her["Responsable"].fillna("BODEGA", inplace=True)
+        if "Responsable" not in df_her.columns: df_her["Responsable"] = "Bodega"
+        df_her["Responsable"].fillna("Bodega", inplace=True)
 
     tab1, tab2, tab3 = st.tabs(["Movimientos", "Inventario", "Historial"])
     
@@ -546,64 +589,34 @@ elif opcion_almacen == "Herramientas (Activos)":
         if tiene_permiso("Almacén: Prestar/Devolver Herramientas"):
             c1, c2 = st.columns(2)
             with c1:
-                with st.container(border=True):
-                    st.info("📤 Prestar Herramienta")
-                    if not df_her.empty:
-                        bodega = df_her[df_her["Responsable"] == "BODEGA"]
-                        if not bodega.empty:
-                            sel = st.selectbox("Selecciona Herramienta", bodega["Herramienta"].tolist(), key="prest_herr")
-                            resp = st.selectbox("Prestar a:", lista_personal, key="prest_resp")
-                            if st.button("Confirmar Préstamo", type="primary"):
-                                id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
-                                
-                                supabase.table("Herramientas").update({
-                                    "Responsable": str(resp)
-                                }).eq("id", int(id_h)).execute()
-                                
-                                try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
-                                except: pass
-                                st.success("✅ Prestado exitosamente"); time.sleep(1); st.rerun()
-                        else:
-                            st.warning("No hay herramientas disponibles en BODEGA.")
+                st.info("Prestar")
+                if not df_her.empty:
+                    bodega = df_her[df_her["Responsable"]=="Bodega"]
+                    if not bodega.empty:
+                        sel = st.selectbox("Herramienta", bodega["Herramienta"].tolist())
+                        resp = st.selectbox("A quien", lista_personal)
+                        if st.button("Prestar"):
+                            id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
+                            supabase.table("Herramientas").update({"Responsable": str(resp)}).eq("id", int(id_h)).execute()
+                            try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
+                            except: pass
+                            st.success("Prestado"); time.sleep(1); st.rerun()
             with c2:
-                with st.container(border=True):
-                    st.warning("📥 Devolver Herramienta")
-                    if not df_her.empty:
-                        prestadas = df_her[df_her["Responsable"] != "BODEGA"]
-                        if not prestadas.empty:
-                            sel_d = st.selectbox("Selecciona Herramienta a devolver", prestadas["Herramienta"].tolist(), key="dev_herr")
-                            
-                            if st.button("Confirmar Devolución", type="primary"):
-                                id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
-                                
-                                supabase.table("Herramientas").update({
-                                    "Responsable": "BODEGA"
-                                }).eq("id", int(id_h)).execute()
-                                
-                                try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "BODEGA"}).execute()
-                                except: pass
-                                st.success("✅ Devuelto exitosamente"); time.sleep(1); st.rerun()
-                        else:
-                            st.info("Todas las herramientas están actualmente en bodega.")
+                st.warning("Devolver")
+                if not df_her.empty:
+                    prestadas = df_her[df_her["Responsable"]!="Bodega"]
+                    if not prestadas.empty:
+                        sel_d = st.selectbox("Devolver", prestadas["Herramienta"].tolist())
+                        if st.button("Devolver"):
+                            id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
+                            supabase.table("Herramientas").update({"Responsable": "Bodega"}).eq("id", int(id_h)).execute()
+                            try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
+                            except: pass
+                            st.success("Devuelto"); time.sleep(1); st.rerun()
         else:
             st.warning("🔒 No tienes permiso para prestar ni devolver herramientas.")
 
-    with tab2:
-        if not df_her.empty:
-            df_view = df_her.copy()
-            
-            # TRUCO VISUAL: Si no está en bodega, reemplazamos el texto de la ubicación por el nombre de la persona
-            df_view.loc[df_view['Responsable'] != 'BODEGA', 'ubicacion'] = "En uso - " + df_view['Responsable']
-            
-            cols_mostrar = ["codigo", "Herramienta", "Estado", "Responsable", "ubicacion"]
-            for col in cols_mostrar:
-                if col not in df_view.columns: df_view[col] = ""
-            
-            df_display = df_view[cols_mostrar].rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"})
-            
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
-        else:
-            st.info("No hay inventario registrado.")
+    with tab2: st.dataframe(df_her, use_container_width=True)
 
     with tab3:
         @st.dialog("Detalles del Movimiento - Herramientas")
