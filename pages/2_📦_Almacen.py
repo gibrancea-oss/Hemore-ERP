@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components # <--- AGREGADO PARA EVITAR QUE SE TRABE
 import pandas as pd
 from datetime import datetime, timedelta, date
 import time
@@ -26,7 +25,7 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
-# FUNCIONES DEL MANUAL PDF (AISLADAS PARA QUE NO SE TRABE ⚡)
+# FUNCIONES DEL MANUAL PDF (OPTIMIZADO CON <OBJECT> ⚡)
 # ==========================================
 @st.cache_data
 def cargar_pdf_en_memoria(ruta_archivo):
@@ -38,12 +37,9 @@ def mostrar_pdf(ruta_archivo, pagina=1):
     try:
         base64_pdf = cargar_pdf_en_memoria(ruta_archivo)
         
-        # Usamos components.html en lugar de st.markdown. 
-        # Esto encapsula el PDF y evita que la página colapse.
-        html_code = f'''
-            <iframe src="data:application/pdf;base64,{base64_pdf}#page={pagina}" width="100%" height="650" style="border: none;"></iframe>
-        '''
-        components.html(html_code, height=660)
+        # La etiqueta <object> es la más estable para mostrar PDFs en Base64 sin que el navegador colapse
+        pdf_display = f'<object data="data:application/pdf;base64,{base64_pdf}#page={pagina}" type="application/pdf" width="100%" height="700px" style="border-radius: 8px;"></object>'
+        st.markdown(pdf_display, unsafe_allow_html=True)
         
     except FileNotFoundError:
         st.error("⚠️ No se encontró el archivo del manual. Asegúrate de que 'manual_hemore.pdf' esté en la misma carpeta que este código.")
@@ -541,6 +537,7 @@ if opcion_almacen == "Insumos (Consumibles)":
             st.write(f"**Descripción:** {row_info.get('descripcion', '')}")
             st.write(f"**Tipo de Movimiento:** {row_info.get('tipo_movimiento', '')}")
             st.write(f"**Cantidad:** {row_info.get('cantidad', '')}")
+            
             st.write(f"**Responsable / Detalles:** {row_info.get('responsable', '')}")
             
             st.divider()
