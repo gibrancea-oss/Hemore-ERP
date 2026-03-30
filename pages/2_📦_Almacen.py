@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, date
 import time
 import io
 import os
-import base64
 import utils 
 from fpdf import FPDF
 
@@ -25,32 +24,76 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
-# FUNCIONES DEL MANUAL PDF (OPTIMIZADO CON <OBJECT> ⚡)
+# MANUAL DE AYUDA NATIVO (ULTRA RÁPIDO ⚡)
 # ==========================================
-@st.cache_data
-def cargar_pdf_en_memoria(ruta_archivo):
-    """Lee el PDF una sola vez y lo guarda en la RAM ultrarrápida"""
-    with open(ruta_archivo, "rb") as f:
-        return base64.b64encode(f.read()).decode('utf-8')
+MANUAL_AYUDA = {
+    "Insumos": """
+### 📦 Control de Insumos (Consumibles)
+**📝 Registrar Movimientos**
+1. **Selecciona la Acción:** Elige si vas a hacer una 'Entrega (Salida)' o un 'Re-Stock (Entrada)'.
+2. **Busca el Insumo:** Usa la barra para encontrar tu material. Verás el stock actual a la derecha.
+3. **Ingresa la Cantidad:** Define cuántas unidades vas a mover.
+4. **Confirmar:** Selecciona a quién se le entrega o qué proveedor lo surtió y da clic en Confirmar.
 
-def mostrar_pdf(ruta_archivo, pagina=1):
-    try:
-        base64_pdf = cargar_pdf_en_memoria(ruta_archivo)
-        
-        # La etiqueta <object> es la más estable para mostrar PDFs en Base64 sin que el navegador colapse
-        pdf_display = f'<object data="data:application/pdf;base64,{base64_pdf}#page={pagina}" type="application/pdf" width="100%" height="700px" style="border-radius: 8px;"></object>'
-        st.markdown(pdf_display, unsafe_allow_html=True)
-        
-    except FileNotFoundError:
-        st.error("⚠️ No se encontró el archivo del manual. Asegúrate de que 'manual_hemore.pdf' esté en la misma carpeta que este código.")
+**📊 Existencias y 📜 Historial**
+En la pestaña de existencias puedes ver el inventario actualizado y descargarlo en Excel. En el historial puedes auditar cada movimiento, ver quién lo hizo y, si tienes permisos, eliminar registros incorrectos.
+    """,
+    "Herramientas": """
+### 🛠️ Control de Herramientas (Activos)
+**📤 Prestar Herramienta**
+Selecciona del menú izquierdo la herramienta disponible en bodega y a qué operador se la vas a entregar. Da clic en "Confirmar Préstamo".
+
+**📥 Devolver Herramienta**
+Selecciona del menú derecho la herramienta que te están devolviendo y da clic en "Confirmar Devolución" para regresarla a la bodega.
+
+**📋 Inventario y Historial**
+En inventario podrás ver en todo momento si una herramienta está en bodega o dice "En uso - [Nombre]". En historial tendrás la bitácora completa de préstamos y devoluciones.
+    """,
+    "Recibos": """
+### 📑 Recibos de Entrega OC (Salidas a Clientes)
+**➕ Nuevo Recibo**
+1. Escribe el número de Orden de Compra (O.C.) y verifica la fecha.
+2. Selecciona al Proveedor (Origen) y al Cliente (Destino).
+3. Llena la tabla interactiva con el Código, Descripción, Color y Cantidad de los productos a enviar.
+4. Da clic en 'Guardar y PDF' para generar tu documento listo para imprimir y recabar firmas.
+
+**📜 Historial**
+Aquí puedes auditar todas las salidas. Dando clic en 'Ver Detalle' puedes corregir algún código o cantidad equivocada y volver a imprimir el PDF corregido.
+    """,
+    "Entradas": """
+### 📥 Registro de Entrada de Material
+**➕ Nueva Entrada**
+1. Ingresa el folio de la O.C. o Remisión con la que llega el material.
+2. Selecciona la Fecha y el Proveedor que entrega.
+3. Llena la tabla con los materiales físicos que estás recibiendo.
+4. Agrega observaciones (si el material llegó dañado, incompleto, etc.) y da clic en 'Registrar Entrada'.
+
+**📜 Historial**
+Revisa tu bitácora de ingresos. Usa el botón 'Ver Detalle' si necesitas editar información o reimprimir la Constancia de Entrada.
+    """,
+    "Dinero": """
+### 💰 Entradas y Salidas de Dinero (Caja Chica)
+**➕ Nuevo Movimiento**
+1. Selecciona si entra dinero a caja o si sale (pagos).
+2. Ingresa quién entrega físicamente el dinero y quién lo recibe.
+3. Escribe la Cantidad exacta y describe detalladamente el motivo del movimiento.
+4. Da clic en 'Guardar y Generar Ticket' para descargar el comprobante con la cantidad en letras para firmas.
+
+**📜 Historial**
+Monitorea tu caja (🟢 Entradas, 🔴 Salidas). Dando clic en 'Ver Detalle' puedes corregir importes en caso de error y volver a generar el ticket.
+    """
+}
 
 @st.dialog("📖 Manual de Usuario Completo", width="large")
 def modal_manual_completo():
-    mostrar_pdf("manual_hemore.pdf", pagina=1)
+    for titulo, texto in MANUAL_AYUDA.items():
+        st.markdown(texto)
+        st.divider()
 
 @st.dialog("❓ Ayuda del Procedimiento", width="large")
-def modal_ayuda_modulo(pagina):
-    mostrar_pdf("manual_hemore.pdf", pagina=pagina)
+def modal_ayuda_modulo(modulo):
+    st.markdown(MANUAL_AYUDA[modulo])
+
 
 # --- HELPER FUNCTIONS ---
 def _bloque_folio_fecha(pdf, folio, fecha):
@@ -413,15 +456,15 @@ with c_tit:
     
 with c_ayu:
     if opcion_almacen == "Insumos (Consumibles)":
-        if st.button("❓ Ayuda", key="ayu_ins"): modal_ayuda_modulo(19)
+        if st.button("❓ Ayuda", key="ayu_ins"): modal_ayuda_modulo("Insumos")
     elif opcion_almacen == "Herramientas (Activos)":
-        if st.button("❓ Ayuda", key="ayu_herr"): modal_ayuda_modulo(22)
+        if st.button("❓ Ayuda", key="ayu_herr"): modal_ayuda_modulo("Herramientas")
     elif opcion_almacen == "Recibos de Entrega OC":
-        if st.button("❓ Ayuda", key="ayu_rec"): modal_ayuda_modulo(25)
+        if st.button("❓ Ayuda", key="ayu_rec"): modal_ayuda_modulo("Recibos")
     elif opcion_almacen == "Entrada de Material":
-        if st.button("❓ Ayuda", key="ayu_ent"): modal_ayuda_modulo(28)
+        if st.button("❓ Ayuda", key="ayu_ent"): modal_ayuda_modulo("Entradas")
     elif opcion_almacen == "Entradas y Salidas de Dinero":
-        if st.button("❓ Ayuda", key="ayu_din"): modal_ayuda_modulo(31)
+        if st.button("❓ Ayuda", key="ayu_din"): modal_ayuda_modulo("Dinero")
 # ---------------------------------------------------------------------
 
 # ==================================================
