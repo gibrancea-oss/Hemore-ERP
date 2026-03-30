@@ -24,78 +24,157 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
-# MANUAL DE AYUDA NATIVO (ULTRA RÁPIDO ⚡)
+# MANUAL DE AYUDA NATIVO (SÚPER DETALLADO Y CON SOPORTE DE IMÁGENES ⚡)
 # ==========================================
-MANUAL_AYUDA = {
-    "Insumos": """
-### 📦 Control de Insumos (Consumibles)
-**📝 Registrar Movimientos**
-1. **Selecciona la Acción:** Elige si vas a hacer una 'Entrega (Salida)' o un 'Re-Stock (Entrada)'.
-2. **Busca el Insumo:** Usa la barra para encontrar tu material. Verás el stock actual a la derecha.
-3. **Ingresa la Cantidad:** Define cuántas unidades vas a mover.
-4. **Confirmar:** Selecciona a quién se le entrega o qué proveedor lo surtió y da clic en Confirmar.
+def mostrar_imagen_ayuda(nombre_archivo, caption_texto):
+    """Muestra una imagen si existe en la carpeta, si no, muestra un recuadro de instrucción."""
+    if os.path.exists(nombre_archivo):
+        st.image(nombre_archivo, caption=caption_texto, use_container_width=True)
+    else:
+        st.info(f"📸 **Espacio para imagen:** (Para que aparezca aquí, guarda una captura de pantalla en la carpeta de tu programa con el nombre exacto: `{nombre_archivo}`)")
 
-**📊 Existencias y 📜 Historial**
-En la pestaña de existencias puedes ver el inventario actualizado y descargarlo en Excel. En el historial puedes auditar cada movimiento, ver quién lo hizo y, si tienes permisos, eliminar registros incorrectos.
-    """,
-    "Herramientas": """
-### 🛠️ Control de Herramientas (Activos)
-**📤 Prestar Herramienta**
-Selecciona del menú izquierdo la herramienta disponible en bodega y a qué operador se la vas a entregar. Da clic en "Confirmar Préstamo".
+def renderizar_manual(modulo):
+    if modulo == "Insumos" or modulo == "Todos":
+        st.markdown("## 📦 Módulo: Control de Insumos (Consumibles)")
+        st.markdown("Este módulo controla las entradas y salidas de la materia prima del día a día (tornillos, pintura, acero, soldadura, etc.).")
+        
+        st.markdown("### 📝 Pestaña: Registrar Movimientos")
+        st.markdown("""
+        **📤 Para hacer una SALIDA (Entrega a producción):**
+        1. Selecciona la opción superior **Entrega (Salida)**.
+        2. Escribe en el buscador el código o nombre del material. 
+        3. *Tip:* Al seleccionarlo, a la derecha aparecerá el Stock Actual y su Ubicación para que vayas a buscarlo a la bodega.
+        4. Escribe la **Cantidad** física que vas a entregar.
+        5. Selecciona al trabajador responsable que se lleva el material.
+        6. Haz clic en **Confirmar Salida**.
+        """)
+        mostrar_imagen_ayuda("ayuda_insumos_salida.png", "Ejemplo de registro de salida de material.")
+        
+        st.markdown("""
+        **📥 Para hacer una ENTRADA (Re-Stock de proveedor):**
+        1. Selecciona la opción superior **Re-Stock (Entrada)**.
+        2. Busca y selecciona el insumo que acaba de llegar.
+        3. Escribe la **Cantidad** que estás ingresando al almacén.
+        4. Llena los detalles de la compra: Selecciona el **Proveedor**, marca si trae factura o ticket, y anota el número de folio.
+        5. Haz clic en **Confirmar Entrada**.
+        """)
+        mostrar_imagen_ayuda("ayuda_insumos_entrada.png", "Ejemplo de registro de re-stock.")
+        
+        st.markdown("### 📊 Existencias y 📜 Historial")
+        st.markdown("""
+        * **Existencias:** Muestra una tabla en tiempo real con todo el inventario de la fábrica. Da clic en el botón de descargar para obtener un Excel ideal para inventarios físicos.
+        * **Historial:** Bitácora de todos los movimientos. Haz clic en el botón **Ver Detalle** al final de cada fila para auditar quién hizo el movimiento. Si eres administrador, verás un botón rojo para **Eliminar** el registro en caso de equivocación.
+        """)
+        if modulo != "Todos": return
 
-**📥 Devolver Herramienta**
-Selecciona del menú derecho la herramienta que te están devolviendo y da clic en "Confirmar Devolución" para regresarla a la bodega.
+    if modulo == "Todos": st.divider()
 
-**📋 Inventario y Historial**
-En inventario podrás ver en todo momento si una herramienta está en bodega o dice "En uso - [Nombre]". En historial tendrás la bitácora completa de préstamos y devoluciones.
-    """,
-    "Recibos": """
-### 📑 Recibos de Entrega OC (Salidas a Clientes)
-**➕ Nuevo Recibo**
-1. Escribe el número de Orden de Compra (O.C.) y verifica la fecha.
-2. Selecciona al Proveedor (Origen) y al Cliente (Destino).
-3. Llena la tabla interactiva con el Código, Descripción, Color y Cantidad de los productos a enviar.
-4. Da clic en 'Guardar y PDF' para generar tu documento listo para imprimir y recabar firmas.
+    if modulo == "Herramientas" or modulo == "Todos":
+        st.markdown("## 🛠️ Módulo: Control de Herramientas (Activos)")
+        st.markdown("Control estricto para evitar pérdidas de maquinaria y equipo pesado (esmeriladoras, taladros, extensiones, etc.).")
+        
+        st.markdown("### 🔄 Pestaña: Movimientos")
+        st.markdown("""
+        **📤 Prestar Herramienta (Lado Izquierdo):**
+        1. Selecciona la herramienta que vas a entregar. *Nota: Solo aparecen las que están físicamente en BODEGA.*
+        2. Elige de la lista al operador que se la lleva.
+        3. Da clic en **Confirmar Préstamo**.
+        
+        **📥 Devolver Herramienta (Lado Derecho):**
+        1. Al final del turno, selecciona la herramienta que te están regresando. *Nota: Solo aparecen las que están marcadas como prestadas.*
+        2. Da clic en **Confirmar Devolución**. El sistema la regresará al estatus de BODEGA.
+        """)
+        mostrar_imagen_ayuda("ayuda_herramientas.png", "Panel de préstamos y devoluciones.")
+        
+        st.markdown("### 📋 Inventario y 📜 Historial")
+        st.markdown("""
+        * **Inventario Inteligente:** Revisa dónde está cada equipo. Si un operador la tiene, la columna de Ubicación dirá automáticamente *"En uso - [Nombre del Operador]"*.
+        * **Historial:** Auditoría completa. El botón **Ver Detalle** te permite revisar la hora exacta del préstamo y borrar el registro si fue un error de captura (solo administradores).
+        """)
+        if modulo != "Todos": return
 
-**📜 Historial**
-Aquí puedes auditar todas las salidas. Dando clic en 'Ver Detalle' puedes corregir algún código o cantidad equivocada y volver a imprimir el PDF corregido.
-    """,
-    "Entradas": """
-### 📥 Registro de Entrada de Material
-**➕ Nueva Entrada**
-1. Ingresa el folio de la O.C. o Remisión con la que llega el material.
-2. Selecciona la Fecha y el Proveedor que entrega.
-3. Llena la tabla con los materiales físicos que estás recibiendo.
-4. Agrega observaciones (si el material llegó dañado, incompleto, etc.) y da clic en 'Registrar Entrada'.
+    if modulo == "Todos": st.divider()
 
-**📜 Historial**
-Revisa tu bitácora de ingresos. Usa el botón 'Ver Detalle' si necesitas editar información o reimprimir la Constancia de Entrada.
-    """,
-    "Dinero": """
-### 💰 Entradas y Salidas de Dinero (Caja Chica)
-**➕ Nuevo Movimiento**
-1. Selecciona si entra dinero a caja o si sale (pagos).
-2. Ingresa quién entrega físicamente el dinero y quién lo recibe.
-3. Escribe la Cantidad exacta y describe detalladamente el motivo del movimiento.
-4. Da clic en 'Guardar y Generar Ticket' para descargar el comprobante con la cantidad en letras para firmas.
+    if modulo == "Recibos" or modulo == "Todos":
+        st.markdown("## 📑 Módulo: Recibos de Entrega OC (Salidas a Clientes)")
+        st.markdown("Generación de comprobantes formales en PDF cuando se envía mobiliario terminado a un cliente.")
+        
+        st.markdown("### ➕ Pestaña: Nuevo Recibo")
+        st.markdown("""
+        1. **Datos Básicos:** Ingresa el número de O.C., verifica la fecha, y asegúrate de seleccionar al Proveedor (HEMORE) y al Cliente que recibe.
+        2. **Tabla de Productos:** Da clic en las celdas de la tabla para escribir el Código, Descripción, Color y Cantidad. 
+           * *Tip:* Si necesitas enviar 3 productos diferentes, simplemente haz clic en la fila de abajo y la tabla crecerá automáticamente.
+        3. Agrega **Observaciones** (ej. *Se entrega material emplayado*).
+        4. Haz clic en **Guardar y PDF**. Se generará el botón para descargar tu archivo listo para firmas.
+        """)
+        mostrar_imagen_ayuda("ayuda_recibos_nuevo.png", "Llenado de una salida a cliente.")
+        
+        st.markdown("### 📜 Pestaña: Historial (Centro de Corrección)")
+        st.markdown("""
+        Aquí puedes ver todas las remisiones de la historia.
+        ¿Te equivocaste en una cantidad o te faltó una observación? 
+        1. Busca el folio y haz clic en **Ver Detalle**.
+        2. Edita directamente las celdas de la tabla o los textos.
+        3. Haz clic en **Guardar Cambios** e inmediatamente después en **PDF** para descargar tu recibo corregido.
+        """)
+        mostrar_imagen_ayuda("ayuda_recibos_detalle.png", "Ventana de corrección y reimpresión.")
+        if modulo != "Todos": return
 
-**📜 Historial**
-Monitorea tu caja (🟢 Entradas, 🔴 Salidas). Dando clic en 'Ver Detalle' puedes corregir importes en caso de error y volver a generar el ticket.
-    """
-}
+    if modulo == "Todos": st.divider()
+
+    if modulo == "Entradas" or modulo == "Todos":
+        st.markdown("## 📥 Módulo: Entrada de Material")
+        st.markdown("Generación de constancias en PDF cuando se recibe materia prima o maquinaria de un proveedor externo.")
+        
+        st.markdown("### ➕ Pestaña: Nueva Entrada")
+        st.markdown("""
+        Funciona igual que las salidas a clientes, pero a la inversa:
+        1. Anota obligatoriamente el **Folio de la O.C. o Remisión** con la que llegó el camión.
+        2. Selecciona al **Proveedor** que surte.
+        3. Llena la tabla interactiva con lo que estás descargando físicamente (Código, Descripción, Cantidad).
+        4. Anota anomalías en **Observaciones** (ej. *Material rayado*).
+        5. Haz clic en **Registrar Entrada** y descarga tu PDF de constancia.
+        """)
+        mostrar_imagen_ayuda("ayuda_entradas_nuevo.png", "Recepción de material de proveedor.")
+        
+        st.markdown("### 📜 Pestaña: Historial")
+        st.markdown("""
+        Auditoría de recepciones. Usa el botón **Ver Detalle** para corregir cualquier error de captura que hayas tenido al descargar el camión apresuradamente, y vuelve a imprimir tu Constancia en PDF.
+        """)
+        if modulo != "Todos": return
+
+    if modulo == "Todos": st.divider()
+
+    if modulo == "Dinero" or modulo == "Todos":
+        st.markdown("## 💰 Módulo: Entradas y Salidas de Dinero (Caja Chica)")
+        st.markdown("Control financiero para maniobras, fletes rápidos y viáticos, amparado con tickets impresos.")
+        
+        st.markdown("### ➕ Pestaña: Nuevo Movimiento")
+        st.markdown("""
+        1. Selecciona si es una entrada a la caja chica o un gasto (salida).
+        2. Escribe claramente quién está dando el dinero físico y quién lo recibe.
+        3. Ingresa la **Cantidad ($)**. Usa los botones laterales o escribe la cifra exacta con decimales.
+        4. Detalla exactamente para qué es el dinero en la caja de descripción.
+        5. Haz clic en **Guardar y Generar Ticket**. El sistema escribirá automáticamente el importe con letras y generará las líneas para las firmas físicas.
+        """)
+        mostrar_imagen_ayuda("ayuda_dinero_nuevo.png", "Registro de gasto de caja chica.")
+        
+        st.markdown("### 📜 Pestaña: Historial")
+        st.markdown("""
+        Revisa los flujos de la caja identificándolos rápidamente por color (🟢 Entradas, 🔴 Salidas). 
+        Si hubo un error de centavos, haz clic en **Ver Detalle**, corrige el monto, guarda y vuelve a **Reimprimir el Ticket**.
+        """)
 
 @st.dialog("📖 Manual de Usuario Completo", width="large")
 def modal_manual_completo():
-    for titulo, texto in MANUAL_AYUDA.items():
-        st.markdown(texto)
-        st.divider()
+    renderizar_manual("Todos")
 
 @st.dialog("❓ Ayuda del Procedimiento", width="large")
 def modal_ayuda_modulo(modulo):
-    st.markdown(MANUAL_AYUDA[modulo])
+    renderizar_manual(modulo)
 
 
-# --- HELPER FUNCTIONS ---
+# --- HELPER FUNCTIONS PDF ---
 def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_font('Arial', 'B', 10)
     pdf.set_xy(140, 25); pdf.cell(25, 6, "Folio:", 0, 0, 'R'); pdf.set_font('Arial', '', 10); pdf.cell(30, 6, str(folio), 0, 1, 'L')
@@ -580,7 +659,6 @@ if opcion_almacen == "Insumos (Consumibles)":
             st.write(f"**Descripción:** {row_info.get('descripcion', '')}")
             st.write(f"**Tipo de Movimiento:** {row_info.get('tipo_movimiento', '')}")
             st.write(f"**Cantidad:** {row_info.get('cantidad', '')}")
-            
             st.write(f"**Responsable / Detalles:** {row_info.get('responsable', '')}")
             
             st.divider()
