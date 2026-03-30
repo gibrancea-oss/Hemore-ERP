@@ -25,6 +25,103 @@ def tiene_permiso(permiso):
     return permiso in st.session_state.get("permisos", [])
 
 # ==========================================
+# MANUAL DE AYUDA NATIVO (CONFIGURACIÓN ⚡)
+# ==========================================
+def renderizar_manual_config(modulo):
+    if modulo == "Personal" or modulo == "Todos":
+        st.markdown("## 👥 Módulo: Personal y Accesos")
+        st.markdown("Exclusivo para administradores. Aquí controlas quién entra al sistema y qué puede hacer.")
+        st.markdown("""
+        **➕ Alta Personal:**
+        1. Llena los datos generales del empleado.
+        2. Crea su **Usuario** y **Contraseña / PIN** (con estos datos iniciará sesión).
+        3. En la lista desplegable de **Permisos**, selecciona exactamente qué botones y pantallas podrá usar en el Almacén o Finanzas. 
+        4. Haz clic en Guardar.
+        
+        **📋 Kardex y Accesos:**
+        Muestra a todo el personal. Dando clic en **Ver / Editar** puedes cambiar contraseñas, agregarle nuevos permisos, o dar de baja (eliminar) a un usuario que ya no labora en la empresa.
+        """)
+        if modulo != "Todos": return
+
+    if modulo == "Todos": st.divider()
+
+    if modulo == "Insumos" or modulo == "Todos":
+        st.markdown("## 📦 Módulo: Catálogo de Insumos")
+        st.markdown("Aquí se 'bautizan' los materiales nuevos. **Ojo:** Aquí no se mete stock, solo se crea el nombre oficial para que el almacén lo pueda usar.")
+        st.markdown("""
+        **➕ Alta Manual:**
+        Escribe el Código/SKU, la descripción exacta, la unidad de medida (Pzas, Kg, Mts) y el stock mínimo ideal. Da clic en Guardar.
+        
+        **📋 Inventario Maestro:**
+        Aquí puedes ver la lista completa. Si escribiste mal un nombre o quieres cambiar el stock mínimo, modifica la celda directamente y da clic en **Guardar Cambios**.
+        """)
+        if modulo != "Todos": return
+
+    if modulo == "Todos": st.divider()
+
+    if modulo == "Herramientas" or modulo == "Todos":
+        st.markdown("## 🛠️ Módulo: Catálogo de Herramientas")
+        st.markdown("Registro maestro de la maquinaria y equipo de la empresa.")
+        st.markdown("""
+        **➕ Alta de Herramienta:**
+        Asigna un Código (ID), el nombre del equipo, su estado físico y quién la tiene inicialmente (usualmente BODEGA).
+        
+        **📋 Inventario de Activos:**
+        Catálogo completo editable. Aquí puedes corregir nombres o estatus directamente en la tabla y dar clic en **Actualizar Catálogo**.
+        """)
+        if modulo != "Todos": return
+
+    if modulo == "Todos": st.divider()
+
+    if modulo == "Clientes" or modulo == "Todos":
+        st.markdown("## 🏢 Módulo: Clientes")
+        st.markdown("Directorio para las salidas de almacén.")
+        st.markdown("""
+        **➕ Alta Cliente:**
+        Llena el Nombre de la empresa o persona, RFC y datos de contacto. El nombre es obligatorio porque es el que aparecerá en los Recibos de Entrega PDF.
+        
+        **📋 Lista de Clientes:**
+        Edita la información de contacto o fiscal directamente en la tabla y guarda los cambios.
+        """)
+        if modulo != "Todos": return
+
+    if modulo == "Todos": st.divider()
+    
+    if modulo == "Proveedores" or modulo == "Todos":
+        st.markdown("## 🚚 Módulo: Proveedores")
+        st.markdown("Directorio para las entradas de almacén.")
+        st.markdown("""
+        **➕ Alta Proveedor:**
+        Registra a las empresas que surten a HEMORE. Este nombre será el que el Almacén seleccione al registrar llegadas de material o compras.
+        
+        **📋 Lista de Proveedores:**
+        Mantén el directorio actualizado modificando las celdas directamente.
+        """)
+        if modulo != "Todos": return
+
+    if modulo == "Todos": st.divider()
+
+    if modulo == "Etiquetas" or modulo == "Todos":
+        st.markdown("## 📂 Módulo: Catálogos y Etiquetas QR")
+        st.markdown("Generador automático de etiquetas para el inventario físico.")
+        st.markdown("""
+        1. Entra a la pestaña de Insumos o Herramientas.
+        2. Verás tu catálogo completo y el código QR generado automáticamente por el sistema.
+        3. En la columna de la izquierda, marca la casilla (**Seleccionar**) de todas las etiquetas que necesites imprimir.
+        4. Haz clic en **Generar PDF**.
+        5. Descarga el archivo. Está configurado con las medidas exactas (3.0 x 2.3 cm) para mandarse a una impresora de etiquetas térmicas.
+        """)
+
+@st.dialog("📖 Manual de Configuración", width="large")
+def modal_manual_completo_config():
+    renderizar_manual_config("Todos")
+
+@st.dialog("❓ Ayuda del Módulo", width="large")
+def modal_ayuda_modulo_config(modulo):
+    renderizar_manual_config(modulo)
+
+
+# ==========================================
 # FUNCIONES AUXILIARES (QR y PDF)
 # ==========================================
 def get_qr_data_url(text):
@@ -128,12 +225,41 @@ if not opciones_config:
 
 opcion = st.sidebar.radio("Selecciona Módulo:", opciones_config)
 
+# --- BOTÓN DE MANUAL COMPLETO ---
+st.sidebar.divider()
+if st.sidebar.button("📖 Leer Manual de Configuración", use_container_width=True):
+    modal_manual_completo_config()
+# --------------------------------
+
+# --- TÍTULOS DINÁMICOS CON BOTÓN DE AYUDA ---
+c_tit, c_ayu = st.columns([9, 1])
+with c_tit:
+    if opcion == "Personal": st.title("👥 GESTIÓN DE PERSONAL")
+    elif opcion == "Insumos": st.title("📦 CATÁLOGO DE INSUMOS")
+    elif opcion == "Herramientas": st.title("🛠️ CATÁLOGO DE HERRAMIENTAS")
+    elif opcion == "Clientes": st.title("🏢 DIRECTORIO DE CLIENTES")
+    elif opcion == "Proveedores": st.title("🚚 DIRECTORIO DE PROVEEDORES")
+    else: st.title("📂 CATÁLOGOS Y ETIQUETAS QR")
+
+with c_ayu:
+    if opcion == "Personal":
+        if st.button("❓ Ayuda", key="ayu_pers"): modal_ayuda_modulo_config("Personal")
+    elif opcion == "Insumos":
+        if st.button("❓ Ayuda", key="ayu_cat_ins"): modal_ayuda_modulo_config("Insumos")
+    elif opcion == "Herramientas":
+        if st.button("❓ Ayuda", key="ayu_cat_herr"): modal_ayuda_modulo_config("Herramientas")
+    elif opcion == "Clientes":
+        if st.button("❓ Ayuda", key="ayu_cli"): modal_ayuda_modulo_config("Clientes")
+    elif opcion == "Proveedores":
+        if st.button("❓ Ayuda", key="ayu_prov"): modal_ayuda_modulo_config("Proveedores")
+    else:
+        if st.button("❓ Ayuda", key="ayu_etiq"): modal_ayuda_modulo_config("Etiquetas")
+# --------------------------------------------
+
 # ==========================================
 # 1. PERSONAL (CON CONTROL DE ACCESOS Y DIALOG)
 # ==========================================
 if opcion == "Personal":
-    st.markdown("### 👥 Gestión de Recursos Humanos y Accesos")
-    
     lista_permisos = [
         "Configuración: Personal", "Configuración: Insumos", "Configuración: Herramientas", 
         "Configuración: Clientes", "Configuración: Proveedores", "Configuración: Generar QR",
@@ -297,7 +423,6 @@ if opcion == "Personal":
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
-    st.markdown("### 📦 Gestión de Almacén e Insumos")
     try:
         response = utils.supabase.table("Insumos").select("*").order("id").execute()
         df = pd.DataFrame(response.data)
@@ -308,7 +433,7 @@ elif opcion == "Insumos":
     with t1:
         with st.form("alta_insumo"):
             c1, c2 = st.columns([1, 3]); cod = c1.text_input("Código / SKU"); nom = c2.text_input("Descripción")
-            c3, c4, c5 = st.columns(3); uni = c3.selectbox("Unidad", lista_unidades); cant = c4.number_input("Cantidad", min_value=0.0); mini = c5.number_input("Min", value=5.0)
+            c3, c4, c5 = st.columns(3); uni = c3.selectbox("Unidad", lista_unidades); cant = c4.number_input("Cantidad Inicial (Opcional)", min_value=0.0); mini = c5.number_input("Stock Min", value=5.0)
             ubi = st.text_input("Ubicación")
             
             if st.form_submit_button("Guardar Insumo"):
@@ -318,7 +443,7 @@ elif opcion == "Insumos":
                     try:
                         utils.supabase.table("Insumos").insert(datos).execute()
                         st.success("✅ Guardado correctamente"); time.sleep(1); st.rerun()
-                    except Exception as e: st.error(f"Error: {e}. ¿Creaste la columna en Supabase?")
+                    except Exception as e: st.error(f"Error: {e}.")
                 else: st.warning("Código y Descripción obligatorios.")
     with t2:
         if not df.empty:
@@ -337,12 +462,10 @@ elif opcion == "Insumos":
 # 3. HERRAMIENTAS (Módulo Configuración)
 # ==========================================
 elif opcion == "Herramientas":
-    st.markdown("### 🛠️ Gestión de Herramientas (Activos)")
     try:
         response = utils.supabase.table("Herramientas").select("*").order("id").execute()
         df = pd.DataFrame(response.data)
         
-        # Obtener personal para la lista de responsables
         res_pers = utils.supabase.table("Personal").select("nombre").eq("activo", True).execute()
         lista_personal = ["BODEGA"] + [p["nombre"] for p in res_pers.data] if res_pers.data else ["BODEGA"]
     except: 
@@ -368,7 +491,7 @@ elif opcion == "Herramientas":
                 if sku_id_h and nombre_h:
                     datos_herramienta = {
                         "codigo": sku_id_h, 
-                        "ID_Herramienta": sku_id_h,  # Se guarda el mismo valor en ambas columnas
+                        "ID_Herramienta": sku_id_h,
                         "Herramienta": nombre_h, 
                         "Estado": estado_h, 
                         "Responsable": responsable_h,
@@ -382,13 +505,11 @@ elif opcion == "Herramientas":
 
     with t2:
         if not df.empty:
-            # Seleccionamos solo una columna de código para mostrar
             cols_base = ["id", "codigo", "Herramienta", "Estado", "Responsable", "ubicacion"]
             for col in cols_base:
                 if col not in df.columns: df[col] = ""
             
             df_view = df[cols_base].copy()
-            # Renombramos visualmente para que sea más intuitivo
             df_view.rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"}, inplace=True)
             
             edited_h = st.data_editor(df_view, num_rows="dynamic", use_container_width=True, hide_index=True)
@@ -396,19 +517,15 @@ elif opcion == "Herramientas":
             if st.button("💾 Actualizar Catálogo", type="primary"):
                 try:
                     for i, r in edited_h.iterrows():
-                        # Reconstruimos el diccionario mapeando los nombres visuales a los de la BD
                         d = {
                             "codigo": r.get("Código / ID"),
-                            "ID_Herramienta": r.get("Código / ID"), # Replicamos la actualización en la BD
+                            "ID_Herramienta": r.get("Código / ID"), 
                             "Herramienta": r.get("Herramienta"),
                             "Estado": r.get("Estado"),
                             "Responsable": r.get("Responsable"),
                             "ubicacion": r.get("Ubicación")
                         }
-                        
-                        # Filtramos valores nulos
                         d = {k: v for k, v in d.items() if pd.notna(v)}
-                        
                         id_row = r.get("id")
                         if pd.notna(id_row) and str(id_row).strip() != "": 
                             utils.supabase.table("Herramientas").update(d).eq("id", id_row).execute()
@@ -424,7 +541,6 @@ elif opcion == "Herramientas":
 # 4. CLIENTES
 # ==========================================
 elif opcion == "Clientes":
-    st.markdown("### 🏢 Gestión de Clientes")
     try: 
         df = pd.DataFrame(utils.supabase.table("Clientes").select("*").order("id").execute().data)
     except: 
@@ -451,19 +567,12 @@ elif opcion == "Clientes":
             if st.form_submit_button("Guardar Cliente", type="primary"):
                 if nombre_cli:
                     datos_cli = {
-                        "nombre": nombre_cli, 
-                        "rfc": rfc_cli, 
-                        "telefono": telefono_cli,
-                        "email": email_cli,
-                        "direccion": direccion_cli, 
-                        "colonia": colonia_cli, 
-                        "codigo_postal": cp_cli,
-                        "estado": estado_cli
+                        "nombre": nombre_cli, "rfc": rfc_cli, "telefono": telefono_cli, "email": email_cli,
+                        "direccion": direccion_cli, "colonia": colonia_cli, "codigo_postal": cp_cli, "estado": estado_cli
                     }
                     utils.supabase.table("Clientes").insert(datos_cli).execute()
                     st.success("✅ Cliente registrado correctamente.")
-                    time.sleep(1)
-                    st.rerun()
+                    time.sleep(1); st.rerun()
                 else:
                     st.warning("⚠️ El nombre del cliente es obligatorio.")
     with t2:
@@ -471,17 +580,14 @@ elif opcion == "Clientes":
         if st.button("💾 Actualizar Clientes"):
             for i, r in edited_c.iterrows():
                 d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
-                if pd.notna(r['id']): 
-                    utils.supabase.table("Clientes").update(d).eq("id", r['id']).execute()
-                else: 
-                    utils.supabase.table("Clientes").insert(d).execute()
+                if pd.notna(r['id']): utils.supabase.table("Clientes").update(d).eq("id", r['id']).execute()
+                else: utils.supabase.table("Clientes").insert(d).execute()
             st.rerun()
 
 # ==========================================
 # 5. PROVEEDORES
 # ==========================================
 elif opcion == "Proveedores":
-    st.markdown("### 🚚 Gestión de Proveedores")
     try: 
         df = pd.DataFrame(utils.supabase.table("Proveedores").select("*").order("id").execute().data)
     except: 
@@ -507,19 +613,12 @@ elif opcion == "Proveedores":
             if st.form_submit_button("Guardar Proveedor", type="primary"):
                 if nombre_prov:
                     datos_prov = {
-                        "nombre": nombre_prov, 
-                        "empresa": nombre_prov, 
-                        "rfc": rfc_prov, 
-                        "contacto": contacto_prov,
-                        "telefono": telefono_prov,
-                        "domicilio": domicilio_prov,
-                        "colonia": colonia_prov,
-                        "codigo_postal": cp_prov
+                        "nombre": nombre_prov, "empresa": nombre_prov, "rfc": rfc_prov, "contacto": contacto_prov,
+                        "telefono": telefono_prov, "domicilio": domicilio_prov, "colonia": colonia_prov, "codigo_postal": cp_prov
                     }
                     utils.supabase.table("Proveedores").insert(datos_prov).execute()
                     st.success("✅ Proveedor registrado correctamente.")
-                    time.sleep(1)
-                    st.rerun()
+                    time.sleep(1); st.rerun()
                 else:
                     st.warning("⚠️ El nombre de la empresa es obligatorio.")
     with t2:
@@ -528,17 +627,14 @@ elif opcion == "Proveedores":
             for i, r in edited_p.iterrows():
                 d = {k: v for k, v in r.items() if k != 'id' and pd.notna(v)}
                 d["empresa"] = d.get("nombre", "")
-                if pd.notna(r['id']): 
-                    utils.supabase.table("Proveedores").update(d).eq("id", r['id']).execute()
-                else: 
-                    utils.supabase.table("Proveedores").insert(d).execute()
+                if pd.notna(r['id']): utils.supabase.table("Proveedores").update(d).eq("id", r['id']).execute()
+                else: utils.supabase.table("Proveedores").insert(d).execute()
             st.rerun()
 
 # ==========================================
 # 6. CATÁLOGOS & ETIQUETAS QR
 # ==========================================
 elif "Etiquetas" in opcion:
-    st.markdown("### 📂 Catálogos y Etiquetas QR")
     tab_ins, tab_her = st.tabs(["📦 Etiquetas Insumos", "🛠️ Etiquetas Herramientas"])
     
     with tab_ins:
@@ -562,14 +658,9 @@ elif "Etiquetas" in opcion:
             res = utils.supabase.table("Herramientas").select("*").order("id").execute()
             df_her = pd.DataFrame(res.data)
             if not df_her.empty:
-                # 1. Filtramos SOLO las columnas que necesitamos para evitar duplicados con la base de datos
                 df_her_clean = df_her[["codigo", "Herramienta"]].copy()
-                
-                # 2. Generamos el QR y la columna de selección
                 df_her_clean["QR_Img"] = df_her_clean["codigo"].apply(get_qr_data_url)
                 df_her_clean["Seleccionar"] = False
-                
-                # 3. Renombramos 'Herramienta' a 'descripcion' con total seguridad
                 df_her_tag = df_her_clean.rename(columns={"Herramienta": "descripcion"})
                 
                 edited_her = st.data_editor(
