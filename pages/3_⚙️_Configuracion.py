@@ -82,7 +82,7 @@ def renderizar_manual_config(modulo):
         Esta es tu base de datos central en formato de tabla editable (como Excel).
         * Si notas que un insumo tiene una falta de ortografía, o si decidieron cambiar de pasillo un material, simplemente **haz doble clic en la celda**, escribe el nuevo dato y presiona Enter.
         * 🚨 **ELIMINAR UN INSUMO:** Si deseas borrar de manera perpetua un material del sistema, desplázate a la última columna de la tabla y **marca la casilla `🗑️ Eliminar`** correspondiente a esa fila.
-        * Haz clic en **💾 Guardar Cambios** al fondo para que el sistema actualice toda la base de datos y borre permanentemente los registros que hayas marcado al instante.
+        * Haz clic en **💾 Guardar Cambios** al fondo para que el sistema actualice toda la base de datos y borre permanentemente los registros que hayas marcado.
         """)
         if modulo != "Todos": return
 
@@ -440,17 +440,17 @@ if opcion == "Personal":
                         "usuario": n_user, "pin": n_pin, "permisos": permisos_str_update,
                         "activo": n_activo
                     }
-                    utils.supabase.table("Personal").update(datos_update).eq("id", int(emp_id)).execute()
-                    st.toast("✅ Información actualizada al momento.", icon="✅")
-                    time.sleep(0.5)
+                    utils.supabase.table("Personal").update(datos_update).eq("id", emp_id).execute()
+                    st.success("✅ Información actualizada correctamente.")
+                    time.sleep(1)
                     st.rerun()
                 else:
                     st.error("Nombre, Usuario y Contraseña no pueden estar vacíos.")
             
             if col_b.button("🗑️ ELIMINAR DEL SISTEMA", type="secondary", use_container_width=True, key=f"btn_d_{emp_id}"):
-                utils.supabase.table("Personal").delete().eq("id", int(emp_id)).execute()
-                st.toast("⚠️ Empleado eliminado.", icon="🗑️")
-                time.sleep(0.5)
+                utils.supabase.table("Personal").delete().eq("id", emp_id).execute()
+                st.warning("⚠️ Empleado eliminado de la base de datos.")
+                time.sleep(1)
                 st.rerun()
 
         if not df_personal.empty:
@@ -536,24 +536,46 @@ elif opcion == "Insumos":
                 }
             )
             
-            if st.button("💾 Guardar Cambios"):
-                for i, r in edited.iterrows():
-                    if r.get("🗑️ Eliminar", False):
-                        if pd.notna(r["id"]):
-                            utils.supabase.table("Insumos").delete().eq("id", int(r["id"])).execute()
-                    else:
-                        d = {"codigo": str(r["codigo"]), "Descripcion": str(r["Descripcion"]), "Insumo": str(r["Descripcion"]), "Cantidad": float(r["Cantidad"]), "Unidad": str(r["Unidad"]), "stock_minimo": float(r["stock_minimo"])}
-                        if "ubicacion" in r: d["ubicacion"] = str(r["ubicacion"])
-                        
-                        if pd.notna(r["id"]): 
-                            utils.supabase.table("Insumos").update(d).eq("id", int(r["id"])).execute()
-                        else: 
-                            if str(r["codigo"]).strip() != "" and str(r["Descripcion"]).strip() != "":
-                                utils.supabase.table("Insumos").insert(d).execute()
+            if st.button("💾 Guardar Cambios", type="primary"):
+                try:
+                    to_upsert = []
+                    to_delete = []
+                    
+                    for i, r in edited.iterrows():
+                        if r.get("🗑️ Eliminar", False):
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                to_delete.append(int(r["id"]))
+                        else:
+                            d = {
+                                "codigo": str(r.get("codigo", "")),
+                                "Descripcion": str(r.get("Descripcion", "")),
+                                "Insumo": str(r.get("Descripcion", "")),
+                                "Cantidad": float(r.get("Cantidad", 0) if pd.notna(r.get("Cantidad")) else 0),
+                                "Unidad": str(r.get("Unidad", "")),
+                                "stock_minimo": float(r.get("stock_minimo", 0) if pd.notna(r.get("stock_minimo")) else 0)
+                            }
+                            if "ubicacion" in r:
+                                d["ubicacion"] = str(r.get("ubicacion", ""))
+                            
+                            # Si ya existe en BD, agregamos su ID
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                d["id"] = int(r["id"])
+                            elif d["codigo"].strip() == "" or d["Descripcion"].strip() == "":
+                                continue  # Ignora filas vacías si alguien le dio al + accidentalmente
                                 
-                st.toast("✅ Lista actualizada al momento", icon="✅")
-                time.sleep(0.4) # Retardo milimétrico para que la base de datos procese antes de recargar
-                st.rerun()
+                            to_upsert.append(d)
+                    
+                    # Ejecutamos en lote (BULK) para evitar el error httpx.ReadError
+                    if to_delete:
+                        utils.supabase.table("Insumos").delete().in_("id", to_delete).execute()
+                    if to_upsert:
+                        utils.supabase.table("Insumos").upsert(to_upsert).execute()
+                        
+                    st.toast("✅ Inventario actualizado al momento", icon="✅")
+                    time.sleep(0.5) 
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al guardar los cambios: {e}")
 
 # ==========================================
 # 3. HERRAMIENTAS (Módulo Configuración)
@@ -631,10 +653,13 @@ elif opcion == "Herramientas":
             
             if st.button("💾 Actualizar Catálogo", type="primary"):
                 try:
+                    to_upsert = []
+                    to_delete = []
+                    
                     for i, r in edited_h.iterrows():
                         if r.get("🗑️ Eliminar", False):
-                            if pd.notna(r["id"]):
-                                utils.supabase.table("Herramientas").delete().eq("id", int(r["id"])).execute()
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                to_delete.append(int(r["id"]))
                         else:
                             d = {
                                 "codigo": str(r.get("Código / ID", "")),
@@ -644,17 +669,22 @@ elif opcion == "Herramientas":
                                 "Responsable": str(r.get("Responsable", "")),
                                 "ubicacion": str(r.get("Ubicación", ""))
                             }
-                            d = {k: v for k, v in d.items() if pd.notna(v)}
                             
-                            id_row = r.get("id")
-                            if pd.notna(id_row) and str(id_row).strip() != "": 
-                                utils.supabase.table("Herramientas").update(d).eq("id", int(id_row)).execute()
-                            else: 
-                                if str(r.get("Código / ID", "")).strip() != "" and str(r.get("Herramienta", "")).strip() != "":
-                                    utils.supabase.table("Herramientas").insert(d).execute()
-                            
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                d["id"] = int(r["id"])
+                            elif d["codigo"].strip() == "" or d["Herramienta"].strip() == "":
+                                continue
+
+                            to_upsert.append(d)
+                    
+                    # BULK EXECUTION
+                    if to_delete:
+                        utils.supabase.table("Herramientas").delete().in_("id", to_delete).execute()
+                    if to_upsert:
+                        utils.supabase.table("Herramientas").upsert(to_upsert).execute()
+                        
                     st.toast("✅ Catálogo sincronizado al momento.", icon="✅")
-                    time.sleep(0.4)
+                    time.sleep(0.5)
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error al actualizar: {e}")
@@ -721,22 +751,36 @@ elif opcion == "Clientes":
                 }
             )
             
-            if st.button("💾 Actualizar Clientes"):
-                for i, r in edited_c.iterrows():
-                    if r.get("🗑️ Eliminar", False):
-                        if pd.notna(r["id"]):
-                            utils.supabase.table("Clientes").delete().eq("id", int(r["id"])).execute()
-                    else:
-                        d = {k: str(v) for k, v in r.items() if k not in ['id', '🗑️ Eliminar', 'created_at'] and pd.notna(v)}
-                        if pd.notna(r['id']): 
-                            utils.supabase.table("Clientes").update(d).eq("id", int(r['id'])).execute()
-                        else: 
-                            if d.get("nombre", "").strip() != "":
-                                utils.supabase.table("Clientes").insert(d).execute()
+            if st.button("💾 Actualizar Clientes", type="primary"):
+                try:
+                    to_upsert = []
+                    to_delete = []
+                    
+                    for i, r in edited_c.iterrows():
+                        if r.get("🗑️ Eliminar", False):
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                to_delete.append(int(r["id"]))
+                        else:
+                            d = {k: str(v) for k, v in r.items() if k not in ['id', '🗑️ Eliminar', 'created_at'] and pd.notna(v)}
+                            
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                d["id"] = int(r["id"])
+                            elif d.get("nombre", "").strip() == "":
+                                continue
                                 
-                st.toast("✅ Clientes actualizados al momento.", icon="✅")
-                time.sleep(0.4)
-                st.rerun()
+                            to_upsert.append(d)
+                    
+                    # BULK EXECUTION
+                    if to_delete:
+                        utils.supabase.table("Clientes").delete().in_("id", to_delete).execute()
+                    if to_upsert:
+                        utils.supabase.table("Clientes").upsert(to_upsert).execute()
+                        
+                    st.toast("✅ Clientes actualizados al momento.", icon="✅")
+                    time.sleep(0.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al actualizar: {e}")
 
 # ==========================================
 # 5. PROVEEDORES
@@ -799,24 +843,37 @@ elif opcion == "Proveedores":
                 }
             )
             
-            if st.button("💾 Actualizar Proveedores"):
-                for i, r in edited_p.iterrows():
-                    if r.get("🗑️ Eliminar", False):
-                        if pd.notna(r["id"]):
-                            utils.supabase.table("Proveedores").delete().eq("id", int(r["id"])).execute()
-                    else:
-                        d = {k: str(v) for k, v in r.items() if k not in ['id', '🗑️ Eliminar', 'created_at'] and pd.notna(v)}
-                        d["empresa"] = d.get("nombre", "")
-                        
-                        if pd.notna(r['id']): 
-                            utils.supabase.table("Proveedores").update(d).eq("id", int(r['id'])).execute()
-                        else: 
-                            if d.get("nombre", "").strip() != "":
-                                utils.supabase.table("Proveedores").insert(d).execute()
+            if st.button("💾 Actualizar Proveedores", type="primary"):
+                try:
+                    to_upsert = []
+                    to_delete = []
+                    
+                    for i, r in edited_p.iterrows():
+                        if r.get("🗑️ Eliminar", False):
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                to_delete.append(int(r["id"]))
+                        else:
+                            d = {k: str(v) for k, v in r.items() if k not in ['id', '🗑️ Eliminar', 'created_at'] and pd.notna(v)}
+                            d["empresa"] = d.get("nombre", "")
+                            
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                d["id"] = int(r["id"])
+                            elif d.get("nombre", "").strip() == "":
+                                continue
                                 
-                st.toast("✅ Proveedores actualizados al momento.", icon="✅")
-                time.sleep(0.4)
-                st.rerun()
+                            to_upsert.append(d)
+                            
+                    # BULK EXECUTION
+                    if to_delete:
+                        utils.supabase.table("Proveedores").delete().in_("id", to_delete).execute()
+                    if to_upsert:
+                        utils.supabase.table("Proveedores").upsert(to_upsert).execute()
+                        
+                    st.toast("✅ Proveedores actualizados al momento.", icon="✅")
+                    time.sleep(0.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al actualizar: {e}")
 
 # ==========================================
 # 6. CATÁLOGOS & ETIQUETAS QR
