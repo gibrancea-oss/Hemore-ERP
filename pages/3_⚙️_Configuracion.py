@@ -542,29 +542,47 @@ elif "Etiquetas" in opcion:
     tab_ins, tab_her = st.tabs(["📦 Etiquetas Insumos", "🛠️ Etiquetas Herramientas"])
     with tab_ins:
         try:
-            res = utils.supabase.table("Insumos").select("*").order("id").execute(); df_ins = pd.DataFrame(res.data)
+            res = utils.supabase.table("Insumos").select("*").order("id").execute()
+            df_ins = pd.DataFrame(res.data)
             if not df_ins.empty:
                 df_ins.columns = df_ins.columns.str.lower()
-                df_ins["QR_Img"] = df_ins["codigo"].apply(get_qr_data_url); df_ins["Seleccionar"] = False
+                df_ins["QR_Img"] = df_ins["codigo"].apply(get_qr_data_url)
+                df_ins["Seleccionar"] = False
                 edited_ins = st.data_editor(df_ins[["Seleccionar", "QR_Img", "codigo", "descripcion"]], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
                 if st.button("🖨️ Generar PDF Insumos"):
                     sel = edited_ins[edited_ins["Seleccionar"] == True]
-                    if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Insumos"); st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Insumos.pdf")
+                    if not sel.empty: 
+                        pdf = generar_pdf_etiquetas_qr(sel, "Insumos")
+                        st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Insumos.pdf")
         except: st.error("Error cargando datos")
+    
     with tab_her:
         try:
-            res = utils.supabase.table("Herramientas").select("*").order("id").execute(); df_her = pd.DataFrame(res.data)
+            res = utils.supabase.table("Herramientas").select("*").order("id").execute()
+            df_her = pd.DataFrame(res.data)
             if not df_her.empty:
-                df_her["QR_Img"] = df_her["codigo"].apply(get_qr_data_url); df_her["Seleccionar"] = False
+                df_her["QR_Img"] = df_her["codigo"].apply(get_qr_data_url)
+                df_her["Seleccionar"] = False
+                
+                # Renombramos 'Herramienta' a 'descripcion' para que el generador PDF funcione igual que con Insumos
                 df_her_tag = df_her.rename(columns={"Herramienta": "descripcion"})
                 
-                # Manejamos de forma segura si 'marca' ya no existe en la BD para el generador QR
-                cols_to_show = ["Seleccionar", "QR_Img", "codigo", "descripcion"]
-                if "marca" in df_her_tag.columns:
-                    cols_to_show.append("marca")
-                    
-                edited_her = st.data_editor(df_her_tag[cols_to_show], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
+                edited_her = st.data_editor(
+                    df_her_tag[["Seleccionar", "QR_Img", "codigo", "descripcion"]], 
+                    column_config={
+                        "QR_Img": st.column_config.ImageColumn("QR"),
+                        "codigo": "Código / ID",
+                        "descripcion": "Descripción (Herramienta)"
+                    }, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    key="editor_herramientas_qr"
+                )
+                
                 if st.button("🖨️ Generar PDF Herramientas"):
                     sel = edited_her[edited_her["Seleccionar"] == True]
-                    if not sel.empty: pdf = generar_pdf_etiquetas_qr(sel, "Herramientas"); st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Herramientas.pdf")
-        except: st.error("Error cargando datos")
+                    if not sel.empty: 
+                        pdf = generar_pdf_etiquetas_qr(sel, "Herramientas")
+                        st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Herramientas.pdf")
+        except Exception as e: 
+            st.error(f"Error cargando datos: {e}")
