@@ -157,7 +157,6 @@ def modal_manual_completo():
 def modal_ayuda_modulo(modulo):
     renderizar_manual(modulo)
 
-
 # --- HELPER FUNCTIONS PDF ---
 def _bloque_folio_fecha(pdf, folio, fecha):
     pdf.set_font('Arial', 'B', 10)
@@ -481,6 +480,12 @@ def convertir_df_a_excel(df):
 st.sidebar.title("🏭 Almacén Central")
 
 opciones_permitidas = []
+
+# --- NUEVO: PERMISO PARA TRABAJADORES ---
+# Si el usuario tiene sesión iniciada, siempre puede pedir material (o puedes crear un permiso específico)
+opciones_permitidas.append("🛒 Pedir Material (Trabajadores)")
+# ----------------------------------------
+
 if tiene_permiso("Almacén: Movimientos Insumos") or tiene_permiso("Almacén: Ver Existencias Insumos") or tiene_permiso("Almacén: Eliminar Historial Insumos"):
     opciones_permitidas.append("Insumos (Consumibles)")
 if tiene_permiso("Almacén: Prestar/Devolver Herramientas") or tiene_permiso("Almacén: Eliminar Historial Herramientas"):
@@ -492,8 +497,12 @@ if tiene_permiso("Almacén: Registrar Entrada Material") or tiene_permiso("Almac
 if tiene_permiso("Finanzas: Registrar Movimientos Dinero") or tiene_permiso("Finanzas: Editar/Eliminar Movimientos Dinero"):
     opciones_permitidas.append("Entradas y Salidas de Dinero")
 
+# Agregamos la opción para que el almacenista despache:
+if tiene_permiso("Almacén: Movimientos Insumos") or tiene_permiso("Almacén: Prestar/Devolver Herramientas"):
+    opciones_permitidas.append("🔔 Despachar Pedidos")
+
 if not opciones_permitidas:
-    st.warning("🔒 No tienes permisos asignados para operar en ningún módulo del Almacén.")
+    st.warning("🔒 No tienes permisos asignados en el sistema.")
     st.stop()
 
 opcion_almacen = st.sidebar.radio(
@@ -515,7 +524,7 @@ with c_tit:
     elif opcion_almacen == "Recibos de Entrega OC": st.title("📑 CONTROL DE RECIBOS DE ENTREGA OC")
     elif opcion_almacen == "Entrada de Material": st.title("📥 CONTROL DE ENTRADA DE MATERIAL")
     elif opcion_almacen == "Entradas y Salidas de Dinero": st.title("💰 CONTROL DE ENTRADAS Y SALIDAS DE DINERO")
-    else: st.title(f"Control de {opcion_almacen.split(' (')[0]}")
+    else: st.title(f"{opcion_almacen}")
     
 with c_ayu:
     if opcion_almacen == "Insumos (Consumibles)":
@@ -585,7 +594,7 @@ if opcion_almacen == "Insumos (Consumibles)":
                                 if st.button("Confirmar Salida", type="primary"):
                                     if item_actual['cantidad'] >= cant_mov:
                                         new_st = float(item_actual['cantidad'] - cant_mov)
-                                        supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                        supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                         try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
                                         except: pass
                                         st.session_state["insumo_mov_guardado"] = True
@@ -600,7 +609,7 @@ if opcion_almacen == "Insumos (Consumibles)":
                                 
                                 if st.button("Confirmar Entrada", type="primary"):
                                     new_st = float(item_actual['cantidad'] + cant_mov)
-                                    supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                    supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                     
                                     info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante}"
                                     
@@ -1295,3 +1304,145 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
                 st.info("No hay movimientos registrados.")
         except Exception as e: 
             st.error(f"Error cargando historial: Asegúrate de crear la tabla 'Entradas_Salidas_Dinero' en Supabase.")
+
+# ==================================================
+# 🛒 OPCIÓN 6: PEDIR MATERIAL (VISTA TRABAJADOR)
+# ==================================================
+elif opcion_almacen == "🛒 Pedir Material (Trabajadores)":
+    st.title("🛒 Solicitar Material o Herramienta")
+    st.markdown("Busca lo que necesitas y envia la solicitud a almacén para que te lo preparen.")
+    
+    # Obtener el nombre del usuario actual (o dejar genérico si no lo tienes configurado aún)
+    usuario_actual = st.session_state.get("usuario", "Trabajador") 
+
+    tab_pedir_insumo, tab_pedir_herr, tab_mis_pedidos = st.tabs(["📦 Pedir Insumos", "🛠️ Pedir Herramientas", "📜 Mis Pedidos Pendientes"])
+
+    # --- BUSCADOR DE INSUMOS ---
+    with tab_pedir_insumo:
+        try:
+            df_ins = pd.DataFrame(supabase.table("Insumos").select("*").execute().data)
+            if not df_ins.empty:
+                # Buscador Inteligente
+                lista_busqueda = [f"{row['codigo']} | {row['descripcion']} (Stock: {row['cantidad']})" for i, row in df_ins.iterrows()]
+                seleccion_ins = st.selectbox("🔍 Buscar Insumo:", lista_busqueda, index=None, placeholder="Escribe para buscar...")
+                
+                if seleccion_ins:
+                    codigo_sel = seleccion_ins.split(" | ")[0]
+                    item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
+                    
+                    st.info(f"📍 **Ubicación en almacén:** {item_actual.get('ubicacion', 'S/U')}")
+                    st.metric("Stock Disponible", item_actual.get('cantidad', 0))
+                    
+                    cant_pedir = st.number_input("Cantidad a solicitar:", min_value=1.0, max_value=float(item_actual['cantidad']), value=1.0)
+                    
+                    if st.button("🚀 Enviar Pedido a Almacén", type="primary"):
+                        datos_solicitud = {
+                            "fecha": datetime.now().strftime('%Y-%m-%d %H:%M'),
+                            "usuario_solicita": str(usuario_actual),
+                            "tipo_item": "Insumo",
+                            "codigo_item": str(item_actual['codigo']),
+                            "nombre_item": str(item_actual['descripcion']),
+                            "cantidad": float(cant_pedir),
+                            "estado": "Pendiente"
+                        }
+                        supabase.table("Solicitudes_Almacen").insert(datos_solicitud).execute()
+                        st.success(f"✅ Pedido enviado. Pasa a ventanilla de almacén por tus {cant_pedir} unidades.")
+                        time.sleep(2); st.rerun()
+        except Exception as e:
+            st.error("Error cargando insumos.")
+
+    # --- BUSCADOR DE HERRAMIENTAS ---
+    with tab_pedir_herr:
+        try:
+            df_her = pd.DataFrame(supabase.table("Herramientas").select("*").execute().data)
+            if not df_her.empty:
+                # Solo mostrar herramientas que están en Bodega
+                bodega = df_her[df_her["Responsable"] == "Bodega"]
+                if not bodega.empty:
+                    lista_herr = [f"{row['codigo']} | {row['Herramienta']}" for i, row in bodega.iterrows()]
+                    seleccion_herr = st.selectbox("🔍 Buscar Herramienta Disponible:", lista_herr, index=None, placeholder="Escribe para buscar...")
+                    
+                    if seleccion_herr:
+                        cod_herr = seleccion_herr.split(" | ")[0]
+                        herr_actual = bodega[bodega["codigo"] == cod_herr].iloc[0]
+                        
+                        st.info("🟢 Disponible para préstamo inmediato.")
+                        if st.button("🚀 Solicitar Préstamo", type="primary"):
+                            datos_solicitud = {
+                                "fecha": datetime.now().strftime('%Y-%m-%d %H:%M'),
+                                "usuario_solicita": str(usuario_actual),
+                                "tipo_item": "Herramienta",
+                                "codigo_item": str(herr_actual.get('codigo', '')),
+                                "nombre_item": str(herr_actual['Herramienta']),
+                                "cantidad": 1.0,
+                                "estado": "Pendiente"
+                            }
+                            supabase.table("Solicitudes_Almacen").insert(datos_solicitud).execute()
+                            st.success("✅ Solicitud enviada. Pasa a ventanilla por la herramienta.")
+                            time.sleep(2); st.rerun()
+                else:
+                    st.warning("No hay herramientas en bodega en este momento.")
+        except Exception as e:
+            st.error("Error cargando herramientas.")
+
+    # --- MIS PEDIDOS ---
+    with tab_mis_pedidos:
+        try:
+            res_mis_pedidos = supabase.table("Solicitudes_Almacen").select("*").eq("usuario_solicita", usuario_actual).eq("estado", "Pendiente").execute()
+            df_mis_pedidos = pd.DataFrame(res_mis_pedidos.data)
+            if not df_mis_pedidos.empty:
+                st.dataframe(df_mis_pedidos[['fecha', 'tipo_item', 'nombre_item', 'cantidad', 'estado']], use_container_width=True)
+            else:
+                st.info("No tienes pedidos pendientes de recoger.")
+        except: pass
+
+# ==================================================
+# 🔔 OPCIÓN 7: DESPACHAR PEDIDOS (VISTA ALMACENISTA)
+# ==================================================
+elif opcion_almacen == "🔔 Despachar Pedidos":
+    st.title("🔔 Requerimientos Pendientes")
+    st.markdown("Pedidos realizados por los trabajadores que están esperando en ventanilla.")
+    
+    try:
+        res_pendientes = supabase.table("Solicitudes_Almacen").select("*").eq("estado", "Pendiente").execute()
+        df_pendientes = pd.DataFrame(res_pendientes.data)
+        
+        if not df_pendientes.empty:
+            for i, row in df_pendientes.iterrows():
+                with st.container(border=True):
+                    c1, c2, c3 = st.columns([3, 1, 1])
+                    c1.markdown(f"**{row['usuario_solicita']}** solicita:")
+                    c1.markdown(f"### {row['cantidad']}x {row['nombre_item']} ({row['tipo_item']})")
+                    c1.caption(f"📅 {row['fecha']} | Código: {row['codigo_item']}")
+                    
+                    # Botón para Despachar
+                    if c2.button("✅ Despachar (Entregar)", key=f"ok_{row['id']}", type="primary", use_container_width=True):
+                        # 1. Actualizar el estado de la solicitud
+                        supabase.table("Solicitudes_Almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
+                        
+                        # 2. Descontar stock o cambiar responsable según el tipo
+                        if row['tipo_item'] == "Insumo":
+                            # Buscar stock actual y restar
+                            item_ins = supabase.table("Insumos").select("id, cantidad").eq("codigo", row['codigo_item']).execute().data[0]
+                            nuevo_stock = float(item_ins['cantidad']) - float(row['cantidad'])
+                            supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
+                            # Registrar en historial
+                            supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": str(row['usuario_solicita'])}).execute()
+                        
+                        elif row['tipo_item'] == "Herramienta":
+                            # Cambiar responsable
+                            item_herr = supabase.table("Herramientas").select("id").eq("codigo", row['codigo_item']).execute().data[0]
+                            supabase.table("Herramientas").update({"Responsable": str(row['usuario_solicita'])}).eq("id", item_herr['id']).execute()
+                            # Registrar en historial
+                            supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": "Préstamo", "Responsable": str(row['usuario_solicita'])}).execute()
+                            
+                        st.success("Despachado y descontado del sistema."); time.sleep(1.5); st.rerun()
+                        
+                    # Botón para Rechazar
+                    if c3.button("❌ Rechazar", key=f"no_{row['id']}", use_container_width=True):
+                        supabase.table("Solicitudes_Almacen").update({"estado": "Rechazado"}).eq("id", row['id']).execute()
+                        st.warning("Solicitud rechazada."); time.sleep(1); st.rerun()
+        else:
+            st.success("🎉 No hay pedidos pendientes. Tómate un café.")
+    except Exception as e:
+        st.error(f"Error cargando solicitudes: Asegúrate de haber creado la tabla 'Solicitudes_Almacen' en Supabase.")
