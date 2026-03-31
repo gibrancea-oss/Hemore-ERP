@@ -17,6 +17,7 @@ utils.validar_login()
 supabase = utils.supabase 
 
 # Obtenemos el nombre del usuario logueado en esta sesión
+# Busca el nombre completo, si no lo encuentra busca el nombre normal, y como último recurso usa el usuario
 usuario_actual = st.session_state.get("nombre_completo", st.session_state.get("nombre", st.session_state.get("usuario", "Almacenista/Trabajador")))
 
 # ==========================================
@@ -94,7 +95,7 @@ def renderizar_manual(modulo):
         st.markdown("""
         1. **Datos Básicos:** Ingresa el número de O.C., verifica la fecha, y asegúrate de seleccionar al Proveedor (HEMORE) y al Cliente que recibe.
         2. **Tabla de Productos:** Da clic en las celdas de la tabla para escribir el Código, Descripción, Color y Cantidad. 
-           * *Tip:* Si necesitas enviar 3 productos diferentes, simplemente haz clic en la fila de abajo y la tabla crecerá automáticamente.
+           * *Tip:* Si necesitas enviar 3 diferentes, simplemente haz clic en la fila de abajo y la tabla crecerá automáticamente.
         3. Agrega **Observaciones** (ej. *Se entrega material emplayado*).
         4. Haz clic en **Guardar y PDF**. Se generará el botón para descargar tu archivo listo para firmas.
         """)
@@ -113,7 +114,7 @@ def renderizar_manual(modulo):
 
     if modulo == "Entradas" or modulo == "Todos":
         st.markdown("## 📥 Módulo: Entrada de Material")
-        st.markdown("Generación de con stancias en PDF cuando se recibe materia prima o maquinaria de un proveedor externo.")
+        st.markdown("Generación de constancias en PDF cuando se recibe materia prima o maquinaria de un proveedor externo.")
         
         st.markdown("### ➕ Pestaña: Nueva Entrada")
         st.markdown("""
@@ -552,8 +553,10 @@ if opcion_almacen == "Insumos (Consumibles)":
             if "unidad" not in df_ins.columns: df_ins["unidad"] = "Pzas"
             if "ubicacion" not in df_ins.columns: df_ins["ubicacion"] = "S/U"
 
-        df_personal = pd.DataFrame(supabase.table("Personal").select("nombre, nombre_completo, usuario").eq("activo", True).execute().data)
-        lista_personal = df_personal['nombre'].tolist() if not df_personal.empty else []
+        # --- MEJORA: Seleccionar todo para buscar el nombre completo sin causar error ---
+        df_personal = pd.DataFrame(supabase.table("Personal").select("*").eq("activo", True).execute().data)
+        lista_personal = df_personal['nombre'].tolist() if (not df_personal.empty and 'nombre' in df_personal.columns) else []
+        # ------------------------------------------------------------------------------
         
         df_provs_insumos = pd.DataFrame(supabase.table("Proveedores").select("*").execute().data)
         col_p_name_ins = 'empresa' if 'empresa' in df_provs_insumos.columns else 'nombre'
@@ -562,6 +565,7 @@ if opcion_almacen == "Insumos (Consumibles)":
     except Exception as e: 
         st.error(f"Error cargando base de datos: {e}")
         df_ins = pd.DataFrame()
+        df_personal = pd.DataFrame() # --- MEJORA: Definir df_personal para evitar el error de variable no definida ---
         lista_personal = []
         lista_provs_insumos = []
 
@@ -576,7 +580,7 @@ if opcion_almacen == "Insumos (Consumibles)":
             
             if not df_pendientes.empty:
                 # --- Encabezados de la Tabla con 6 columnas (Cantidad Separada) ---
-                c_h1, c_h2, c_h3, c_h4, c_h5, c_h6 = st.columns([2.5, 1.5, 2.5, 1, 1.5, 2.5])
+                c_h1, c_h2, c_h3, c_h4, c_h5, c_h6 = st.columns([2, 1.5, 2.5, 1, 1.5, 2.5])
                 c_h1.markdown("**🙋‍♂️ Persona**")
                 c_h2.markdown("**🏷️ Código**")
                 c_h3.markdown("**📦 Descripción**")
@@ -587,15 +591,24 @@ if opcion_almacen == "Insumos (Consumibles)":
                 
                 # --- Filas de la Tabla ---
                 for i, row in df_pendientes.iterrows():
-                    # LÓGICA PARA BUSCAR EL NOMBRE COMPLETO
-                    nombre_a_mostrar = row['usuario_solicita'] # Valor por defecto
+                    # --- MEJORA: BUSCAR NOMBRE COMPLETO DE FORMA SEGURA ---
+                    nombre_mostrar = str(row['usuario_solicita'])
                     if not df_personal.empty:
-                        match = df_personal[(df_personal['usuario'] == row['usuario_solicita']) | (df_personal['nombre'] == row['usuario_solicita'])]
-                        if not match.empty:
-                            nombre_a_mostrar = match.iloc[0].get('nombre_completo', match.iloc[0].get('nombre', row['usuario_solicita']))
+                        filtro = pd.DataFrame()
+                        if 'usuario' in df_personal.columns:
+                            filtro = df_personal[df_personal['usuario'] == row['usuario_solicita']]
+                        if filtro.empty and 'nombre' in df_personal.columns:
+                            filtro = df_personal[df_personal['nombre'] == row['usuario_solicita']]
+                        
+                        if not filtro.empty:
+                            if 'nombre_completo' in filtro.columns and pd.notna(filtro.iloc[0]['nombre_completo']):
+                                nombre_mostrar = str(filtro.iloc[0]['nombre_completo'])
+                            elif 'nombre' in filtro.columns and pd.notna(filtro.iloc[0]['nombre']):
+                                nombre_mostrar = str(filtro.iloc[0]['nombre'])
+                    # --------------------------------------------------------
 
-                    c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.5, 2.5, 1, 1.5, 2.5])
-                    c1.write(f"**{nombre_a_mostrar}**")
+                    c1, c2, c3, c4, c5, c6 = st.columns([2, 1.5, 2.5, 1, 1.5, 2.5])
+                    c1.write(nombre_mostrar) # --- MEJORA: MOSTRAR EL NOMBRE ENCONTRADO ---
                     c2.write(row['codigo_item'])
                     c3.write(f"{row['nombre_item']} ({row['tipo_item']})")
                     c4.write(row['cantidad'])
@@ -615,15 +628,15 @@ if opcion_almacen == "Insumos (Consumibles)":
                             try: supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
                             except: supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
                             
-                            detalle_resp = f"Pidió: {nombre_a_mostrar} | Entregó: {usuario_actual}"
+                            detalle_resp = f"Pidió: {nombre_mostrar} | Entregó: {usuario_actual}" # --- MEJORA: GUARDAR EN HISTORIAL CON NOMBRE ---
                             supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": detalle_resp}).execute()
                         
                         elif row['tipo_item'] == "Herramienta":
                             item_herr = supabase.table("Herramientas").select("id").eq("codigo", row['codigo_item']).execute().data[0]
-                            supabase.table("Herramientas").update({"Responsable": str(nombre_a_mostrar)}).eq("id", item_herr['id']).execute()
+                            supabase.table("Herramientas").update({"Responsable": str(nombre_mostrar)}).eq("id", item_herr['id']).execute() # --- MEJORA: GUARDAR RESPONSABLE ---
                             
                             detalle_mov = f"Préstamo (Entregó: {usuario_actual})"
-                            supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": detalle_mov, "Responsable": str(nombre_a_mostrar)}).execute()
+                            supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": detalle_mov, "Responsable": str(nombre_mostrar)}).execute() # --- MEJORA: GUARDAR EN HISTORIAL ---
                             
                         st.success("Despachado exitosamente."); time.sleep(1); st.rerun()
                         
