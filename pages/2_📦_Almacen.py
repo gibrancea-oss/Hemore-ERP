@@ -1347,7 +1347,7 @@ elif opcion_almacen == "🛒 Pedir Material":
                             "cantidad": float(cant_pedir),
                             "estado": "Pendiente"
                         }
-                        supabase.table("Solicitudes_Almacen").insert(datos_solicitud).execute()
+                        supabase.table("solicitudes_almacen").insert(datos_solicitud).execute()
                         st.success(f"✅ Pedido enviado. Pasa a ventanilla de almacén por tus {cant_pedir} unidades.")
                         time.sleep(2); st.rerun()
             else:
@@ -1383,7 +1383,7 @@ elif opcion_almacen == "🛒 Pedir Material":
                                 "cantidad": 1.0,
                                 "estado": "Pendiente"
                             }
-                            supabase.table("Solicitudes_Almacen").insert(datos_solicitud).execute()
+                            supabase.table("solicitudes_almacen").insert(datos_solicitud).execute()
                             st.success("✅ Solicitud enviada. Pasa a ventanilla por la herramienta.")
                             time.sleep(2); st.rerun()
                 else:
@@ -1394,7 +1394,7 @@ elif opcion_almacen == "🛒 Pedir Material":
     # --- MIS PEDIDOS ---
     with tab_mis_pedidos:
         try:
-            res_mis_pedidos = supabase.table("Solicitudes_Almacen").select("*").eq("usuario_solicita", usuario_actual).eq("estado", "Pendiente").execute()
+            res_mis_pedidos = supabase.table("solicitudes_almacen").select("*").eq("usuario_solicita", usuario_actual).eq("estado", "Pendiente").execute()
             df_mis_pedidos = pd.DataFrame(res_mis_pedidos.data)
             if not df_mis_pedidos.empty:
                 st.dataframe(df_mis_pedidos[['fecha', 'tipo_item', 'nombre_item', 'cantidad', 'estado']], use_container_width=True)
@@ -1409,7 +1409,7 @@ elif opcion_almacen == "🔔 Despachar Pedidos":
     st.markdown("Pedidos realizados por los trabajadores que están esperando en ventanilla.")
     
     try:
-        res_pendientes = supabase.table("Solicitudes_Almacen").select("*").eq("estado", "Pendiente").execute()
+        res_pendientes = supabase.table("solicitudes_almacen").select("*").eq("estado", "Pendiente").execute()
         df_pendientes = pd.DataFrame(res_pendientes.data)
         
         if not df_pendientes.empty:
@@ -1423,7 +1423,7 @@ elif opcion_almacen == "🔔 Despachar Pedidos":
                     # Botón para Despachar
                     if c2.button("✅ Despachar (Entregar)", key=f"ok_{row['id']}", type="primary", use_container_width=True):
                         # 1. Actualizar el estado de la solicitud
-                        supabase.table("Solicitudes_Almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
+                        supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
                         
                         # 2. Descontar stock o cambiar responsable según el tipo
                         if row['tipo_item'] == "Insumo":
@@ -1441,9 +1441,9 @@ elif opcion_almacen == "🔔 Despachar Pedidos":
                         
                     # Botón para Rechazar
                     if c3.button("❌ Rechazar", key=f"no_{row['id']}", use_container_width=True):
-                        supabase.table("Solicitudes_Almacen").update({"estado": "Rechazado"}).eq("id", row['id']).execute()
+                        supabase.table("solicitudes_almacen").update({"estado": "Rechazado"}).eq("id", row['id']).execute()
                         st.warning("Solicitud rechazada."); time.sleep(1); st.rerun()
         else:
             st.success("🎉 No hay pedidos pendientes. Tómate un café.")
     except Exception as e:
-        st.error(f"Asegúrate de haber ejecutado el código SQL en Supabase para crear la tabla 'Solicitudes_Almacen'. Detalles técnicos: {e}")
+        st.error(f"Asegúrate de haber ejecutado el código SQL en Supabase para crear la tabla 'solicitudes_almacen'. Detalles técnicos: {e}")
