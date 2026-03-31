@@ -95,7 +95,7 @@ def renderizar_manual(modulo):
         st.markdown("""
         1. **Datos Básicos:** Ingresa el número de O.C., verifica la fecha, y asegúrate de seleccionar al Proveedor (HEMORE) y al Cliente que recibe.
         2. **Tabla de Productos:** Da clic en las celdas de la tabla para escribir el Código, Descripción, Color y Cantidad. 
-           * *Tip:* Si necesitas enviar 3 diferentes, simplemente haz clic en la fila de abajo y la tabla crecerá automáticamente.
+           * *Tip:* Si necesitas enviar 3 productos diferentes, simplemente haz clic en la fila de abajo y la tabla crecerá automáticamente.
         3. Agrega **Observaciones** (ej. *Se entrega material emplayado*).
         4. Haz clic en **Guardar y PDF**. Se generará el botón para descargar tu archivo listo para firmas.
         """)
@@ -621,12 +621,11 @@ if opcion_almacen == "Insumos (Consumibles)":
                         supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
                         
                         if row['tipo_item'] == "Insumo":
-                            item_ins = supabase.table("Insumos").select("id, cantidad, Cantidad").eq("codigo", row['codigo_item']).execute().data[0]
-                            stock_actual = item_ins.get('cantidad', item_ins.get('Cantidad', 0))
+                            item_ins = supabase.table("Insumos").select("id, cantidad").eq("codigo", row['codigo_item']).execute().data[0]
+                            stock_actual = item_ins.get('cantidad', 0)
                             nuevo_stock = float(stock_actual) - float(row['cantidad'])
                             
-                            try: supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
-                            except: supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
+                            supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
                             
                             detalle_resp = f"Pidió: {nombre_mostrar} | Entregó: {usuario_actual}" # --- MEJORA: GUARDAR EN HISTORIAL CON NOMBRE ---
                             supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": detalle_resp}).execute()
@@ -676,8 +675,7 @@ if opcion_almacen == "Insumos (Consumibles)":
                                 if st.button("Confirmar Salida", type="primary"):
                                     if float(item_actual['cantidad']) >= cant_mov:
                                         new_st = float(item_actual['cantidad']) - cant_mov
-                                        try: supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                                        except: supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                        supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                         
                                         detalle_resp_manual = f"Recibe: {responsable} | Entregó: {usuario_actual}"
                                         try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": detalle_resp_manual}).execute()
@@ -694,8 +692,7 @@ if opcion_almacen == "Insumos (Consumibles)":
                                 
                                 if st.button("Confirmar Entrada", type="primary"):
                                     new_st = float(item_actual['cantidad']) + cant_mov
-                                    try: supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                                    except: supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                    supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                     
                                     info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante} | Recibió: {usuario_actual}"
                                     
