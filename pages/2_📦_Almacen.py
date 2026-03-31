@@ -553,10 +553,8 @@ if opcion_almacen == "Insumos (Consumibles)":
             if "unidad" not in df_ins.columns: df_ins["unidad"] = "Pzas"
             if "ubicacion" not in df_ins.columns: df_ins["ubicacion"] = "S/U"
 
-        # --- MEJORA: Seleccionar todo para buscar el nombre completo sin causar error ---
         df_personal = pd.DataFrame(supabase.table("Personal").select("*").eq("activo", True).execute().data)
         lista_personal = df_personal['nombre'].tolist() if (not df_personal.empty and 'nombre' in df_personal.columns) else []
-        # ------------------------------------------------------------------------------
         
         df_provs_insumos = pd.DataFrame(supabase.table("Proveedores").select("*").execute().data)
         col_p_name_ins = 'empresa' if 'empresa' in df_provs_insumos.columns else 'nombre'
@@ -565,7 +563,7 @@ if opcion_almacen == "Insumos (Consumibles)":
     except Exception as e: 
         st.error(f"Error cargando base de datos: {e}")
         df_ins = pd.DataFrame()
-        df_personal = pd.DataFrame() # --- MEJORA: Definir df_personal para evitar el error de variable no definida ---
+        df_personal = pd.DataFrame()
         lista_personal = []
         lista_provs_insumos = []
 
@@ -591,24 +589,22 @@ if opcion_almacen == "Insumos (Consumibles)":
                 
                 # --- Filas de la Tabla ---
                 for i, row in df_pendientes.iterrows():
-                    # --- MEJORA: BUSCAR NOMBRE COMPLETO DE FORMA SEGURA ---
-                    nombre_mostrar = str(row['usuario_solicita'])
+                    nombre_mostrar = row['usuario_solicita']
                     if not df_personal.empty:
-                        filtro = pd.DataFrame()
+                        match = pd.DataFrame()
                         if 'usuario' in df_personal.columns:
-                            filtro = df_personal[df_personal['usuario'] == row['usuario_solicita']]
-                        if filtro.empty and 'nombre' in df_personal.columns:
-                            filtro = df_personal[df_personal['nombre'] == row['usuario_solicita']]
+                            match = df_personal[df_personal['usuario'] == nombre_mostrar]
+                        if match.empty and 'nombre' in df_personal.columns:
+                            match = df_personal[df_personal['nombre'] == nombre_mostrar]
                         
-                        if not filtro.empty:
-                            if 'nombre_completo' in filtro.columns and pd.notna(filtro.iloc[0]['nombre_completo']):
-                                nombre_mostrar = str(filtro.iloc[0]['nombre_completo'])
-                            elif 'nombre' in filtro.columns and pd.notna(filtro.iloc[0]['nombre']):
-                                nombre_mostrar = str(filtro.iloc[0]['nombre'])
-                    # --------------------------------------------------------
+                        if not match.empty:
+                            if 'nombre_completo' in match.columns and pd.notna(match.iloc[0]['nombre_completo']):
+                                nombre_mostrar = match.iloc[0]['nombre_completo']
+                            elif 'nombre' in match.columns and pd.notna(match.iloc[0]['nombre']):
+                                nombre_mostrar = match.iloc[0]['nombre']
 
                     c1, c2, c3, c4, c5, c6 = st.columns([2, 1.5, 2.5, 1, 1.5, 2.5])
-                    c1.write(nombre_mostrar) # --- MEJORA: MOSTRAR EL NOMBRE ENCONTRADO ---
+                    c1.write(nombre_mostrar)
                     c2.write(row['codigo_item'])
                     c3.write(f"{row['nombre_item']} ({row['tipo_item']})")
                     c4.write(row['cantidad'])
@@ -621,21 +617,22 @@ if opcion_almacen == "Insumos (Consumibles)":
                         supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
                         
                         if row['tipo_item'] == "Insumo":
-                            item_ins = supabase.table("Insumos").select("id, cantidad").eq("codigo", row['codigo_item']).execute().data[0]
-                            stock_actual = item_ins.get('cantidad', 0)
+                            item_ins = supabase.table("Insumos").select("id, cantidad, Cantidad").eq("codigo", row['codigo_item']).execute().data[0]
+                            stock_actual = item_ins.get('cantidad', item_ins.get('Cantidad', 0))
                             nuevo_stock = float(stock_actual) - float(row['cantidad'])
                             
-                            supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
+                            try: supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
+                            except: supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
                             
-                            detalle_resp = f"Pidió: {nombre_mostrar} | Entregó: {usuario_actual}" # --- MEJORA: GUARDAR EN HISTORIAL CON NOMBRE ---
+                            detalle_resp = f"Pidió: {nombre_mostrar} | Entregó: {usuario_actual}"
                             supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": detalle_resp}).execute()
                         
                         elif row['tipo_item'] == "Herramienta":
                             item_herr = supabase.table("Herramientas").select("id").eq("codigo", row['codigo_item']).execute().data[0]
-                            supabase.table("Herramientas").update({"Responsable": str(nombre_mostrar)}).eq("id", item_herr['id']).execute() # --- MEJORA: GUARDAR RESPONSABLE ---
+                            supabase.table("Herramientas").update({"Responsable": str(nombre_mostrar)}).eq("id", item_herr['id']).execute()
                             
                             detalle_mov = f"Préstamo (Entregó: {usuario_actual})"
-                            supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": detalle_mov, "Responsable": str(nombre_mostrar)}).execute() # --- MEJORA: GUARDAR EN HISTORIAL ---
+                            supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": detalle_mov, "Responsable": str(nombre_mostrar)}).execute()
                             
                         st.success("Despachado exitosamente."); time.sleep(1); st.rerun()
                         
@@ -675,7 +672,8 @@ if opcion_almacen == "Insumos (Consumibles)":
                                 if st.button("Confirmar Salida", type="primary"):
                                     if float(item_actual['cantidad']) >= cant_mov:
                                         new_st = float(item_actual['cantidad']) - cant_mov
-                                        supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                        try: supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                        except: supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                         
                                         detalle_resp_manual = f"Recibe: {responsable} | Entregó: {usuario_actual}"
                                         try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": detalle_resp_manual}).execute()
@@ -692,7 +690,8 @@ if opcion_almacen == "Insumos (Consumibles)":
                                 
                                 if st.button("Confirmar Entrada", type="primary"):
                                     new_st = float(item_actual['cantidad']) + cant_mov
-                                    supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                    try: supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                    except: supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                     
                                     info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante} | Recibió: {usuario_actual}"
                                     
