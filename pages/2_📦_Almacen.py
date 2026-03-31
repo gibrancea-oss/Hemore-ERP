@@ -482,8 +482,7 @@ st.sidebar.title("🏭 Almacén Central")
 opciones_permitidas = []
 
 # --- NUEVO: PERMISO PARA TRABAJADORES ---
-# Si el usuario tiene sesión iniciada, siempre puede pedir material (o puedes crear un permiso específico)
-opciones_permitidas.append("🛒 Pedir Material (Trabajadores)")
+opciones_permitidas.append("🛒 Pedir Material")
 # ----------------------------------------
 
 if tiene_permiso("Almacén: Movimientos Insumos") or tiene_permiso("Almacén: Ver Existencias Insumos") or tiene_permiso("Almacén: Eliminar Historial Insumos"):
@@ -524,6 +523,8 @@ with c_tit:
     elif opcion_almacen == "Recibos de Entrega OC": st.title("📑 CONTROL DE RECIBOS DE ENTREGA OC")
     elif opcion_almacen == "Entrada de Material": st.title("📥 CONTROL DE ENTRADA DE MATERIAL")
     elif opcion_almacen == "Entradas y Salidas de Dinero": st.title("💰 CONTROL DE ENTRADAS Y SALIDAS DE DINERO")
+    elif opcion_almacen == "🛒 Pedir Material": st.title("🛒 SOLICITAR MATERIAL O HERRAMIENTA")
+    elif opcion_almacen == "🔔 Despachar Pedidos": st.title("🔔 REQUERIMIENTOS PENDIENTES")
     else: st.title(f"{opcion_almacen}")
     
 with c_ayu:
@@ -1308,11 +1309,9 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
 # ==================================================
 # 🛒 OPCIÓN 6: PEDIR MATERIAL (VISTA TRABAJADOR)
 # ==================================================
-elif opcion_almacen == "🛒 Pedir Material (Trabajadores)":
-    st.title("🛒 Solicitar Material o Herramienta")
-    st.markdown("Busca lo que necesitas y envia la solicitud a almacén para que te lo preparen.")
+elif opcion_almacen == "🛒 Pedir Material":
+    st.markdown("Busca lo que necesitas y envía la solicitud a almacén para que te lo preparen.")
     
-    # Obtener el nombre del usuario actual (o dejar genérico si no lo tienes configurado aún)
     usuario_actual = st.session_state.get("usuario", "Trabajador") 
 
     tab_pedir_insumo, tab_pedir_herr, tab_mis_pedidos = st.tabs(["📦 Pedir Insumos", "🛠️ Pedir Herramientas", "📜 Mis Pedidos Pendientes"])
@@ -1320,10 +1319,13 @@ elif opcion_almacen == "🛒 Pedir Material (Trabajadores)":
     # --- BUSCADOR DE INSUMOS ---
     with tab_pedir_insumo:
         try:
-            df_ins = pd.DataFrame(supabase.table("Insumos").select("*").execute().data)
+            res_ins = supabase.table("Insumos").select("*").execute()
+            df_ins = pd.DataFrame(res_ins.data)
             if not df_ins.empty:
-                # Buscador Inteligente
-                lista_busqueda = [f"{row['codigo']} | {row['descripcion']} (Stock: {row['cantidad']})" for i, row in df_ins.iterrows()]
+                # Normalizamos las columnas a minúsculas para evitar el error de lectura
+                df_ins.columns = df_ins.columns.str.lower()
+                
+                lista_busqueda = [f"{row.get('codigo', 'S/C')} | {row.get('descripcion', 'Sin nombre')} (Stock: {row.get('cantidad', 0)})" for i, row in df_ins.iterrows()]
                 seleccion_ins = st.selectbox("🔍 Buscar Insumo:", lista_busqueda, index=None, placeholder="Escribe para buscar...")
                 
                 if seleccion_ins:
@@ -1333,33 +1335,37 @@ elif opcion_almacen == "🛒 Pedir Material (Trabajadores)":
                     st.info(f"📍 **Ubicación en almacén:** {item_actual.get('ubicacion', 'S/U')}")
                     st.metric("Stock Disponible", item_actual.get('cantidad', 0))
                     
-                    cant_pedir = st.number_input("Cantidad a solicitar:", min_value=1.0, max_value=float(item_actual['cantidad']), value=1.0)
+                    cant_pedir = st.number_input("Cantidad a solicitar:", min_value=1.0, max_value=float(item_actual.get('cantidad', 1)), value=1.0)
                     
                     if st.button("🚀 Enviar Pedido a Almacén", type="primary"):
                         datos_solicitud = {
                             "fecha": datetime.now().strftime('%Y-%m-%d %H:%M'),
                             "usuario_solicita": str(usuario_actual),
                             "tipo_item": "Insumo",
-                            "codigo_item": str(item_actual['codigo']),
-                            "nombre_item": str(item_actual['descripcion']),
+                            "codigo_item": str(item_actual.get('codigo', '')),
+                            "nombre_item": str(item_actual.get('descripcion', '')),
                             "cantidad": float(cant_pedir),
                             "estado": "Pendiente"
                         }
                         supabase.table("Solicitudes_Almacen").insert(datos_solicitud).execute()
                         st.success(f"✅ Pedido enviado. Pasa a ventanilla de almacén por tus {cant_pedir} unidades.")
                         time.sleep(2); st.rerun()
+            else:
+                st.warning("No hay insumos registrados en la base de datos.")
         except Exception as e:
-            st.error("Error cargando insumos.")
+            st.error(f"Error cargando insumos: {e}")
 
     # --- BUSCADOR DE HERRAMIENTAS ---
     with tab_pedir_herr:
         try:
-            df_her = pd.DataFrame(supabase.table("Herramientas").select("*").execute().data)
+            res_herr = supabase.table("Herramientas").select("*").execute()
+            df_her = pd.DataFrame(res_herr.data)
             if not df_her.empty:
                 # Solo mostrar herramientas que están en Bodega
-                bodega = df_her[df_her["Responsable"] == "Bodega"]
+                bodega = df_her[df_her.get("Responsable", df_her.get("responsable")) == "Bodega"]
                 if not bodega.empty:
-                    lista_herr = [f"{row['codigo']} | {row['Herramienta']}" for i, row in bodega.iterrows()]
+                    # Usamos .get() para evitar errores si las mayúsculas no coinciden
+                    lista_herr = [f"{row.get('codigo', 'S/C')} | {row.get('Herramienta', row.get('herramienta', 'Sin nombre'))}" for i, row in bodega.iterrows()]
                     seleccion_herr = st.selectbox("🔍 Buscar Herramienta Disponible:", lista_herr, index=None, placeholder="Escribe para buscar...")
                     
                     if seleccion_herr:
@@ -1373,7 +1379,7 @@ elif opcion_almacen == "🛒 Pedir Material (Trabajadores)":
                                 "usuario_solicita": str(usuario_actual),
                                 "tipo_item": "Herramienta",
                                 "codigo_item": str(herr_actual.get('codigo', '')),
-                                "nombre_item": str(herr_actual['Herramienta']),
+                                "nombre_item": str(herr_actual.get('Herramienta', herr_actual.get('herramienta', ''))),
                                 "cantidad": 1.0,
                                 "estado": "Pendiente"
                             }
@@ -1383,7 +1389,7 @@ elif opcion_almacen == "🛒 Pedir Material (Trabajadores)":
                 else:
                     st.warning("No hay herramientas en bodega en este momento.")
         except Exception as e:
-            st.error("Error cargando herramientas.")
+            st.error(f"Error cargando herramientas: {e}")
 
     # --- MIS PEDIDOS ---
     with tab_mis_pedidos:
@@ -1400,7 +1406,6 @@ elif opcion_almacen == "🛒 Pedir Material (Trabajadores)":
 # 🔔 OPCIÓN 7: DESPACHAR PEDIDOS (VISTA ALMACENISTA)
 # ==================================================
 elif opcion_almacen == "🔔 Despachar Pedidos":
-    st.title("🔔 Requerimientos Pendientes")
     st.markdown("Pedidos realizados por los trabajadores que están esperando en ventanilla.")
     
     try:
@@ -1422,18 +1427,14 @@ elif opcion_almacen == "🔔 Despachar Pedidos":
                         
                         # 2. Descontar stock o cambiar responsable según el tipo
                         if row['tipo_item'] == "Insumo":
-                            # Buscar stock actual y restar
                             item_ins = supabase.table("Insumos").select("id, cantidad").eq("codigo", row['codigo_item']).execute().data[0]
-                            nuevo_stock = float(item_ins['cantidad']) - float(row['cantidad'])
+                            nuevo_stock = float(item_ins.get('cantidad', 0)) - float(row['cantidad'])
                             supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
-                            # Registrar en historial
                             supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": str(row['usuario_solicita'])}).execute()
                         
                         elif row['tipo_item'] == "Herramienta":
-                            # Cambiar responsable
                             item_herr = supabase.table("Herramientas").select("id").eq("codigo", row['codigo_item']).execute().data[0]
                             supabase.table("Herramientas").update({"Responsable": str(row['usuario_solicita'])}).eq("id", item_herr['id']).execute()
-                            # Registrar en historial
                             supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": "Préstamo", "Responsable": str(row['usuario_solicita'])}).execute()
                             
                         st.success("Despachado y descontado del sistema."); time.sleep(1.5); st.rerun()
@@ -1445,4 +1446,4 @@ elif opcion_almacen == "🔔 Despachar Pedidos":
         else:
             st.success("🎉 No hay pedidos pendientes. Tómate un café.")
     except Exception as e:
-        st.error(f"Error cargando solicitudes: Asegúrate de haber creado la tabla 'Solicitudes_Almacen' en Supabase.")
+        st.error(f"Asegúrate de haber ejecutado el código SQL en Supabase para crear la tabla 'Solicitudes_Almacen'. Detalles técnicos: {e}")
