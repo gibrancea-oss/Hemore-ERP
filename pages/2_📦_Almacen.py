@@ -15,8 +15,10 @@ utils.validar_login()
 # --------------------
 
 supabase = utils.supabase 
+
 # Obtenemos el nombre del usuario logueado en esta sesión
-usuario_actual = st.session_state.get("usuario", "Almacenista")
+# Busca el nombre completo, si no lo encuentra busca el nombre normal, y como último recurso usa el usuario
+usuario_actual = st.session_state.get("nombre_completo", st.session_state.get("nombre", st.session_state.get("usuario", "Almacenista/Trabajador")))
 
 # ==========================================
 # FUNCIÓN DE PERMISOS
@@ -570,40 +572,40 @@ if opcion_almacen == "Insumos (Consumibles)":
     with tab_pendientes:
         st.markdown("### Requerimientos en Fila")
         try:
-            res_pendientes = supabase.table("Solicitudes_Almacen").select("*").eq("estado", "Pendiente").execute()
+            res_pendientes = supabase.table("solicitudes_almacen").select("*").eq("estado", "Pendiente").execute()
             df_pendientes = pd.DataFrame(res_pendientes.data)
             
             if not df_pendientes.empty:
-                # --- Encabezados de la Tabla ---
-                c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([2, 1.5, 3, 2, 3])
+                # --- Encabezados de la Tabla con 6 columnas (Cantidad Separada) ---
+                c_h1, c_h2, c_h3, c_h4, c_h5, c_h6 = st.columns([2, 1.5, 2.5, 1, 1.5, 2.5])
                 c_h1.markdown("**🙋‍♂️ Persona**")
                 c_h2.markdown("**🏷️ Código**")
-                c_h3.markdown("**📦 Descripción (Tipo)**")
-                c_h4.markdown("**📅 Fecha**")
-                c_h5.markdown("**⚙️ Acciones**")
+                c_h3.markdown("**📦 Descripción**")
+                c_h4.markdown("**🔢 Cant**")
+                c_h5.markdown("**📅 Fecha**")
+                c_h6.markdown("**⚙️ Acciones**")
                 st.divider()
                 
                 # --- Filas de la Tabla ---
                 for i, row in df_pendientes.iterrows():
-                    c1, c2, c3, c4, c5 = st.columns([2, 1.5, 3, 2, 3])
+                    c1, c2, c3, c4, c5, c6 = st.columns([2, 1.5, 2.5, 1, 1.5, 2.5])
                     c1.write(row['usuario_solicita'])
                     c2.write(row['codigo_item'])
-                    c3.write(f"{row['cantidad']}x {row['nombre_item']} ({row['tipo_item']})")
-                    c4.write(row['fecha'])
+                    c3.write(f"{row['nombre_item']} ({row['tipo_item']})")
+                    c4.write(row['cantidad'])
+                    c5.write(row['fecha'])
                     
-                    # Botones de Acción (Lado a lado)
-                    btn_col1, btn_col2 = c5.columns(2)
+                    # Botones de Acción (Lado a lado en la última columna)
+                    btn_col1, btn_col2 = c6.columns(2)
                     
                     if btn_col1.button("✅ Entregar", key=f"ok_{row['id']}", type="primary", use_container_width=True):
-                        supabase.table("Solicitudes_Almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
+                        supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
                         
                         if row['tipo_item'] == "Insumo":
-                            item_ins = supabase.table("Insumos").select("id, cantidad").eq("codigo", row['codigo_item']).execute().data[0]
-                            # Usamos .get() buscando minúscula y mayúscula para evitar errores
+                            item_ins = supabase.table("Insumos").select("id, cantidad, Cantidad").eq("codigo", row['codigo_item']).execute().data[0]
                             stock_actual = item_ins.get('cantidad', item_ins.get('Cantidad', 0))
                             nuevo_stock = float(stock_actual) - float(row['cantidad'])
                             
-                            # Actualizamos usando "Cantidad" con mayúscula si así está en tu BD
                             try: supabase.table("Insumos").update({"Cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
                             except: supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
                             
@@ -620,10 +622,10 @@ if opcion_almacen == "Insumos (Consumibles)":
                         st.success("Despachado exitosamente."); time.sleep(1); st.rerun()
                         
                     if btn_col2.button("❌ Rechazar", key=f"no_{row['id']}", use_container_width=True):
-                        supabase.table("Solicitudes_Almacen").update({"estado": "Rechazado"}).eq("id", row['id']).execute()
+                        supabase.table("solicitudes_almacen").update({"estado": "Rechazado"}).eq("id", row['id']).execute()
                         st.warning("Solicitud rechazada."); time.sleep(1); st.rerun()
                         
-                    st.divider() # Línea separadora entre filas
+                    st.divider()
             else:
                 st.info("No hay pedidos pendientes en la ventanilla. Tómate un café ☕.")
         except Exception as e:
@@ -653,12 +655,11 @@ if opcion_almacen == "Insumos (Consumibles)":
                             if "Entrega" in tipo_operacion:
                                 responsable = st.selectbox("Entregar a:", lista_personal, key="insumo_resp")
                                 if st.button("Confirmar Salida", type="primary"):
-                                    if item_actual['cantidad'] >= cant_mov:
-                                        new_st = float(item_actual['cantidad'] - cant_mov)
+                                    if float(item_actual['cantidad']) >= cant_mov:
+                                        new_st = float(item_actual['cantidad']) - cant_mov
                                         try: supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                         except: supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                         
-                                        # Detalle manual también muestra quién entrega
                                         detalle_resp_manual = f"Recibe: {responsable} | Entregó: {usuario_actual}"
                                         try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": detalle_resp_manual}).execute()
                                         except: pass
@@ -673,7 +674,7 @@ if opcion_almacen == "Insumos (Consumibles)":
                                 num_comprobante = c_f2.text_input("No. Factura / Ticket", key="num_re_stock")
                                 
                                 if st.button("Confirmar Entrada", type="primary"):
-                                    new_st = float(item_actual['cantidad'] + cant_mov)
+                                    new_st = float(item_actual['cantidad']) + cant_mov
                                     try: supabase.table("Insumos").update({"Cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                     except: supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                     
@@ -1380,8 +1381,6 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
 elif opcion_almacen == "🛒 Pedir Material":
     st.markdown("Busca lo que necesitas y envía la solicitud a almacén para que te lo preparen.")
     
-    usuario_actual = st.session_state.get("usuario", "Trabajador") 
-
     tab_pedir_insumo, tab_pedir_herr = st.tabs(["📦 Pedir Insumos", "🛠️ Pedir Herramientas"])
 
     # --- BUSCADOR DE INSUMOS ---
@@ -1418,7 +1417,7 @@ elif opcion_almacen == "🛒 Pedir Material":
                                 "cantidad": float(cant_pedir),
                                 "estado": "Pendiente"
                             }
-                            supabase.table("Solicitudes_Almacen").insert(datos_solicitud).execute()
+                            supabase.table("solicitudes_almacen").insert(datos_solicitud).execute()
                             
                             st.session_state["pedido_ins_enviado"] = True
                             st.rerun()
@@ -1462,7 +1461,7 @@ elif opcion_almacen == "🛒 Pedir Material":
                                     "cantidad": 1.0,
                                     "estado": "Pendiente"
                                 }
-                                supabase.table("Solicitudes_Almacen").insert(datos_solicitud).execute()
+                                supabase.table("solicitudes_almacen").insert(datos_solicitud).execute()
                                 
                                 st.session_state["pedido_herr_enviado"] = True
                                 st.rerun()
