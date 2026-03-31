@@ -593,14 +593,19 @@ if opcion_almacen == "Insumos (Consumibles)":
                             if "Entrega" in tipo_operacion:
                                 responsable = st.selectbox("Entregar a:", lista_personal, key="insumo_resp")
                                 if st.button("Confirmar Salida", type="primary"):
-                                    if item_actual['cantidad'] >= cant_mov:
-                                        new_st = float(item_actual['cantidad'] - cant_mov)
-                                        supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                                        try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
-                                        except: pass
-                                        st.session_state["insumo_mov_guardado"] = True
-                                        st.rerun()
-                                    else: st.error("Stock insuficiente")
+                                    # --- LÓGICA MULTIUSUARIO: Verificar stock real ---
+                                    res_check = supabase.table("Insumos").select("cantidad").eq("id", int(item_actual['id'])).execute()
+                                    if res_check.data:
+                                        stock_real = float(res_check.data[0]['cantidad'])
+                                        if stock_real >= cant_mov:
+                                            new_st = stock_real - cant_mov
+                                            supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
+                                            try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
+                                            except: pass
+                                            st.session_state["insumo_mov_guardado"] = True
+                                            st.rerun()
+                                        else: st.error(f"Stock insuficiente o modificado por otro usuario. Stock real: {stock_real}")
+                                    else: st.error("Error al verificar el stock. Insumo no encontrado.")
                             else:
                                 st.markdown("**Detalles de la Entrada:**")
                                 prov_in_insumo = st.selectbox("Proveedor:", lista_provs_insumos, index=None, key="prov_re_stock")
@@ -609,7 +614,11 @@ if opcion_almacen == "Insumos (Consumibles)":
                                 num_comprobante = c_f2.text_input("No. Factura / Ticket", key="num_re_stock")
                                 
                                 if st.button("Confirmar Entrada", type="primary"):
-                                    new_st = float(item_actual['cantidad'] + cant_mov)
+                                    # --- LÓGICA MULTIUSUARIO: Verificar stock real ---
+                                    res_check = supabase.table("Insumos").select("cantidad").eq("id", int(item_actual['id'])).execute()
+                                    stock_actual = float(res_check.data[0]['cantidad']) if res_check.data else float(item_actual['cantidad'])
+                                    new_st = stock_actual + cant_mov
+                                    
                                     supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
                                     
                                     info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante}"
@@ -718,15 +727,19 @@ elif opcion_almacen == "Herramientas (Activos)":
                             sel = st.selectbox("Selecciona Herramienta", bodega["Herramienta"].tolist(), key="prest_herr")
                             resp = st.selectbox("Prestar a:", lista_personal, key="prest_resp")
                             if st.button("Confirmar Préstamo", type="primary"):
-                                id_h = bodega[bodega["Herramienta"]==sel].iloc[0]["id"]
-                                
-                                supabase.table("Herramientas").update({
-                                    "Responsable": str(resp)
-                                }).eq("id", int(id_h)).execute()
-                                
-                                try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
-                                except: pass
-                                st.success("✅ Prestado exitosamente"); time.sleep(1); st.rerun()
+                                id_h = int(bodega[bodega["Herramienta"]==sel].iloc[0]["id"])
+                                # --- LÓGICA MULTIUSUARIO: Verificar disponibilidad real ---
+                                res_check = supabase.table("Herramientas").select("Responsable").eq("id", id_h).execute()
+                                if res_check.data and res_check.data[0].get("Responsable", "") == "Bodega":
+                                    supabase.table("Herramientas").update({
+                                        "Responsable": str(resp)
+                                    }).eq("id", id_h).execute()
+                                    
+                                    try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
+                                    except: pass
+                                    st.success("✅ Prestado exitosamente"); time.sleep(1); st.rerun()
+                                else:
+                                    st.error("Esta herramienta ya fue prestada por otro usuario hace un momento.")
                         else:
                             st.warning("No hay herramientas disponibles en BODEGA.")
             with c2:
@@ -738,15 +751,19 @@ elif opcion_almacen == "Herramientas (Activos)":
                             sel_d = st.selectbox("Selecciona Herramienta a devolver", prestadas["Herramienta"].tolist(), key="dev_herr")
                             
                             if st.button("Confirmar Devolución", type="primary"):
-                                id_h = prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"]
-                                
-                                supabase.table("Herramientas").update({
-                                    "Responsable": "Bodega"
-                                }).eq("id", int(id_h)).execute()
-                                
-                                try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
-                                except: pass
-                                st.success("✅ Devuelto exitosamente"); time.sleep(1); st.rerun()
+                                id_h = int(prestadas[prestadas["Herramienta"]==sel_d].iloc[0]["id"])
+                                # --- LÓGICA MULTIUSUARIO: Verificar que siga prestada ---
+                                res_check = supabase.table("Herramientas").select("Responsable").eq("id", id_h).execute()
+                                if res_check.data and res_check.data[0].get("Responsable", "") != "Bodega":
+                                    supabase.table("Herramientas").update({
+                                        "Responsable": "Bodega"
+                                    }).eq("id", id_h).execute()
+                                    
+                                    try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
+                                    except: pass
+                                    st.success("✅ Devuelto exitosamente"); time.sleep(1); st.rerun()
+                                else:
+                                    st.error("Esta herramienta ya fue devuelta por otro usuario.")
                         else:
                             st.info("Todas las herramientas están actualmente en bodega.")
         else:
@@ -1322,7 +1339,6 @@ elif opcion_almacen == "🛒 Pedir Material":
             res_ins = supabase.table("Insumos").select("*").execute()
             df_ins = pd.DataFrame(res_ins.data)
             if not df_ins.empty:
-                # Normalizamos las columnas a minúsculas para evitar el error de lectura
                 df_ins.columns = df_ins.columns.str.lower()
                 
                 lista_busqueda = [f"{row.get('codigo', 'S/C')} | {row.get('descripcion', 'Sin nombre')} (Stock: {row.get('cantidad', 0)})" for i, row in df_ins.iterrows()]
@@ -1361,10 +1377,8 @@ elif opcion_almacen == "🛒 Pedir Material":
             res_herr = supabase.table("Herramientas").select("*").execute()
             df_her = pd.DataFrame(res_herr.data)
             if not df_her.empty:
-                # Solo mostrar herramientas que están en Bodega
                 bodega = df_her[df_her.get("Responsable", df_her.get("responsable")) == "Bodega"]
                 if not bodega.empty:
-                    # Usamos .get() para evitar errores si las mayúsculas no coinciden
                     lista_herr = [f"{row.get('codigo', 'S/C')} | {row.get('Herramienta', row.get('herramienta', 'Sin nombre'))}" for i, row in bodega.iterrows()]
                     seleccion_herr = st.selectbox("🔍 Buscar Herramienta Disponible:", lista_herr, index=None, placeholder="Escribe para buscar...")
                     
@@ -1422,22 +1436,31 @@ elif opcion_almacen == "🔔 Despachar Pedidos":
                     
                     # Botón para Despachar
                     if c2.button("✅ Despachar (Entregar)", key=f"ok_{row['id']}", type="primary", use_container_width=True):
-                        # 1. Actualizar el estado de la solicitud
-                        supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
                         
-                        # 2. Descontar stock o cambiar responsable según el tipo
+                        # --- LÓGICA MULTIUSUARIO: Verificar estado real antes de despachar ---
                         if row['tipo_item'] == "Insumo":
                             item_ins = supabase.table("Insumos").select("id, cantidad").eq("codigo", row['codigo_item']).execute().data[0]
-                            nuevo_stock = float(item_ins.get('cantidad', 0)) - float(row['cantidad'])
-                            supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
-                            supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": str(row['usuario_solicita'])}).execute()
+                            stock_real = float(item_ins.get('cantidad', 0))
+                            
+                            if stock_real >= float(row['cantidad']):
+                                nuevo_stock = stock_real - float(row['cantidad'])
+                                supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
+                                supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": str(row['usuario_solicita'])}).execute()
+                                supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
+                                st.success("Despachado y descontado del sistema."); time.sleep(1.5); st.rerun()
+                            else:
+                                st.error(f"Stock insuficiente en almacén. Quedan {stock_real} unidades.")
                         
                         elif row['tipo_item'] == "Herramienta":
-                            item_herr = supabase.table("Herramientas").select("id").eq("codigo", row['codigo_item']).execute().data[0]
-                            supabase.table("Herramientas").update({"Responsable": str(row['usuario_solicita'])}).eq("id", item_herr['id']).execute()
-                            supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": "Préstamo", "Responsable": str(row['usuario_solicita'])}).execute()
+                            item_herr = supabase.table("Herramientas").select("id, Responsable").eq("codigo", row['codigo_item']).execute().data[0]
                             
-                        st.success("Despachado y descontado del sistema."); time.sleep(1.5); st.rerun()
+                            if item_herr.get("Responsable", "") == "Bodega":
+                                supabase.table("Herramientas").update({"Responsable": str(row['usuario_solicita'])}).eq("id", item_herr['id']).execute()
+                                supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": "Préstamo", "Responsable": str(row['usuario_solicita'])}).execute()
+                                supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
+                                st.success("Despachado y descontado del sistema."); time.sleep(1.5); st.rerun()
+                            else:
+                                st.error(f"La herramienta ya fue prestada a: {item_herr.get('Responsable', 'Otro usuario')}")
                         
                     # Botón para Rechazar
                     if c3.button("❌ Rechazar", key=f"no_{row['id']}", use_container_width=True):
