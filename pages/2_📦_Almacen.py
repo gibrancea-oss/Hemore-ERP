@@ -1395,7 +1395,8 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
 elif opcion_almacen == "🛒 Pedir Material":
     st.markdown("Busca lo que necesitas y envía la solicitud a almacén para que te lo preparen.")
     
-    usuario_actual = st.session_state.get("usuario_actual", "Trabajador") 
+    # OBTENEMOS EL NOMBRE COMPLETO EXACTO CON EL QUE SE LOGUEÓ
+    usuario_actual = st.session_state.get("usuario_actual", "Usuario No Identificado") 
 
     # Se quitó la pestaña de pedidos pendientes de esta vista
     tab_pedir_insumo, tab_pedir_herr = st.tabs(["📦 Pedir Insumos", "🛠️ Pedir Herramientas"])
