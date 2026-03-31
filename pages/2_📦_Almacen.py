@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, timezone, date
 import time
 import io
 import os
@@ -15,6 +15,9 @@ utils.validar_login()
 # --------------------
 
 supabase = utils.supabase 
+
+# ZONA HORARIA CDMX (UTC-6)
+tz_cdmx = timezone(timedelta(hours=-6))
 
 # ==========================================
 # FUNCIÓN DE PERMISOS
@@ -541,7 +544,7 @@ with c_ayu:
 # ---------------------------------------------------------------------
 
 # ==================================================
-# 🧱 OPCIÓN 1: INSUMOS
+# 🧱 OPCIÓN 1: INSUMOS (AHORA INCLUYE PEDIDOS PENDIENTES)
 # ==================================================
 if opcion_almacen == "Insumos (Consumibles)":
     try:
@@ -567,7 +570,8 @@ if opcion_almacen == "Insumos (Consumibles)":
         lista_personal = []
         lista_provs_insumos = []
 
-    tab_op, tab_exist, tab_hist = st.tabs(["📝 Registrar Movimientos", "📊 Existencias", "📜 Historial"])
+    # Se agregó la pestaña tab_pedidos
+    tab_op, tab_exist, tab_hist, tab_pedidos = st.tabs(["📝 Registrar Movimientos", "📊 Existencias", "📜 Historial", "🔔 Pedidos Pendientes"])
     
     with tab_op:
         if tiene_permiso("Almacén: Movimientos Insumos"):
@@ -600,7 +604,7 @@ if opcion_almacen == "Insumos (Consumibles)":
                                         if stock_real >= cant_mov:
                                             new_st = stock_real - cant_mov
                                             supabase.table("Insumos").update({"cantidad": new_st}).eq("id", int(item_actual['id'])).execute()
-                                            try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
+                                            try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Salida", "cantidad": float(cant_mov), "responsable": str(responsable)}).execute()
                                             except: pass
                                             st.session_state["insumo_mov_guardado"] = True
                                             st.rerun()
@@ -623,7 +627,7 @@ if opcion_almacen == "Insumos (Consumibles)":
                                     
                                     info_entrada = f"Proveedor: {prov_in_insumo if prov_in_insumo else 'S/P'} | {factura_opcion}: {num_comprobante}"
                                     
-                                    try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": info_entrada}).execute()
+                                    try: supabase.table("Historial_Insumos").insert({"fecha": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'), "codigo": str(item_actual['codigo']), "descripcion": str(item_actual['descripcion']), "tipo_movimiento": "Re-stock", "cantidad": float(cant_mov), "responsable": info_entrada}).execute()
                                     except: pass
                                     st.session_state["insumo_mov_guardado"] = True
                                     st.rerun()
@@ -699,6 +703,68 @@ if opcion_almacen == "Insumos (Consumibles)":
         except Exception as e: 
             st.error(f"Error cargando historial: {e}")
 
+    # --- NUEVA PESTAÑA: PEDIDOS PENDIENTES (SÓLO INSUMOS) ---
+    with tab_pedidos:
+        if tiene_permiso("Almacén: Movimientos Insumos"):
+            st.markdown("### 🔔 Solicitudes de Insumos Pendientes de Entrega")
+            try:
+                res_pend = supabase.table("solicitudes_almacen").select("*").eq("estado", "Pendiente").eq("tipo_item", "Insumo").execute()
+                df_pend = pd.DataFrame(res_pend.data)
+                
+                if not df_pend.empty:
+                    c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1.5, 3, 2, 1, 2])
+                    c1.markdown("**Fecha / Hora (CDMX)**")
+                    c2.markdown("**Código SKU**")
+                    c3.markdown("**Descripción**")
+                    c4.markdown("**Solicitante**")
+                    c5.markdown("**Cant.**")
+                    c6.markdown("**Acciones**")
+                    
+                    for _, row in df_pend.iterrows():
+                        col1, col2, col3, col4, col5, col6 = st.columns([1.5, 1.5, 3, 2, 1, 2])
+                        col1.write(row['fecha'])
+                        col2.write(row['codigo_item'])
+                        col3.write(row['nombre_item'])
+                        col4.write(row['usuario_solicita'])
+                        col5.write(row['cantidad'])
+                        
+                        with col6:
+                            btn_c1, btn_c2 = st.columns(2)
+                            if btn_c1.button("✅", help="Entregar Material", key=f"ent_ins_{row['id']}"):
+                                # Lógica segura: Verificar stock
+                                item_db = supabase.table("Insumos").select("id, cantidad").eq("codigo", row['codigo_item']).execute().data
+                                if item_db:
+                                    stock_real = float(item_db[0].get('cantidad', 0))
+                                    if stock_real >= float(row['cantidad']):
+                                        nuevo_stock = stock_real - float(row['cantidad'])
+                                        supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_db[0]['id']).execute()
+                                        
+                                        supabase.table("Historial_Insumos").insert({
+                                            "fecha": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'), 
+                                            "codigo": str(row['codigo_item']), 
+                                            "descripcion": str(row['nombre_item']), 
+                                            "tipo_movimiento": "Salida (Despacho)", 
+                                            "cantidad": float(row['cantidad']), 
+                                            "responsable": str(row['usuario_solicita'])
+                                        }).execute()
+                                        
+                                        supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
+                                        st.success("✅ Entregado con éxito."); time.sleep(1); st.rerun()
+                                    else:
+                                        st.error(f"❌ Stock insuficiente. Quedan {stock_real}.")
+                                else:
+                                    st.error("❌ Código no encontrado en la base de datos.")
+                                    
+                            if btn_c2.button("❌", help="Rechazar Solicitud", key=f"rec_ins_{row['id']}"):
+                                supabase.table("solicitudes_almacen").update({"estado": "Rechazado"}).eq("id", row['id']).execute()
+                                st.warning("⚠️ Solicitud rechazada."); time.sleep(1); st.rerun()
+                else:
+                    st.info("No hay pedidos de insumos en ventanilla en este momento.")
+            except Exception as e:
+                st.error(f"Error cargando solicitudes: {e}")
+        else:
+            st.warning("🔒 No tienes permiso para despachar material.")
+
 # ==================================================
 # 🔧 OPCIÓN 2: HERRAMIENTAS
 # ==================================================
@@ -735,7 +801,7 @@ elif opcion_almacen == "Herramientas (Activos)":
                                         "Responsable": str(resp)
                                     }).eq("id", id_h).execute()
                                     
-                                    try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
+                                    try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'), "Herramienta": str(sel), "Movimiento": "Préstamo", "Responsable": str(resp)}).execute()
                                     except: pass
                                     st.success("✅ Prestado exitosamente"); time.sleep(1); st.rerun()
                                 else:
@@ -759,7 +825,7 @@ elif opcion_almacen == "Herramientas (Activos)":
                                         "Responsable": "Bodega"
                                     }).eq("id", id_h).execute()
                                     
-                                    try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
+                                    try: supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'), "Herramienta": str(sel_d), "Movimiento": "Devolución", "Responsable": "Bodega"}).execute()
                                     except: pass
                                     st.success("✅ Devuelto exitosamente"); time.sleep(1); st.rerun()
                                 else:
@@ -858,7 +924,7 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 if not st.session_state["recibo_guardado"]:
                     c1, c2, c3 = st.columns([1, 1, 1])
                     oc_input = c1.text_input("Orden de Compra (O.C.)", placeholder="Ej. 2183", key="new_ro_oc")
-                    fecha_input = c2.date_input("Fecha", value=datetime.now().date(), key="new_ro_fecha")
+                    fecha_input = c2.date_input("Fecha", value=datetime.now(tz_cdmx).date(), key="new_ro_fecha")
                     prov_input = c3.selectbox("Proveedor (Origen):", lista_nombres_prov, index=None, placeholder="Hemore...", key="new_ro_prov")
                     cliente_input = st.selectbox("Cliente (Destino):", lista_nombres_cli, index=None, key="new_ro_cli")
                     
@@ -930,7 +996,7 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 st.markdown(f"#### 📄 Gestionar O.C. {oc_seleccionada}")
                 
                 try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
-                except: fecha_dt = datetime.now().date()
+                except: fecha_dt = datetime.now(tz_cdmx).date()
                 
                 idx_cli = lista_nombres_cli.index(row_info['cliente']) if row_info['cliente'] in lista_nombres_cli else None
                 idx_prov = lista_nombres_prov.index(row_info['proveedor']) if row_info['proveedor'] in lista_nombres_prov else None
@@ -1044,7 +1110,7 @@ elif opcion_almacen == "Entrada de Material":
 
                 if not st.session_state["entrada_guardada"]:
                     oc_in = st.text_input("Orden de Compra / Remisión", key="new_em_oc")
-                    fecha_in = st.date_input("Fecha de Llegada", value=datetime.now().date(), key="new_em_fecha")
+                    fecha_in = st.date_input("Fecha de Llegada", value=datetime.now(tz_cdmx).date(), key="new_em_fecha")
                     prov_in = st.selectbox("Proveedor (Origen):", lista_provs, index=None, key="new_em_prov")
                     
                     if "data_entrada" not in st.session_state: st.session_state["data_entrada"] = pd.DataFrame([{"Código": "", "Descripción": "", "Color": "", "Cantidad": 0}], columns=["Código", "Descripción", "Color", "Cantidad"])
@@ -1091,7 +1157,7 @@ elif opcion_almacen == "Entrada de Material":
                 st.markdown(f"#### 📥 Gestionar Entrada O.C. / Remisión {oc_seleccionada}")
                 
                 try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
-                except: fecha_dt = datetime.now().date()
+                except: fecha_dt = datetime.now(tz_cdmx).date()
                 
                 idx_prov = lista_provs.index(row_info['proveedor']) if row_info['proveedor'] in lista_provs else None
                 idx_usr = lista_pers.index(row_info.get('usuario', '')) if row_info.get('usuario', '') in lista_pers else None
@@ -1197,7 +1263,7 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
 
                 if not st.session_state["dinero_guardado"]:
                     tipo_mov = st.radio("Tipo de Movimiento:", ["Entrada", "Salida"], horizontal=True, key="new_din_tipo")
-                    fecha_mov = st.date_input("Fecha", value=datetime.now().date(), key="new_din_fecha")
+                    fecha_mov = st.date_input("Fecha", value=datetime.now(tz_cdmx).date(), key="new_din_fecha")
                     
                     c1, c2 = st.columns(2)
                     quien_entrega = c1.text_input("Nombre de quien entrega:", key="new_din_ent")
@@ -1254,7 +1320,7 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
             st.markdown(f"#### 📄 Folio de Movimiento: {id_mov}")
             
             try: fecha_dt = pd.to_datetime(row_info['fecha']).date()
-            except: fecha_dt = datetime.now().date()
+            except: fecha_dt = datetime.now(tz_cdmx).date()
             
             n_tipo = st.radio("Tipo:", ["Entrada", "Salida"], index=0 if row_info['tipo'] == "Entrada" else 1, horizontal=True)
             n_fecha = st.date_input("Fecha", value=fecha_dt, key="d_f")
@@ -1329,95 +1395,99 @@ elif opcion_almacen == "Entradas y Salidas de Dinero":
 elif opcion_almacen == "🛒 Pedir Material":
     st.markdown("Busca lo que necesitas y envía la solicitud a almacén para que te lo preparen.")
     
-    usuario_actual = st.session_state.get("usuario", "Trabajador") 
+    usuario_actual = st.session_state.get("usuario_actual", "Trabajador") 
 
-    tab_pedir_insumo, tab_pedir_herr, tab_mis_pedidos = st.tabs(["📦 Pedir Insumos", "🛠️ Pedir Herramientas", "📜 Mis Pedidos Pendientes"])
+    # Se quitó la pestaña de pedidos pendientes de esta vista
+    tab_pedir_insumo, tab_pedir_herr = st.tabs(["📦 Pedir Insumos", "🛠️ Pedir Herramientas"])
 
     # --- BUSCADOR DE INSUMOS ---
     with tab_pedir_insumo:
-        try:
-            res_ins = supabase.table("Insumos").select("*").execute()
-            df_ins = pd.DataFrame(res_ins.data)
-            if not df_ins.empty:
-                df_ins.columns = df_ins.columns.str.lower()
-                
-                lista_busqueda = [f"{row.get('codigo', 'S/C')} | {row.get('descripcion', 'Sin nombre')} (Stock: {row.get('cantidad', 0)})" for i, row in df_ins.iterrows()]
-                seleccion_ins = st.selectbox("🔍 Buscar Insumo:", lista_busqueda, index=None, placeholder="Escribe para buscar...")
-                
-                if seleccion_ins:
-                    codigo_sel = seleccion_ins.split(" | ")[0]
-                    item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
+        if st.session_state.get("pedido_ins_exito", False):
+            st.success("✅ Pedido enviado correctamente a ventanilla.")
+            if st.button("🔄 Hacer otro pedido de Insumo"):
+                st.session_state["pedido_ins_exito"] = False
+                st.rerun()
+        else:
+            try:
+                res_ins = supabase.table("Insumos").select("*").execute()
+                df_ins = pd.DataFrame(res_ins.data)
+                if not df_ins.empty:
+                    df_ins.columns = df_ins.columns.str.lower()
                     
-                    st.info(f"📍 **Ubicación en almacén:** {item_actual.get('ubicacion', 'S/U')}")
-                    st.metric("Stock Disponible", item_actual.get('cantidad', 0))
+                    lista_busqueda = [f"{row.get('codigo', 'S/C')} | {row.get('descripcion', 'Sin nombre')} (Stock: {row.get('cantidad', 0)})" for i, row in df_ins.iterrows()]
+                    seleccion_ins = st.selectbox("🔍 Buscar Insumo:", lista_busqueda, index=None, placeholder="Escribe para buscar...")
                     
-                    cant_pedir = st.number_input("Cantidad a solicitar:", min_value=1.0, max_value=float(item_actual.get('cantidad', 1)), value=1.0)
-                    
-                    if st.button("🚀 Enviar Pedido a Almacén", type="primary"):
-                        datos_solicitud = {
-                            "fecha": datetime.now().strftime('%Y-%m-%d %H:%M'),
-                            "usuario_solicita": str(usuario_actual),
-                            "tipo_item": "Insumo",
-                            "codigo_item": str(item_actual.get('codigo', '')),
-                            "nombre_item": str(item_actual.get('descripcion', '')),
-                            "cantidad": float(cant_pedir),
-                            "estado": "Pendiente"
-                        }
-                        supabase.table("solicitudes_almacen").insert(datos_solicitud).execute()
-                        st.success(f"✅ Pedido enviado. Pasa a ventanilla de almacén por tus {cant_pedir} unidades.")
-                        time.sleep(2); st.rerun()
-            else:
-                st.warning("No hay insumos registrados en la base de datos.")
-        except Exception as e:
-            st.error(f"Error cargando insumos: {e}")
-
-    # --- BUSCADOR DE HERRAMIENTAS ---
-    with tab_pedir_herr:
-        try:
-            res_herr = supabase.table("Herramientas").select("*").execute()
-            df_her = pd.DataFrame(res_herr.data)
-            if not df_her.empty:
-                bodega = df_her[df_her.get("Responsable", df_her.get("responsable")) == "Bodega"]
-                if not bodega.empty:
-                    lista_herr = [f"{row.get('codigo', 'S/C')} | {row.get('Herramienta', row.get('herramienta', 'Sin nombre'))}" for i, row in bodega.iterrows()]
-                    seleccion_herr = st.selectbox("🔍 Buscar Herramienta Disponible:", lista_herr, index=None, placeholder="Escribe para buscar...")
-                    
-                    if seleccion_herr:
-                        cod_herr = seleccion_herr.split(" | ")[0]
-                        herr_actual = bodega[bodega["codigo"] == cod_herr].iloc[0]
+                    if seleccion_ins:
+                        codigo_sel = seleccion_ins.split(" | ")[0]
+                        item_actual = df_ins[df_ins["codigo"] == codigo_sel].iloc[0]
                         
-                        st.info("🟢 Disponible para préstamo inmediato.")
-                        if st.button("🚀 Solicitar Préstamo", type="primary"):
+                        st.info(f"📍 **Ubicación en almacén:** {item_actual.get('ubicacion', 'S/U')}")
+                        st.metric("Stock Disponible", item_actual.get('cantidad', 0))
+                        
+                        cant_pedir = st.number_input("Cantidad a solicitar:", min_value=1.0, max_value=float(item_actual.get('cantidad', 1)), value=1.0)
+                        
+                        if st.button("🚀 Enviar Pedido a Almacén", type="primary"):
                             datos_solicitud = {
-                                "fecha": datetime.now().strftime('%Y-%m-%d %H:%M'),
+                                "fecha": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'),
                                 "usuario_solicita": str(usuario_actual),
-                                "tipo_item": "Herramienta",
-                                "codigo_item": str(herr_actual.get('codigo', '')),
-                                "nombre_item": str(herr_actual.get('Herramienta', herr_actual.get('herramienta', ''))),
-                                "cantidad": 1.0,
+                                "tipo_item": "Insumo",
+                                "codigo_item": str(item_actual.get('codigo', '')),
+                                "nombre_item": str(item_actual.get('descripcion', '')),
+                                "cantidad": float(cant_pedir),
                                 "estado": "Pendiente"
                             }
                             supabase.table("solicitudes_almacen").insert(datos_solicitud).execute()
-                            st.success("✅ Solicitud enviada. Pasa a ventanilla por la herramienta.")
-                            time.sleep(2); st.rerun()
+                            
+                            st.session_state["pedido_ins_exito"] = True
+                            st.rerun()
                 else:
-                    st.warning("No hay herramientas en bodega en este momento.")
-        except Exception as e:
-            st.error(f"Error cargando herramientas: {e}")
+                    st.warning("No hay insumos registrados en la base de datos.")
+            except Exception as e:
+                st.error(f"Error cargando insumos: {e}")
 
-    # --- MIS PEDIDOS ---
-    with tab_mis_pedidos:
-        try:
-            res_mis_pedidos = supabase.table("solicitudes_almacen").select("*").eq("usuario_solicita", usuario_actual).eq("estado", "Pendiente").execute()
-            df_mis_pedidos = pd.DataFrame(res_mis_pedidos.data)
-            if not df_mis_pedidos.empty:
-                st.dataframe(df_mis_pedidos[['fecha', 'tipo_item', 'nombre_item', 'cantidad', 'estado']], use_container_width=True)
-            else:
-                st.info("No tienes pedidos pendientes de recoger.")
-        except: pass
+    # --- BUSCADOR DE HERRAMIENTAS ---
+    with tab_pedir_herr:
+        if st.session_state.get("pedido_herr_exito", False):
+            st.success("✅ Solicitud enviada correctamente a ventanilla.")
+            if st.button("🔄 Hacer otro pedido de Herramienta"):
+                st.session_state["pedido_herr_exito"] = False
+                st.rerun()
+        else:
+            try:
+                res_herr = supabase.table("Herramientas").select("*").execute()
+                df_her = pd.DataFrame(res_herr.data)
+                if not df_her.empty:
+                    bodega = df_her[df_her.get("Responsable", df_her.get("responsable")) == "Bodega"]
+                    if not bodega.empty:
+                        lista_herr = [f"{row.get('codigo', 'S/C')} | {row.get('Herramienta', row.get('herramienta', 'Sin nombre'))}" for i, row in bodega.iterrows()]
+                        seleccion_herr = st.selectbox("🔍 Buscar Herramienta Disponible:", lista_herr, index=None, placeholder="Escribe para buscar...")
+                        
+                        if seleccion_herr:
+                            cod_herr = seleccion_herr.split(" | ")[0]
+                            herr_actual = bodega[bodega["codigo"] == cod_herr].iloc[0]
+                            
+                            st.info("🟢 Disponible para préstamo inmediato.")
+                            if st.button("🚀 Solicitar Préstamo", type="primary"):
+                                datos_solicitud = {
+                                    "fecha": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'),
+                                    "usuario_solicita": str(usuario_actual),
+                                    "tipo_item": "Herramienta",
+                                    "codigo_item": str(herr_actual.get('codigo', '')),
+                                    "nombre_item": str(herr_actual.get('Herramienta', herr_actual.get('herramienta', ''))),
+                                    "cantidad": 1.0,
+                                    "estado": "Pendiente"
+                                }
+                                supabase.table("solicitudes_almacen").insert(datos_solicitud).execute()
+                                
+                                st.session_state["pedido_herr_exito"] = True
+                                st.rerun()
+                    else:
+                        st.warning("No hay herramientas en bodega en este momento.")
+            except Exception as e:
+                st.error(f"Error cargando herramientas: {e}")
 
 # ==================================================
-# 🔔 OPCIÓN 7: DESPACHAR PEDIDOS (VISTA ALMACENISTA)
+# 🔔 OPCIÓN 7: DESPACHAR PEDIDOS (VISTA ALMACENISTA - GENERAL)
 # ==================================================
 elif opcion_almacen == "🔔 Despachar Pedidos":
     st.markdown("Pedidos realizados por los trabajadores que están esperando en ventanilla.")
@@ -1445,7 +1515,7 @@ elif opcion_almacen == "🔔 Despachar Pedidos":
                             if stock_real >= float(row['cantidad']):
                                 nuevo_stock = stock_real - float(row['cantidad'])
                                 supabase.table("Insumos").update({"cantidad": nuevo_stock}).eq("id", item_ins['id']).execute()
-                                supabase.table("Historial_Insumos").insert({"fecha": datetime.now().strftime('%Y-%m-%d %H:%M'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": str(row['usuario_solicita'])}).execute()
+                                supabase.table("Historial_Insumos").insert({"fecha": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'), "codigo": str(row['codigo_item']), "descripcion": str(row['nombre_item']), "tipo_movimiento": "Salida", "cantidad": float(row['cantidad']), "responsable": str(row['usuario_solicita'])}).execute()
                                 supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
                                 st.success("Despachado y descontado del sistema."); time.sleep(1.5); st.rerun()
                             else:
@@ -1456,7 +1526,7 @@ elif opcion_almacen == "🔔 Despachar Pedidos":
                             
                             if item_herr.get("Responsable", "") == "Bodega":
                                 supabase.table("Herramientas").update({"Responsable": str(row['usuario_solicita'])}).eq("id", item_herr['id']).execute()
-                                supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now().strftime('%Y-%m-%d %H:%M'), "Herramienta": str(row['nombre_item']), "Movimiento": "Préstamo", "Responsable": str(row['usuario_solicita'])}).execute()
+                                supabase.table("Historial_Herramientas").insert({"Fecha_Hora": datetime.now(tz_cdmx).strftime('%Y-%m-%d %H:%M:%S'), "Herramienta": str(row['nombre_item']), "Movimiento": "Préstamo", "Responsable": str(row['usuario_solicita'])}).execute()
                                 supabase.table("solicitudes_almacen").update({"estado": "Despachado"}).eq("id", row['id']).execute()
                                 st.success("Despachado y descontado del sistema."); time.sleep(1.5); st.rerun()
                             else:
