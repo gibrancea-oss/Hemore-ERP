@@ -315,6 +315,7 @@ if opcion == "Personal":
         "Almacén: Prestar/Devolver Herramientas", "Almacén: Eliminar Historial Herramientas",
         "Almacén: Generar Recibos OC", "Almacén: Editar/Eliminar Recibos OC",
         "Almacén: Registrar Entrada Material", "Almacén: Editar/Eliminar Entrada Material",
+        "Almacén: Solicitar Material", "Almacén: Despachar Pedidos",
         "Finanzas: Registrar Movimientos Dinero", "Finanzas: Editar/Eliminar Movimientos Dinero"
     ]
 
