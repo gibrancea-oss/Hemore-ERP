@@ -1,6 +1,15 @@
 import streamlit as st
 import time
 
+# =========================================================
+# ⚠️ AQUÍ VA TU CONEXIÓN A SUPABASE (No la borres)
+# Ejemplo:
+# from supabase import create_client, Client
+# url = st.secrets["SUPABASE_URL"]
+# key = st.secrets["SUPABASE_KEY"]
+# supabase: Client = create_client(url, key)
+# =========================================================
+
 def validar_login():
     # 1. Verificar si hay una sesión activa
     if not st.session_state.get("authenticated", False):
