@@ -6,6 +6,9 @@ import os
 # Configuración inicial en modo "wide" para aprovechar todo el ancho
 st.set_page_config(page_title="Inicio", layout="wide")
 
+# 👇 APLICAR ESTILO PARA CELULARES 👇
+utils.aplicar_estilo_movil()
+
 # --- SISTEMA DE LOGIN Y SESIONES ---
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
