@@ -48,6 +48,7 @@ if not st.session_state["authenticated"]:
                     st.session_state["usuario_actual"] = "Administrador"
                     st.session_state["es_admin"] = True
                     st.session_state["permisos"] = ["TODO"]
+                    st.session_state["last_activity"] = time.time() # Cronómetro iniciado
                     
                     st.toast("✅ Acceso Concedido (Admin)")
                     time.sleep(1) 
@@ -62,6 +63,10 @@ if not st.session_state["authenticated"]:
                         if len(datos_usuario) > 0:
                             usuario_db = datos_usuario[0]
                             st.session_state["authenticated"] = True
+                            
+                            # 👇 INICIAMOS EL CRONÓMETRO AQUÍ 👇
+                            st.session_state["last_activity"] = time.time() 
+                            
                             st.session_state["usuario_actual"] = usuario_db["nombre"]
                             st.session_state["es_admin"] = False
                             
@@ -101,6 +106,7 @@ with col_t2:
         st.session_state["usuario_actual"] = ""
         st.session_state["es_admin"] = False
         st.session_state["permisos"] = []
+        st.session_state.pop("last_activity", None) # Limpiamos el cronómetro al salir manual
         st.rerun()
 
 # Barra de estado
