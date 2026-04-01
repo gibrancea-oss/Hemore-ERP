@@ -1,15 +1,20 @@
 import streamlit as st
 import time
+from supabase import create_client, Client
 
 # =========================================================
-# ⚠️ AQUÍ VA TU CONEXIÓN A SUPABASE (No la borres)
-# Ejemplo:
-# from supabase import create_client, Client
-# url = st.secrets["SUPABASE_URL"]
-# key = st.secrets["SUPABASE_KEY"]
-# supabase: Client = create_client(url, key)
+# CONEXIÓN A SUPABASE (ACTIVA)
 # =========================================================
+# Asegúrate de tener estas variables configuradas en tu archivo .streamlit/secrets.toml
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
 
+# Creamos la variable 'supabase' que usan todos los demás módulos
+supabase: Client = create_client(url, key)
+
+# =========================================================
+# FUNCIÓN DE VALIDACIÓN DE LOGIN E INACTIVIDAD
+# =========================================================
 def validar_login():
     # 1. Verificar si hay una sesión activa
     if not st.session_state.get("authenticated", False):
