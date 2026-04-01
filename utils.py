@@ -5,11 +5,8 @@ from supabase import create_client, Client
 # =========================================================
 # CONEXIÓN A SUPABASE (ACTIVA)
 # =========================================================
-# Asegúrate de tener estas variables configuradas en tu archivo .streamlit/secrets.toml
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
-
-# Creamos la variable 'supabase' que usan todos los demás módulos
 supabase: Client = create_client(url, key)
 
 # =========================================================
@@ -44,3 +41,51 @@ def validar_login():
         else:
             # Si hizo clic antes del minuto, reiniciamos el reloj
             st.session_state["last_activity"] = time.time()
+
+# =========================================================
+# DISEÑO RESPONSIVO PARA CELULARES (MOBILE-FRIENDLY)
+# =========================================================
+def aplicar_estilo_movil():
+    st.markdown("""
+    <style>
+    /* Ajustes específicos para pantallas de celular (menores a 768px) */
+    @media (max-width: 768px) {
+        /* 1. Reducir los márgenes laterales gigantes de Streamlit */
+        .block-container {
+            padding-top: 1.5rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-bottom: 2rem !important;
+        }
+        
+        /* 2. Hacer los botones más altos y anchos para que sea fácil tocarlos con el dedo */
+        div[data-testid="stButton"] > button {
+            width: 100% !important;
+            height: 3.5rem !important;
+            font-size: 1.1rem !important;
+            border-radius: 8px !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        /* 3. Ajustar tamaño de los títulos para que no se desborden ni ocupen media pantalla */
+        h1 { font-size: 1.8rem !important; }
+        h2 { font-size: 1.5rem !important; }
+        h3 { font-size: 1.2rem !important; }
+        
+        /* 4. Asegurar que los inputs de texto y selectores sean cómodos de tocar */
+        div[data-testid="stTextInput"] input, 
+        div[data-testid="stSelectbox"] div[role="combobox"],
+        div[data-testid="stNumberInput"] input {
+            height: 3rem !important;
+            font-size: 1rem !important;
+        }
+        
+        /* 5. Ajustar las pestañas (Tabs) para que se puedan deslizar horizontalmente si son muchas */
+        div[data-testid="stTabs"] button {
+            flex: 1;
+            font-size: 0.9rem !important;
+            padding: 0.5rem !important;
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
