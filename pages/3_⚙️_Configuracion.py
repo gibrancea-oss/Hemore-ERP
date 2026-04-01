@@ -11,6 +11,9 @@ from fpdf import FPDF
 
 st.set_page_config(page_title="Configuración Master", page_icon="⚙️", layout="wide")
 
+# 👇 APLICAR ESTILO PARA CELULARES 👇
+utils.aplicar_estilo_movil()
+
 # --- 🔒 SEGURIDAD ACTIVADA ---
 utils.validar_login()
 # -----------------------------
