@@ -57,6 +57,14 @@ def renderizar_manual(modulo):
         * **Existencias:** Muestra una tabla en tiempo real con todo el inventario de la fábrica. Da clic en el botón de descargar para obtener un Excel ideal para inventarios físicos.
         * **Historial:** Bitácora de todos los movimientos. Haz clic en el botón **Ver Detalle** al final de cada fila para auditar quién hizo el movimiento. Si eres administrador, verás un botón rojo para **Eliminar** el registro en caso de equivocación.
         """)
+
+        st.markdown("### 🔔 Pestaña: Pedidos Pendientes")
+        st.markdown("""
+        Aquí verás las solicitudes de insumos que hacen los trabajadores desde su panel.
+        1. Revisa qué insumo y qué cantidad están solicitando.
+        2. Si tienes stock suficiente en bodega, entrega el material y da clic en el botón verde **✅**. El sistema descontará el stock automáticamente y registrará la salida a nombre del trabajador.
+        3. Si no hay stock o la solicitud es errónea, da clic en el botón rojo **❌** para rechazarla.
+        """)
         if modulo != "Todos": return
 
     if modulo == "Todos": st.divider()
@@ -150,6 +158,27 @@ def renderizar_manual(modulo):
         st.markdown("""
         Revisa los flujos de la caja identificándolos rápidamente por color (🟢 Entradas, 🔴 Salidas). 
         Si hubo un error de centavos, haz clic en **Ver Detalle**, corrige el monto, guarda y vuelve a **Reimprimir el Ticket**.
+        """)
+        if modulo != "Todos": return
+
+    if modulo == "Todos": st.divider()
+
+    if modulo == "Pedir" or modulo == "Todos":
+        st.markdown("## 🛒 Módulo: Solicitar Material o Herramienta")
+        st.markdown("Usa este módulo para pedir tu material o herramientas a la ventanilla de almacén de forma digital y sin tener que dar vueltas.")
+        
+        st.markdown("### 📦 Pestaña: Pedir Insumos")
+        st.markdown("""
+        1. Escribe en el buscador el nombre o código de lo que necesitas (ej. lija, tornillos, soldadura).
+        2. El sistema te mostrará automáticamente la cantidad de "Stock Disponible".
+        3. Ingresa la cantidad exacta que requieres para tu tarea.
+        4. Da clic en **🚀 Enviar Pedido a Almacén**.
+        """)
+
+        st.markdown("### 🛠️ Pestaña: Pedir Herramientas")
+        st.markdown("""
+        1. Selecciona de la lista la herramienta que ocupas. *(Nota: Solo aparecerán las que están disponibles físicamente en Bodega en ese momento).*
+        2. Da clic en **🚀 Solicitar Préstamo**.
         """)
 
 @st.dialog("📖 Manual de Usuario Completo", width="large")
@@ -485,7 +514,8 @@ st.sidebar.title("🏭 Almacén Central")
 opciones_permitidas = []
 
 # --- NUEVO: PERMISO PARA TRABAJADORES ---
-opciones_permitidas.append("🛒 Pedir Material")
+if tiene_permiso("Almacén: Solicitar Material"):
+    opciones_permitidas.append("🛒 Pedir Material")
 # ----------------------------------------
 
 if tiene_permiso("Almacén: Movimientos Insumos") or tiene_permiso("Almacén: Ver Existencias Insumos") or tiene_permiso("Almacén: Eliminar Historial Insumos"):
@@ -500,7 +530,7 @@ if tiene_permiso("Finanzas: Registrar Movimientos Dinero") or tiene_permiso("Fin
     opciones_permitidas.append("Entradas y Salidas de Dinero")
 
 # Agregamos la opción para que el almacenista despache:
-if tiene_permiso("Almacén: Movimientos Insumos") or tiene_permiso("Almacén: Prestar/Devolver Herramientas"):
+if tiene_permiso("Almacén: Despachar Pedidos"):
     opciones_permitidas.append("🔔 Despachar Pedidos")
 
 if not opciones_permitidas:
@@ -541,6 +571,8 @@ with c_ayu:
         if st.button("❓ Ayuda", key="ayu_ent"): modal_ayuda_modulo("Entradas")
     elif opcion_almacen == "Entradas y Salidas de Dinero":
         if st.button("❓ Ayuda", key="ayu_din"): modal_ayuda_modulo("Dinero")
+    elif opcion_almacen == "🛒 Pedir Material": 
+        if st.button("❓ Ayuda", key="ayu_pedir"): modal_ayuda_modulo("Pedir")
 # ---------------------------------------------------------------------
 
 # ==================================================
@@ -705,7 +737,7 @@ if opcion_almacen == "Insumos (Consumibles)":
 
     # --- NUEVA PESTAÑA: PEDIDOS PENDIENTES (SÓLO INSUMOS) ---
     with tab_pedidos:
-        if tiene_permiso("Almacén: Movimientos Insumos"):
+        if tiene_permiso("Almacén: Movimientos Insumos") or tiene_permiso("Almacén: Despachar Pedidos"):
             st.markdown("### 🔔 Solicitudes de Insumos Pendientes de Entrega")
             try:
                 res_pend = supabase.table("solicitudes_almacen").select("*").eq("estado", "Pendiente").eq("tipo_item", "Insumo").execute()
@@ -754,7 +786,7 @@ if opcion_almacen == "Insumos (Consumibles)":
                                         st.error(f"❌ Stock insuficiente. Quedan {stock_real}.")
                                 else:
                                     st.error("❌ Código no encontrado en la base de datos.")
-                                    
+                                
                             if btn_c2.button("❌", help="Rechazar Solicitud", key=f"rec_ins_{row['id']}"):
                                 supabase.table("solicitudes_almacen").update({"estado": "Rechazado"}).eq("id", row['id']).execute()
                                 st.warning("⚠️ Solicitud rechazada."); time.sleep(1); st.rerun()
