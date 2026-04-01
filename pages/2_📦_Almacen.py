@@ -10,6 +10,9 @@ from fpdf import FPDF
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Almacén Central", page_icon="📦", layout="wide")
 
+# 👇 APLICAR ESTILO PARA CELULARES 👇
+utils.aplicar_estilo_movil()
+
 # --- 🔒 SEGURIDAD ---
 utils.validar_login() 
 # --------------------
