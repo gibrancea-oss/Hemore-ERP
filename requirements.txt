@@ -6,3 +6,4 @@ supabase
 fpdf
 openpyxl
 qrcode[pil]
+extra-streamlit-components
