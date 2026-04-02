@@ -15,7 +15,7 @@ utils.aplicar_estilo_movil()
 # ==========================================
 # 🛡️ BARRERA 1: DISPOSITIVO DE CONFIANZA
 # ==========================================
-@st.cache_resource(experimental_allow_widgets=True)
+@st.cache_resource
 def get_manager():
     return stx.CookieManager()
 
