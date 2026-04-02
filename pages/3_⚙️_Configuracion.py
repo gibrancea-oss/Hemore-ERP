@@ -270,7 +270,7 @@ if tiene_permiso("Configuración: Clientes"): opciones_config.append("Clientes")
 if tiene_permiso("Configuración: Proveedores"): opciones_config.append("Proveedores")
 if tiene_permiso("Configuración: Generar QR"): opciones_config.append("📂 Catálogos & Etiquetas QR")
 
-# --- NUEVO: MENÚ DE SEGURIDAD SOLO PARA EL ADMIN ---
+# --- MENÚ DE SEGURIDAD SOLO PARA EL ADMIN MAESTRO ---
 if st.session_state.get("es_admin", False): opciones_config.append("💻 Equipos Autorizados")
 
 if not opciones_config:
@@ -308,7 +308,7 @@ with c_ayu:
     elif opcion == "Proveedores":
         if st.button("❓ Ayuda", key="ayu_prov"): modal_ayuda_modulo_config("Proveedores")
     elif opcion == "💻 Equipos Autorizados":
-        pass # Panel de seguridad, no requiere botón de ayuda
+        pass # No requiere ayuda
     else:
         if st.button("❓ Ayuda", key="ayu_etiq"): modal_ayuda_modulo_config("Etiquetas")
 # --------------------------------------------
@@ -535,7 +535,7 @@ elif opcion == "Insumos":
             if "ubicacion" in df.columns: cols_base.append("ubicacion")
             
             df_view = df[cols_base].copy()
-            df_view["🗑️ Eliminar"] = False  # Columna de borrado instantáneo
+            df_view["🗑️ Eliminar"] = False  
             
             edited = st.data_editor(
                 df_view, 
@@ -567,15 +567,13 @@ elif opcion == "Insumos":
                             if "ubicacion" in r:
                                 d["ubicacion"] = str(r.get("ubicacion", ""))
                             
-                            # Si ya existe en BD, agregamos su ID
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
                                 d["id"] = int(r["id"])
                             elif d["codigo"].strip() == "" or d["Descripcion"].strip() == "":
-                                continue  # Ignora filas vacías si alguien le dio al + accidentalmente
+                                continue  
                                 
                             to_upsert.append(d)
                     
-                    # Ejecutamos en lote (BULK) para evitar el error httpx.ReadError
                     if to_delete:
                         utils.supabase.table("Insumos").delete().in_("id", to_delete).execute()
                     if to_upsert:
@@ -649,7 +647,7 @@ elif opcion == "Herramientas":
             
             df_view = df[cols_base].copy()
             df_view.rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"}, inplace=True)
-            df_view["🗑️ Eliminar"] = False # Columna de borrado instantáneo
+            df_view["🗑️ Eliminar"] = False 
             
             edited_h = st.data_editor(
                 df_view, 
@@ -687,7 +685,6 @@ elif opcion == "Herramientas":
 
                             to_upsert.append(d)
                     
-                    # BULK EXECUTION
                     if to_delete:
                         utils.supabase.table("Herramientas").delete().in_("id", to_delete).execute()
                     if to_upsert:
@@ -780,7 +777,6 @@ elif opcion == "Clientes":
                                 
                             to_upsert.append(d)
                     
-                    # BULK EXECUTION
                     if to_delete:
                         utils.supabase.table("Clientes").delete().in_("id", to_delete).execute()
                     if to_upsert:
@@ -873,7 +869,6 @@ elif opcion == "Proveedores":
                                 
                             to_upsert.append(d)
                             
-                    # BULK EXECUTION
                     if to_delete:
                         utils.supabase.table("Proveedores").delete().in_("id", to_delete).execute()
                     if to_upsert:
