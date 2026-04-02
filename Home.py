@@ -54,7 +54,12 @@ if not dispositivo_valido:
                             vencimiento = datetime.datetime.now() + datetime.timedelta(days=1825)
                             cookie_manager.set("hemore_device_token", nuevo_token, expires_at=vencimiento)
                             
-                            st.success("✅ Equipo vinculado exitosamente. Por favor, recarga la página (Presiona F5).")
+                            # 👇 AQUI ESTÁ LA MAGIA DE LA RECARGA AUTOMÁTICA 👇
+                            st.success("✅ Equipo vinculado exitosamente. Cargando sistema...")
+                            time.sleep(1.5) # Pausa para asegurar la cookie
+                            st.rerun()      # Actualiza la página automáticamente
+                            # 👆 ------------------------------------------ 👆
+                            
                         except Exception as e:
                             st.error(f"Error al conectar con la base de datos: {e}")
                     else:
