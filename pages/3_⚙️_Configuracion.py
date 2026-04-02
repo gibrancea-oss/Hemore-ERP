@@ -373,7 +373,7 @@ if opcion == "Personal":
             st.info("No hay personal registrado en el sistema aún.")
 
 # ==========================================
-# 2. INSUMOS 
+# 2. INSUMOS (TABLA EXACTA Y LIMPIA)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -413,7 +413,6 @@ elif opcion == "Insumos":
                             "stock_minimo": float(mini),
                             "ubicacion": str(ubi)
                         }
-                        
                         try:
                             utils.supabase.table("Insumos").insert(datos).execute()
                             st.session_state["alta_insumo_exito"] = True
@@ -427,16 +426,16 @@ elif opcion == "Insumos":
                 st.rerun()
 
     with t2:
-        cols_requeridas = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo", "ubicacion"]
+        # Definimos estrictamente las columnas que se usarán
+        cols_bd = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo", "ubicacion"]
         
-        # --- AQUÍ ESTÁ LA MAGIA: Si está vacío, creamos el esqueleto ---
         if df.empty:
-            df_view = pd.DataFrame(columns=cols_requeridas)
+            df_view = pd.DataFrame(columns=cols_bd)
         else:
-            for col in cols_requeridas:
+            for col in cols_bd:
                 if col not in df.columns:
                     df[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
-            df_view = df[cols_requeridas].copy()
+            df_view = df[cols_bd].copy()
             
         df_view["🗑️ Eliminar"] = False  
         
@@ -444,7 +443,9 @@ elif opcion == "Insumos":
             df_view, 
             num_rows="dynamic", 
             use_container_width=True,
+            hide_index=True,
             column_config={
+                "id": None, # Magia: Oculta el ID visualmente, pero lo mantiene en el código para poder editar/eliminar
                 "codigo": "Código",
                 "descripcion": "Descripción",
                 "unidad": "Unidad",
