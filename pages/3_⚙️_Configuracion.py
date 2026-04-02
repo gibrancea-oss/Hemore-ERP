@@ -373,7 +373,7 @@ if opcion == "Personal":
             st.info("No hay personal registrado en el sistema aún.")
 
 # ==========================================
-# 2. INSUMOS 
+# 2. INSUMOS (CÓDIGO LIMPIO 100%)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -404,24 +404,22 @@ elif opcion == "Insumos":
                 
                 if st.form_submit_button("Guardar Insumo", type="primary"):
                     if cod and nom:
-                        # Guardamos con llaves estandarizadas en minúsculas
+                        # Guardamos con las llaves exactas en minúsculas
                         datos = {
                             "codigo": str(cod), 
                             "descripcion": str(nom), 
                             "insumo": str(nom), 
                             "unidad": str(uni), 
                             "cantidad": float(cant), 
-                            "stock_minimo": float(mini)
+                            "stock_minimo": float(mini),
+                            "ubicacion": str(ubi)
                         }
-                        # Validamos si existe la columna de ubicacion
-                        if any(c.lower() == "ubicacion" for c in df.columns) or df.empty: 
-                            datos["ubicacion"] = str(ubi)
                         
                         try:
                             utils.supabase.table("Insumos").insert(datos).execute()
                             st.session_state["alta_insumo_exito"] = True
                             st.rerun()
-                        except Exception as e: st.error(f"Error al guardar: {e}.")
+                        except Exception as e: st.error(f"Error al guardar: {e}")
                     else: st.warning("Código y Descripción obligatorios.")
         else:
             st.success("✅ Insumo guardado correctamente en la base de datos.")
@@ -431,21 +429,13 @@ elif opcion == "Insumos":
 
     with t2:
         if not df.empty:
-            # CREAMOS UN DATAFRAME NUEVO Y LIMPIO PARA EVITAR COLUMNAS FANTASMA DUPLICADAS
-            df_view = pd.DataFrame()
-            columnas_requeridas = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo"]
+            # Aseguramos que el dataframe tenga las columnas necesarias aunque la BD esté vacía
+            cols_requeridas = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo", "ubicacion"]
+            for col in cols_requeridas:
+                if col not in df.columns:
+                    df[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
             
-            if any(c.lower() == "ubicacion" for c in df.columns):
-                columnas_requeridas.append("ubicacion")
-            
-            for col in columnas_requeridas:
-                # Buscamos la columna sin importar si está en mayúscula o minúscula
-                matches = [c for c in df.columns if c.lower() == col]
-                if matches:
-                    df_view[col] = df[matches[0]] # Tomamos la primera coincidencia
-                else:
-                    df_view[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
-            
+            df_view = df[cols_requeridas].copy()
             df_view["🗑️ Eliminar"] = False  
             
             edited = st.data_editor(
@@ -473,17 +463,15 @@ elif opcion == "Insumos":
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
                                 to_delete.append(int(r["id"]))
                         else:
-                            # Aseguramos enviar los datos en minúsculas
                             d = {
                                 "codigo": str(r.get("codigo", "")),
                                 "descripcion": str(r.get("descripcion", "")),
                                 "insumo": str(r.get("descripcion", "")),
                                 "cantidad": float(r.get("cantidad", 0) if pd.notna(r.get("cantidad")) else 0),
                                 "unidad": str(r.get("unidad", "")),
-                                "stock_minimo": float(r.get("stock_minimo", 0) if pd.notna(r.get("stock_minimo")) else 0)
+                                "stock_minimo": float(r.get("stock_minimo", 0) if pd.notna(r.get("stock_minimo")) else 0),
+                                "ubicacion": str(r.get("ubicacion", ""))
                             }
-                            if "ubicacion" in r:
-                                d["ubicacion"] = str(r.get("ubicacion", ""))
                             
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
                                 d["id"] = int(r["id"])
