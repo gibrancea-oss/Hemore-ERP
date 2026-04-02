@@ -15,11 +15,8 @@ utils.aplicar_estilo_movil()
 # ==========================================
 # 🛡️ BARRERA 1: DISPOSITIVO DE CONFIANZA
 # ==========================================
-@st.cache_resource
-def get_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_manager()
+# Eliminamos el @st.cache_resource para evitar el warning
+cookie_manager = stx.CookieManager(key="cookie_manager_hemore")
 time.sleep(0.1) # Pausa milimétrica para asegurar la lectura de la cookie
 
 device_token = cookie_manager.get(cookie="hemore_device_token")
@@ -64,9 +61,9 @@ if not dispositivo_valido:
                             vencimiento = datetime.datetime.now() + datetime.timedelta(days=1825)
                             cookie_manager.set("hemore_device_token", nuevo_token, expires_at=vencimiento)
                             
-                            st.success("✅ Equipo vinculado exitosamente.")
-                            time.sleep(1)
-                            st.rerun()
+                            st.success("✅ Equipo vinculado exitosamente. Por favor, recarga la página (F5) o presiona el botón de abajo.")
+                            if st.button("🔄 Actualizar Página"):
+                                st.rerun()
                         except Exception as e:
                             st.error(f"Error al conectar con la base de datos: {e}")
                     else:
