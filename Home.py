@@ -12,16 +12,14 @@ import datetime
 st.set_page_config(page_title="Inicio", layout="wide")
 utils.aplicar_estilo_movil()
 
-# Creamos un contenedor vacío para evitar el parpadeo visual
+# Contenedor principal para evitar parpadeos visuales
 placeholder = st.empty()
 
 # ==========================================
 # 🛡️ BARRERA 1: DISPOSITIVO DE CONFIANZA
 # ==========================================
 cookie_manager = stx.CookieManager(key="cookie_manager_hemore")
-
-# Damos un tiempo mínimo para que la cookie sea leída por el navegador
-time.sleep(0.5) 
+time.sleep(0.5) # Pausa milimétrica para asegurar la lectura de la cookie
 
 device_token = cookie_manager.get(cookie="hemore_device_token")
 dispositivo_valido = False
@@ -32,10 +30,10 @@ if device_token:
         res_device = utils.supabase.table("Dispositivos_Autorizados").select("*").eq("token", device_token).execute()
         if len(res_device.data) > 0:
             dispositivo_valido = True
-    except Exception:
+    except Exception as e:
         pass 
 
-# SI EL DISPOSITIVO NO ES RECONOCIDO
+# SI EL DISPOSITIVO NO ES RECONOCIDO, SE BLOQUEA LA PANTALLA AQUÍ
 if not dispositivo_valido:
     with placeholder.container():
         st.write("<br><br>", unsafe_allow_html=True)
@@ -43,13 +41,15 @@ if not dispositivo_valido:
         
         with col2:
             st.error("⛔ Acceso Denegado: Dispositivo No Autorizado")
-            st.markdown("Este equipo no está vinculado a la red de la fábrica.")
+            st.markdown("Este equipo no está vinculado a la red de la fábrica. Por seguridad, no puedes visualizar la pantalla de inicio de sesión.")
             
+            # --- PUERTA TRASERA PARA VINCULAR EQUIPO ---
             with st.expander("⚙️ Vincular este equipo (Solo Administrador)"):
                 admin_pass_link = st.text_input("Contraseña Maestra", type="password", key="auth_pass")
-                nombre_equipo = st.text_input("Nombre de este equipo", key="auth_name")
+                nombre_equipo = st.text_input("Nombre de este equipo (Ej. Computadora Almacén)", key="auth_name")
                 
                 if st.button("Vincular Equipo Físico", type="primary", use_container_width=True):
+                    # Validamos contra la bóveda de secretos de Streamlit
                     if admin_pass_link == st.secrets["admin_password"]:
                         if nombre_equipo:
                             nuevo_token = str(uuid.uuid4())
@@ -64,26 +64,34 @@ if not dispositivo_valido:
                                 vencimiento = datetime.datetime.now() + datetime.timedelta(days=1825)
                                 cookie_manager.set("hemore_device_token", nuevo_token, expires_at=vencimiento)
                                 
-                                st.success("✅ Equipo vinculado. Redirigiendo...")
+                                st.success("✅ Equipo vinculado exitosamente. Redirigiendo...")
                                 time.sleep(1)
-                                st.rerun() # Recarga automática para quitar los botones de vinculación
+                                st.rerun() # Actualiza solo y muestra el login
                             except Exception as e:
-                                st.error(f"Error de conexión: {e}")
+                                st.error(f"Error al conectar con la base de datos: {e}")
                         else:
-                            st.warning("Escribe un nombre para el equipo.")
+                            st.warning("Escribe un nombre para identificar este equipo.")
                     else:
-                        st.error("Contraseña incorrecta.")
-        st.stop() 
+                        st.error("Contraseña incorrecta. Contacta a gerencia.")
+        
+    st.stop() # DETIENE EL CÓDIGO. NADIE PASA AL LOGIN SIN SER VINCULADO.
 
 # ==========================================
-# 🛡️ BARRERA 2: SISTEMA DE LOGIN (EQUIPO AUTORIZADO)
+# 🛡️ BARRERA 2: SISTEMA DE LOGIN Y SESIONES
 # ==========================================
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
+if "usuario_actual" not in st.session_state:
+    st.session_state["usuario_actual"] = ""
+if "es_admin" not in st.session_state:
+    st.session_state["es_admin"] = False
+if "permisos" not in st.session_state:
+    st.session_state["permisos"] = []
 
 if not st.session_state["authenticated"]:
     with placeholder.container():
         st.write("<br><br>", unsafe_allow_html=True) 
+        
         col_logo, col_login = st.columns([1, 1.5], gap="large")
         
         with col_logo:
@@ -92,34 +100,54 @@ if not st.session_state["authenticated"]:
                 
         with col_login:
             st.title("🔐 Acceso al Sistema ERP")
-            st.success("✅ Equipo Autorizado para uso de HEMORE")
+            st.success("✅ Equipo Autorizado")
+            st.markdown("Por favor ingresa tus credenciales operativas.")
             
             usuario_input = st.text_input("Usuario")
             password_input = st.text_input("Contraseña", type="password")
             
+            st.write("<br>", unsafe_allow_html=True) 
             if st.button("Ingresar al Sistema", type="primary", use_container_width=True):
-                if usuario_input == st.secrets["admin_user"] and password_input == st.secrets["admin_password"]: 
-                    st.session_state["authenticated"] = True
-                    st.session_state["usuario_actual"] = "Administrador Master"
-                    st.session_state["es_admin"] = True
-                    st.session_state["permisos"] = ["TODO"]
-                    st.rerun()
+                if not usuario_input or not password_input:
+                    st.warning("⚠️ Ingresa usuario y contraseña.")
                 else:
-                    res = utils.supabase.table("Personal").select("*").eq("usuario", usuario_input).eq("pin", password_input).eq("activo", True).execute()
-                    if len(res.data) > 0:
-                        usuario_db = res.data[0]
+                    # 👑 1. VALIDACIÓN ADMIN MAESTRO (LEYENDO DESDE SECRETS)
+                    if usuario_input == st.secrets["admin_user"] and password_input == st.secrets["admin_password"]: 
                         st.session_state["authenticated"] = True
-                        st.session_state["usuario_actual"] = usuario_db["nombre"]
-                        st.session_state["es_admin"] = False
-                        permisos_str = usuario_db.get("permisos", "")
-                        st.session_state["permisos"] = [p.strip() for p in permisos_str.split(",")] if permisos_str else []
+                        st.session_state["usuario_actual"] = "Administrador Master"
+                        st.session_state["es_admin"] = True
+                        st.session_state["permisos"] = ["TODO"]
+                        st.session_state["last_activity"] = time.time() 
                         st.rerun()
+                    
+                    # 👷‍♂️ 2. VALIDACIÓN OPERADORES
                     else:
-                        st.error("⛔ Credenciales incorrectas")
-    st.stop()
+                        try:
+                            res = utils.supabase.table("Personal").select("*").eq("usuario", usuario_input).eq("pin", password_input).eq("activo", True).execute()
+                            datos_usuario = res.data
+                            
+                            if len(datos_usuario) > 0:
+                                usuario_db = datos_usuario[0]
+                                st.session_state["authenticated"] = True
+                                st.session_state["last_activity"] = time.time() 
+                                
+                                st.session_state["usuario_actual"] = usuario_db["nombre"]
+                                st.session_state["es_admin"] = False
+                                
+                                permisos_str = usuario_db.get("permisos", "")
+                                if permisos_str:
+                                    st.session_state["permisos"] = [p.strip() for p in permisos_str.split(",")]
+                                else:
+                                    st.session_state["permisos"] = []
+                                st.rerun()
+                            else:
+                                st.error("⛔ Usuario o contraseña incorrectos (o usuario inactivo)")
+                        except Exception as e:
+                            st.error(f"Error de conexión con la base de datos: {e}")
+    st.stop() 
 
 # ==========================================
-# 🏠 PANTALLA PRINCIPAL (YA LOGUEADO)
+# 🏠 PANTALLA PRINCIPAL COMPACTA
 # ==========================================
 with placeholder.container():
     if os.path.exists("logo.png"):
@@ -133,27 +161,36 @@ with placeholder.container():
         st.write("") 
         if st.button("🚪 Cerrar Sesión", use_container_width=True):
             st.session_state["authenticated"] = False
+            st.session_state["usuario_actual"] = ""
+            st.session_state["es_admin"] = False
+            st.session_state["permisos"] = []
+            st.session_state.pop("last_activity", None)
             st.rerun()
 
-    if st.session_state.get("es_admin", False):
-        st.success(f"👤 Sesión Activa: **{st.session_state['usuario_actual']}** | 👑 Acceso Total")
+    if st.session_state["es_admin"]:
+        st.success(f"👤 Sesión Activa: **{st.session_state['usuario_actual']}** | 👑 Acceso Total Habilitado")
     else:
         st.info(f"👤 Sesión Activa: **{st.session_state['usuario_actual']}** | 🔒 Accesos Restringidos")
 
     st.divider()
 
     col_info1, col_info2 = st.columns(2, gap="large")
+
     with col_info1:
         st.markdown("### 🚀 Accesos Directos")
-        st.info("**📦 Almacén:** Gestión de inventarios y movimientos.")
-        st.info("**⚙️ Configuración:** Catálogos y control de seguridad.")
+        st.markdown("Selecciona una opción en el menú de la izquierda:")
+        
+        st.info("**📦 Almacén:** Control de inventarios, entradas, salidas, recibos y préstamos.")
+        st.info("**⚙️ Configuración:** Alta de productos, clientes, proveedores, personal y catálogos QR.")
 
     with col_info2:
-        if st.session_state.get("es_admin", False):
-             st.success("Tienes control total sobre los módulos del sistema.")
+        if st.session_state["es_admin"]:
+             st.markdown("### 🛡️ Nivel de Acceso")
+             st.success("Eres Administrador del Sistema. Tienes control total sobre los módulos de Almacén y Configuración.")
         else:
-            st.markdown("### 🛡️ Tus permisos:")
-            if st.session_state.get("permisos"):
-                st.success(" | ".join([f"✅ {p}" for p in st.session_state["permisos"]]))
+            st.markdown("### 🛡️ Tus permisos habilitados:")
+            if st.session_state["permisos"]:
+                permisos_texto = " | ".join([f"✅ {p}" for p in st.session_state["permisos"]])
+                st.success(permisos_texto)
             else:
-                st.warning("No tienes permisos asignados.")
+                st.warning("No tienes permisos asignados actualmente.")
