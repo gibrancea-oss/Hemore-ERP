@@ -12,6 +12,10 @@ import datetime
 st.set_page_config(page_title="Inicio", layout="wide")
 utils.aplicar_estilo_movil()
 
+# Creamos una variable de sesión temporal para el salto instantáneo
+if "bypass_device" not in st.session_state:
+    st.session_state["bypass_device"] = False
+
 # ==========================================
 # 🛡️ BARRERA 1: DISPOSITIVO DE CONFIANZA
 # ==========================================
@@ -28,6 +32,10 @@ if device_token:
             dispositivo_valido = True
     except Exception as e:
         pass 
+
+# Si en esta sesión acabamos de vincular, forzamos la validación a True
+if st.session_state["bypass_device"]:
+    dispositivo_valido = True
 
 if not dispositivo_valido:
     st.write("<br><br>", unsafe_allow_html=True)
@@ -56,16 +64,11 @@ if not dispositivo_valido:
                             vencimiento = datetime.datetime.now() + datetime.timedelta(days=1825)
                             cookie_manager.set("hemore_device_token", nuevo_token, expires_at=vencimiento)
                             
-                            # 👇 TRUCO JAVASCRIPT PARA RECARGA AUTOMÁTICA 👇
-                            st.success("✅ Equipo vinculado exitosamente. Redirigiendo al sistema...")
+                            # 3. PASE VIP: Activamos el bypass para que Python ignore la cookie por ahora
+                            st.session_state["bypass_device"] = True
                             
-                            # Este código invisible espera 1.5 segundos (para asegurar la cookie) 
-                            # y luego hace una recarga completa del navegador.
-                            st.components.v1.html(
-                                "<script>setTimeout(function(){window.parent.location.reload();}, 1500);</script>",
-                                height=0
-                            )
-                            # 👆 ------------------------------------------ 👆
+                            # 4. RECARGA INSTANTÁNEA
+                            st.rerun()
                             
                         except Exception as e:
                             st.error(f"Error al conectar con la base de datos: {e}")
