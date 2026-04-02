@@ -380,9 +380,6 @@ elif opcion == "Insumos":
     try:
         response = utils.supabase.table("Insumos").select("*").order("id").execute()
         df = pd.DataFrame(response.data)
-        # --- BLINDAJE: FORZAR MINÚSCULAS EN EL DATAFRAME ---
-        if not df.empty:
-            df.columns = df.columns.str.lower()
     except: 
         df = pd.DataFrame()
     
@@ -407,7 +404,7 @@ elif opcion == "Insumos":
                 
                 if st.form_submit_button("Guardar Insumo", type="primary"):
                     if cod and nom:
-                        # --- BLINDAJE: LLAVES ESTRICTAMENTE EN MINÚSCULAS ---
+                        # Guardamos con llaves estandarizadas en minúsculas
                         datos = {
                             "codigo": str(cod), 
                             "descripcion": str(nom), 
@@ -416,7 +413,9 @@ elif opcion == "Insumos":
                             "cantidad": float(cant), 
                             "stock_minimo": float(mini)
                         }
-                        if "ubicacion" in df.columns or df.empty: datos["ubicacion"] = str(ubi)
+                        # Validamos si existe la columna de ubicacion
+                        if any(c.lower() == "ubicacion" for c in df.columns) or df.empty: 
+                            datos["ubicacion"] = str(ubi)
                         
                         try:
                             utils.supabase.table("Insumos").insert(datos).execute()
@@ -432,18 +431,21 @@ elif opcion == "Insumos":
 
     with t2:
         if not df.empty:
-            # Ahora cols_base solo trabaja en minúsculas (igual que la base de datos)
-            cols_base = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo"]
+            # CREAMOS UN DATAFRAME NUEVO Y LIMPIO PARA EVITAR COLUMNAS FANTASMA DUPLICADAS
+            df_view = pd.DataFrame()
+            columnas_requeridas = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo"]
             
-            # Aseguramos que existan todas las columnas para que Pandas no tire error
-            for col in cols_base:
-                if col not in df.columns:
-                    df[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
-                    
-            if "ubicacion" in df.columns: 
-                cols_base.append("ubicacion")
+            if any(c.lower() == "ubicacion" for c in df.columns):
+                columnas_requeridas.append("ubicacion")
             
-            df_view = df[cols_base].copy()
+            for col in columnas_requeridas:
+                # Buscamos la columna sin importar si está en mayúscula o minúscula
+                matches = [c for c in df.columns if c.lower() == col]
+                if matches:
+                    df_view[col] = df[matches[0]] # Tomamos la primera coincidencia
+                else:
+                    df_view[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
+            
             df_view["🗑️ Eliminar"] = False  
             
             edited = st.data_editor(
@@ -451,7 +453,6 @@ elif opcion == "Insumos":
                 num_rows="dynamic", 
                 use_container_width=True,
                 column_config={
-                    # Aquí es donde le damos el formato visual bonito sin alterar la BD
                     "codigo": "Código",
                     "descripcion": "Descripción",
                     "unidad": "Unidad",
@@ -472,7 +473,7 @@ elif opcion == "Insumos":
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
                                 to_delete.append(int(r["id"]))
                         else:
-                            # --- BLINDAJE: LLAVES ESTRICTAMENTE EN MINÚSCULAS ---
+                            # Aseguramos enviar los datos en minúsculas
                             d = {
                                 "codigo": str(r.get("codigo", "")),
                                 "descripcion": str(r.get("descripcion", "")),
