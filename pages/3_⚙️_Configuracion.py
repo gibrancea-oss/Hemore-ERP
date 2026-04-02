@@ -373,7 +373,7 @@ if opcion == "Personal":
             st.info("No hay personal registrado en el sistema aún.")
 
 # ==========================================
-# 2. INSUMOS (CÓDIGO LIMPIO 100%)
+# 2. INSUMOS 
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -404,7 +404,6 @@ elif opcion == "Insumos":
                 
                 if st.form_submit_button("Guardar Insumo", type="primary"):
                     if cod and nom:
-                        # Guardamos con las llaves exactas en minúsculas
                         datos = {
                             "codigo": str(cod), 
                             "descripcion": str(nom), 
@@ -428,68 +427,71 @@ elif opcion == "Insumos":
                 st.rerun()
 
     with t2:
-        if not df.empty:
-            # Aseguramos que el dataframe tenga las columnas necesarias aunque la BD esté vacía
-            cols_requeridas = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo", "ubicacion"]
+        cols_requeridas = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo", "ubicacion"]
+        
+        # --- AQUÍ ESTÁ LA MAGIA: Si está vacío, creamos el esqueleto ---
+        if df.empty:
+            df_view = pd.DataFrame(columns=cols_requeridas)
+        else:
             for col in cols_requeridas:
                 if col not in df.columns:
                     df[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
-            
             df_view = df[cols_requeridas].copy()
-            df_view["🗑️ Eliminar"] = False  
             
-            edited = st.data_editor(
-                df_view, 
-                num_rows="dynamic", 
-                use_container_width=True,
-                column_config={
-                    "codigo": "Código",
-                    "descripcion": "Descripción",
-                    "unidad": "Unidad",
-                    "cantidad": "Cantidad",
-                    "stock_minimo": "Stock Mínimo",
-                    "ubicacion": "Ubicación",
-                    "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
-                }
-            )
-            
-            if st.button("💾 Guardar Cambios", type="primary"):
-                try:
-                    to_upsert = []
-                    to_delete = []
-                    
-                    for i, r in edited.iterrows():
-                        if r.get("🗑️ Eliminar", False):
-                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
-                                to_delete.append(int(r["id"]))
-                        else:
-                            d = {
-                                "codigo": str(r.get("codigo", "")),
-                                "descripcion": str(r.get("descripcion", "")),
-                                "insumo": str(r.get("descripcion", "")),
-                                "cantidad": float(r.get("cantidad", 0) if pd.notna(r.get("cantidad")) else 0),
-                                "unidad": str(r.get("unidad", "")),
-                                "stock_minimo": float(r.get("stock_minimo", 0) if pd.notna(r.get("stock_minimo")) else 0),
-                                "ubicacion": str(r.get("ubicacion", ""))
-                            }
-                            
-                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
-                                d["id"] = int(r["id"])
-                            elif d["codigo"].strip() == "" or d["descripcion"].strip() == "":
-                                continue  
-                                
-                            to_upsert.append(d)
-                    
-                    if to_delete:
-                        utils.supabase.table("Insumos").delete().in_("id", to_delete).execute()
-                    if to_upsert:
-                        utils.supabase.table("Insumos").upsert(to_upsert).execute()
+        df_view["🗑️ Eliminar"] = False  
+        
+        edited = st.data_editor(
+            df_view, 
+            num_rows="dynamic", 
+            use_container_width=True,
+            column_config={
+                "codigo": "Código",
+                "descripcion": "Descripción",
+                "unidad": "Unidad",
+                "cantidad": "Cantidad",
+                "stock_minimo": "Stock Mínimo",
+                "ubicacion": "Ubicación",
+                "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+            }
+        )
+        
+        if st.button("💾 Guardar Cambios", type="primary"):
+            try:
+                to_upsert = []
+                to_delete = []
+                
+                for i, r in edited.iterrows():
+                    if r.get("🗑️ Eliminar", False):
+                        if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                            to_delete.append(int(r["id"]))
+                    else:
+                        d = {
+                            "codigo": str(r.get("codigo", "")),
+                            "descripcion": str(r.get("descripcion", "")),
+                            "insumo": str(r.get("descripcion", "")),
+                            "cantidad": float(r.get("cantidad", 0) if pd.notna(r.get("cantidad")) else 0),
+                            "unidad": str(r.get("unidad", "")),
+                            "stock_minimo": float(r.get("stock_minimo", 0) if pd.notna(r.get("stock_minimo")) else 0),
+                            "ubicacion": str(r.get("ubicacion", ""))
+                        }
                         
-                    st.toast("✅ Inventario actualizado al momento", icon="✅")
-                    time.sleep(0.5) 
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error al guardar los cambios: {e}")
+                        if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                            d["id"] = int(r["id"])
+                        elif d["codigo"].strip() == "" or d["descripcion"].strip() == "":
+                            continue  
+                            
+                        to_upsert.append(d)
+                
+                if to_delete:
+                    utils.supabase.table("Insumos").delete().in_("id", to_delete).execute()
+                if to_upsert:
+                    utils.supabase.table("Insumos").upsert(to_upsert).execute()
+                    
+                st.toast("✅ Inventario actualizado al momento", icon="✅")
+                time.sleep(0.5) 
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al guardar los cambios: {e}")
 
 # ==========================================
 # 3. HERRAMIENTAS 
