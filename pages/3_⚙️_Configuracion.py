@@ -270,6 +270,9 @@ if tiene_permiso("Configuración: Clientes"): opciones_config.append("Clientes")
 if tiene_permiso("Configuración: Proveedores"): opciones_config.append("Proveedores")
 if tiene_permiso("Configuración: Generar QR"): opciones_config.append("📂 Catálogos & Etiquetas QR")
 
+# --- NUEVO: MENÚ DE SEGURIDAD SOLO PARA EL ADMIN ---
+if st.session_state.get("es_admin", False): opciones_config.append("💻 Equipos Autorizados")
+
 if not opciones_config:
     st.warning("🔒 No tienes permisos para acceder a ningún módulo de Configuración.")
     st.stop()
@@ -290,6 +293,7 @@ with c_tit:
     elif opcion == "Herramientas": st.title("🛠️ CATÁLOGO DE HERRAMIENTAS")
     elif opcion == "Clientes": st.title("🏢 DIRECTORIO DE CLIENTES")
     elif opcion == "Proveedores": st.title("🚚 DIRECTORIO DE PROVEEDORES")
+    elif opcion == "💻 Equipos Autorizados": st.title("💻 CONTROL DE EQUIPOS AUTORIZADOS")
     else: st.title("📂 CATÁLOGOS Y ETIQUETAS QR")
 
 with c_ayu:
@@ -303,6 +307,8 @@ with c_ayu:
         if st.button("❓ Ayuda", key="ayu_cli"): modal_ayuda_modulo_config("Clientes")
     elif opcion == "Proveedores":
         if st.button("❓ Ayuda", key="ayu_prov"): modal_ayuda_modulo_config("Proveedores")
+    elif opcion == "💻 Equipos Autorizados":
+        pass # Panel de seguridad, no requiere botón de ayuda
     else:
         if st.button("❓ Ayuda", key="ayu_etiq"): modal_ayuda_modulo_config("Etiquetas")
 # --------------------------------------------
@@ -882,7 +888,7 @@ elif opcion == "Proveedores":
 # ==========================================
 # 6. CATÁLOGOS & ETIQUETAS QR
 # ==========================================
-elif "Etiquetas" in opcion:
+elif opcion == "📂 Catálogos & Etiquetas QR":
     tab_ins, tab_her = st.tabs(["📦 Etiquetas Insumos", "🛠️ Etiquetas Herramientas"])
     
     with tab_ins:
@@ -930,3 +936,61 @@ elif "Etiquetas" in opcion:
                         st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Herramientas.pdf")
         except Exception as e: 
             st.error(f"Error cargando datos: {e}")
+
+# ==========================================
+# 7. EQUIPOS AUTORIZADOS (Seguridad Maestro)
+# ==========================================
+elif opcion == "💻 Equipos Autorizados":
+    st.markdown("Gestión de seguridad: Aquí puedes ver qué dispositivos físicos tienen acceso al ERP. Si un equipo se daña o se extravía, revoca su acceso inmediatamente.")
+    
+    try:
+        res_dev = utils.supabase.table("Dispositivos_Autorizados").select("*").order("id", desc=True).execute()
+        df_dev = pd.DataFrame(res_dev.data)
+    except Exception as e:
+        df_dev = pd.DataFrame()
+        st.error(f"Error cargando base de datos: {e}")
+        
+    if not df_dev.empty:
+        if 'created_at' in df_dev.columns:
+            df_dev['Fecha de Vinculación'] = pd.to_datetime(df_dev['created_at']).dt.strftime('%d/%m/%Y %H:%M')
+        
+        df_view = df_dev[["id", "descripcion", "Fecha de Vinculación"]].copy()
+        df_view.rename(columns={"descripcion": "Nombre del Equipo / Ubicación"}, inplace=True)
+        
+        df_view["🚫 Revocar Acceso"] = False
+        
+        st.warning("⚠️ Al marcar 'Revocar Acceso' y guardar, el equipo será expulsado del sistema al instante. Tendrá que ser vinculado físicamente de nuevo con la Contraseña Maestra.")
+        
+        edited_dev = st.data_editor(
+            df_view,
+            hide_index=True,
+            use_container_width=True,
+            disabled=["id", "Fecha de Vinculación"],
+            column_config={
+                "🚫 Revocar Acceso": st.column_config.CheckboxColumn("🚫 Revocar Acceso", default=False)
+            }
+        )
+        
+        if st.button("💾 Guardar Cambios de Seguridad", type="primary"):
+            try:
+                to_delete = []
+                for i, r in edited_dev.iterrows():
+                    if r.get("🚫 Revocar Acceso", False):
+                        to_delete.append(int(r["id"]))
+                    else:
+                        utils.supabase.table("Dispositivos_Autorizados").update({
+                            "descripcion": str(r["Nombre del Equipo / Ubicación"])
+                        }).eq("id", int(r["id"])).execute()
+                        
+                if to_delete:
+                    utils.supabase.table("Dispositivos_Autorizados").delete().in_("id", to_delete).execute()
+                    st.toast("🚨 Accesos revocados con éxito. Los equipos han sido bloqueados.", icon="🚨")
+                else:
+                    st.toast("✅ Nombres de los equipos actualizados.", icon="✅")
+                    
+                time.sleep(1.5)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al actualizar la seguridad: {e}")
+    else:
+        st.info("No hay ningún equipo vinculado al sistema en este momento.")
