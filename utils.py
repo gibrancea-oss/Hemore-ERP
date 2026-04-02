@@ -1,5 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
+import extra_streamlit_components as stx
+import time
 
 # ==========================================
 # 1. CONEXIÓN SEGURA A SUPABASE (Lee desde secrets)
@@ -11,7 +13,7 @@ def init_supabase() -> Client:
     key = st.secrets["supabase"]["key"]
     return create_client(url, key)
 
-# Inicializamos la variable que usarán los demás archivos (almacen.py, configuracion.py)
+# Inicializamos la variable que usarán los demás archivos
 supabase = init_supabase()
 
 # ==========================================
@@ -19,13 +21,36 @@ supabase = init_supabase()
 # ==========================================
 def validar_login():
     """
-    Esta función se llama al inicio de almacen.py y configuracion.py.
-    Si alguien intenta entrar directo por URL sin pasar por home.py, lo bloquea.
+    Bloqueo total: Verifica autenticación de usuario Y validez del dispositivo
+    en cada clic de cualquier módulo.
     """
+    # 1. Verificar si el usuario está logueado en la sesión
     if "authenticated" not in st.session_state or not st.session_state["authenticated"]:
         st.error("🔒 ACCESO DENEGADO")
         st.warning("Debes iniciar sesión desde la pantalla de Inicio para acceder a este módulo.")
         st.stop() # Detiene la ejecución del código por completo
+
+    # 2. Verificar si el dispositivo físico sigue autorizado en Supabase
+    cookie_manager = stx.CookieManager(key="cookie_check_global")
+    # Pausa mínima para permitir que el navegador entregue la cookie
+    time.sleep(0.3) 
+    token = cookie_manager.get(cookie="hemore_device_token")
+    
+    if not token:
+        st.session_state.clear()
+        st.error("🚫 Dispositivo no identificado o cookie eliminada.")
+        st.stop()
+    
+    # Consulta a la base de datos para ver si el token sigue siendo válido
+    try:
+        res = supabase.table("Dispositivos_Autorizados").select("id").eq("token", token).execute()
+        if not res.data:
+            st.session_state.clear() # Expulsa al usuario de la sesión actual
+            st.error("🚨 ACCESO REVOCADO")
+            st.info("Este equipo ha sido bloqueado por el Administrador. El acceso a todos los módulos ha sido cancelado.")
+            st.stop()
+    except:
+        pass
 
 # ==========================================
 # 3. OPTIMIZACIÓN VISUAL PARA CELULARES
