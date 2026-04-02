@@ -1050,30 +1050,55 @@ elif opcion_almacen == "Recibos de Entrega OC":
                 df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
                 df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
                 
-                edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], num_rows="dynamic", key="d_editor")
+                # --- NUEVA COLUMNA PARA ELIMINAR PARTIDAS ---
+                df_edit_prod["🗑️ Eliminar"] = False 
+                
+                edited_prods = st.data_editor(
+                    df_edit_prod, 
+                    use_container_width=True, 
+                    hide_index=True, 
+                    disabled=['id'], 
+                    num_rows="dynamic", 
+                    key="d_editor",
+                    column_config={
+                        "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                    }
+                )
                 
                 col_g, col_p = st.columns(2)
                 
                 if tiene_permiso("Almacén: Editar/Eliminar Recibos OC"):
                     if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                        to_delete = []
+                        
                         for _, r in edited_prods.iterrows():
-                            val_cant = r.get("Cantidad", 0)
-                            try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
-                            except: cant_f = 0.0
-                            
-                            datos_update = {
-                                "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
-                                "observaciones": str(n_obs), "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
-                                "color": str(r.get("Color", "")), "cantidad": cant_f, "usuario": str(n_entrega),
-                                "oc": str(oc_seleccionada) 
-                            }
-                            
-                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
-                                supabase.table("Recibos_OC").update(datos_update).eq("id", r["id"]).execute()
+                            # Revisamos si el checkbox de eliminar está marcado
+                            if r.get("🗑️ Eliminar", False):
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    to_delete.append(int(r["id"]))
                             else:
-                                if str(r.get("Código", "")).strip() != "": 
-                                    supabase.table("Recibos_OC").insert(datos_update).execute()
-                                    
+                                # Lógica normal de guardado o actualización
+                                val_cant = r.get("Cantidad", 0)
+                                try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
+                                except: cant_f = 0.0
+                                
+                                datos_update = {
+                                    "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
+                                    "observaciones": str(n_obs), "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
+                                    "color": str(r.get("Color", "")), "cantidad": cant_f, "usuario": str(n_entrega),
+                                    "oc": str(oc_seleccionada) 
+                                }
+                                
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    supabase.table("Recibos_OC").update(datos_update).eq("id", r["id"]).execute()
+                                else:
+                                    if str(r.get("Código", "")).strip() != "": 
+                                        supabase.table("Recibos_OC").insert(datos_update).execute()
+                        
+                        # Ejecutamos el borrado masivo de los IDs marcados
+                        if to_delete:
+                            supabase.table("Recibos_OC").delete().in_("id", to_delete).execute()
+                                        
                         st.success("Guardado."); time.sleep(0.5); st.rerun()
                 else:
                     col_g.warning("🔒 No tienes permiso para guardar cambios.")
@@ -1085,14 +1110,17 @@ elif opcion_almacen == "Recibos de Entrega OC":
                         prov_text = _formatear_datos_contacto(n_prov, prov_data)
                         cli_text = _formatear_datos_contacto(n_cli, cli_data)
                         
+                        # Al volver a generar el PDF quitamos las filas marcadas para eliminar
+                        df_pdf = edited_prods[~edited_prods["🗑️ Eliminar"]]
+                        
                         datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": n_entrega}
-                        pdf_bytes = generar_pdf_entrega(datos_pdf, edited_prods, row_info['id'])
+                        pdf_bytes = generar_pdf_entrega(datos_pdf, df_pdf, row_info['id'])
                         col_p.download_button("🖨️ PDF", pdf_bytes, f"Recibo_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
                     except: col_p.error("Error PDF")
                 
                 st.divider()
                 if tiene_permiso("Almacén: Editar/Eliminar Recibos OC"):
-                    if st.button("🗑️ ELIMINAR ESTA ORDEN DE COMPRA", type="secondary", use_container_width=True):
+                    if st.button("🗑️ ELIMINAR ESTA ORDEN DE COMPRA POR COMPLETO", type="secondary", use_container_width=True):
                         supabase.table("Recibos_OC").delete().eq("oc", oc_seleccionada).execute()
                         st.warning("Orden eliminada. Actualizando..."); time.sleep(1); st.rerun()
 
@@ -1209,31 +1237,53 @@ elif opcion_almacen == "Entrada de Material":
                 df_edit_prod = df_oc[['id', 'codigo', 'descripcion', 'color', 'cantidad']].copy()
                 df_edit_prod.rename(columns={'codigo':'Código', 'descripcion':'Descripción', 'color':'Color', 'cantidad':'Cantidad'}, inplace=True)
                 
-                edited_prods = st.data_editor(df_edit_prod, use_container_width=True, hide_index=True, disabled=['id'], num_rows="dynamic", key="e_editor")
+                # --- NUEVA COLUMNA PARA ELIMINAR PARTIDAS EN ENTRADAS ---
+                df_edit_prod["🗑️ Eliminar"] = False 
+
+                edited_prods = st.data_editor(
+                    df_edit_prod, 
+                    use_container_width=True, 
+                    hide_index=True, 
+                    disabled=['id'], 
+                    num_rows="dynamic", 
+                    key="e_editor",
+                    column_config={
+                        "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                    }
+                )
                 
                 col_g, col_p = st.columns(2)
                 
                 if tiene_permiso("Almacén: Editar/Eliminar Entrada Material"):
                     if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
+                        to_delete = []
+
                         for _, r in edited_prods.iterrows():
-                            val_cant = r.get("Cantidad", 0)
-                            try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
-                            except: cant_f = 0.0
-                            
-                            datos_update = {
-                                "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov),
-                                "observaciones": str(n_obs), "usuario": str(n_entrega),
-                                "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
-                                "color": str(r.get("Color", "")), "cantidad": cant_f,
-                                "oc": str(oc_seleccionada) 
-                            }
-                            
-                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
-                                supabase.table("Entradas_Material").update(datos_update).eq("id", r["id"]).execute()
+                            if r.get("🗑️ Eliminar", False):
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    to_delete.append(int(r["id"]))
                             else:
-                                if str(r.get("Código", "")).strip() != "":
-                                    supabase.table("Entradas_Material").insert(datos_update).execute()
-                                    
+                                val_cant = r.get("Cantidad", 0)
+                                try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
+                                except: cant_f = 0.0
+                                
+                                datos_update = {
+                                    "fecha": str(n_fecha.isoformat()), "proveedor": str(n_prov),
+                                    "observaciones": str(n_obs), "usuario": str(n_entrega),
+                                    "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
+                                    "color": str(r.get("Color", "")), "cantidad": cant_f,
+                                    "oc": str(oc_seleccionada) 
+                                }
+                                
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    supabase.table("Entradas_Material").update(datos_update).eq("id", r["id"]).execute()
+                                else:
+                                    if str(r.get("Código", "")).strip() != "":
+                                        supabase.table("Entradas_Material").insert(datos_update).execute()
+                        
+                        if to_delete:
+                            supabase.table("Entradas_Material").delete().in_("id", to_delete).execute()
+                                        
                         st.success("Guardado."); time.sleep(0.5); st.rerun()
                 else:
                     col_g.warning("🔒 No tienes permiso para editar.")
@@ -1244,14 +1294,16 @@ elif opcion_almacen == "Entrada de Material":
                         prov_text = _formatear_datos_contacto(n_prov, prov_data)
                         hemore_text = "HEMORE INDUSTRIAS\nAlmacén Central" 
                         
+                        df_pdf = edited_prods[~edited_prods["🗑️ Eliminar"]]
+
                         datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "hemore_texto": hemore_text, "quien_entrega": n_entrega}
-                        pdf_bytes = generar_pdf_entrada(datos_pdf, edited_prods, row_info['id'])
+                        pdf_bytes = generar_pdf_entrada(datos_pdf, df_pdf, row_info['id'])
                         col_p.download_button("🖨️ Reimprimir PDF", pdf_bytes, f"Entrada_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
                     except: col_p.error("Error PDF")
                 
                 st.divider()
                 if tiene_permiso("Almacén: Editar/Eliminar Entrada Material"):
-                    if st.button("🗑️ ELIMINAR ESTA ENTRADA", type="secondary", use_container_width=True):
+                    if st.button("🗑️ ELIMINAR ESTA ENTRADA POR COMPLETO", type="secondary", use_container_width=True):
                         supabase.table("Entradas_Material").delete().eq("oc", oc_seleccionada).execute()
                         st.warning("Entrada eliminada. Actualizando..."); time.sleep(1); st.rerun()
 
