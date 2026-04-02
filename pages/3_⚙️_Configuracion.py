@@ -380,7 +380,11 @@ elif opcion == "Insumos":
     try:
         response = utils.supabase.table("Insumos").select("*").order("id").execute()
         df = pd.DataFrame(response.data)
-    except: df = pd.DataFrame()
+        # --- BLINDAJE: FORZAR MINÚSCULAS EN EL DATAFRAME ---
+        if not df.empty:
+            df.columns = df.columns.str.lower()
+    except: 
+        df = pd.DataFrame()
     
     t1, t2 = st.tabs(["➕ Alta Manual", "📋 Inventario Maestro"])
     
@@ -403,13 +407,22 @@ elif opcion == "Insumos":
                 
                 if st.form_submit_button("Guardar Insumo", type="primary"):
                     if cod and nom:
-                        datos = {"codigo": str(cod), "Descripcion": str(nom), "Insumo": str(nom), "Unidad": str(uni), "Cantidad": float(cant), "stock_minimo": float(mini)}
+                        # --- BLINDAJE: LLAVES ESTRICTAMENTE EN MINÚSCULAS ---
+                        datos = {
+                            "codigo": str(cod), 
+                            "descripcion": str(nom), 
+                            "insumo": str(nom), 
+                            "unidad": str(uni), 
+                            "cantidad": float(cant), 
+                            "stock_minimo": float(mini)
+                        }
                         if "ubicacion" in df.columns or df.empty: datos["ubicacion"] = str(ubi)
+                        
                         try:
                             utils.supabase.table("Insumos").insert(datos).execute()
                             st.session_state["alta_insumo_exito"] = True
                             st.rerun()
-                        except Exception as e: st.error(f"Error: {e}.")
+                        except Exception as e: st.error(f"Error al guardar: {e}.")
                     else: st.warning("Código y Descripción obligatorios.")
         else:
             st.success("✅ Insumo guardado correctamente en la base de datos.")
@@ -419,19 +432,16 @@ elif opcion == "Insumos":
 
     with t2:
         if not df.empty:
-            cols_base = ["id", "codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo"]
+            # Ahora cols_base solo trabaja en minúsculas (igual que la base de datos)
+            cols_base = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo"]
             
-            # --- PARCHE ANTIBALAS: Asegurar columnas ---
+            # Aseguramos que existan todas las columnas para que Pandas no tire error
             for col in cols_base:
                 if col not in df.columns:
-                    if col.lower() in df.columns:
-                        df.rename(columns={col.lower(): col}, inplace=True)
-                    else:
-                        df[col] = 0.0 if col in ["Cantidad", "stock_minimo"] else ""
-                        
-            if "ubicacion" in df.columns and "ubicacion" not in cols_base: 
+                    df[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
+                    
+            if "ubicacion" in df.columns: 
                 cols_base.append("ubicacion")
-            # -------------------------------------------
             
             df_view = df[cols_base].copy()
             df_view["🗑️ Eliminar"] = False  
@@ -441,6 +451,13 @@ elif opcion == "Insumos":
                 num_rows="dynamic", 
                 use_container_width=True,
                 column_config={
+                    # Aquí es donde le damos el formato visual bonito sin alterar la BD
+                    "codigo": "Código",
+                    "descripcion": "Descripción",
+                    "unidad": "Unidad",
+                    "cantidad": "Cantidad",
+                    "stock_minimo": "Stock Mínimo",
+                    "ubicacion": "Ubicación",
                     "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
                 }
             )
@@ -455,12 +472,13 @@ elif opcion == "Insumos":
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
                                 to_delete.append(int(r["id"]))
                         else:
+                            # --- BLINDAJE: LLAVES ESTRICTAMENTE EN MINÚSCULAS ---
                             d = {
                                 "codigo": str(r.get("codigo", "")),
-                                "Descripcion": str(r.get("Descripcion", "")),
-                                "Insumo": str(r.get("Descripcion", "")),
-                                "Cantidad": float(r.get("Cantidad", 0) if pd.notna(r.get("Cantidad")) else 0),
-                                "Unidad": str(r.get("Unidad", "")),
+                                "descripcion": str(r.get("descripcion", "")),
+                                "insumo": str(r.get("descripcion", "")),
+                                "cantidad": float(r.get("cantidad", 0) if pd.notna(r.get("cantidad")) else 0),
+                                "unidad": str(r.get("unidad", "")),
                                 "stock_minimo": float(r.get("stock_minimo", 0) if pd.notna(r.get("stock_minimo")) else 0)
                             }
                             if "ubicacion" in r:
@@ -468,7 +486,7 @@ elif opcion == "Insumos":
                             
                             if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
                                 d["id"] = int(r["id"])
-                            elif d["codigo"].strip() == "" or d["Descripcion"].strip() == "":
+                            elif d["codigo"].strip() == "" or d["descripcion"].strip() == "":
                                 continue  
                                 
                             to_upsert.append(d)
