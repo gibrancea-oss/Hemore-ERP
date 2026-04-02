@@ -46,18 +46,25 @@ if not dispositivo_valido:
                     if nombre_equipo:
                         nuevo_token = str(uuid.uuid4())
                         try:
+                            # 1. Guardar en Base de Datos
                             utils.supabase.table("Dispositivos_Autorizados").insert({
                                 "token": nuevo_token,
                                 "descripcion": nombre_equipo
                             }).execute()
                             
+                            # 2. Enviar Cookie al navegador
                             vencimiento = datetime.datetime.now() + datetime.timedelta(days=1825)
                             cookie_manager.set("hemore_device_token", nuevo_token, expires_at=vencimiento)
                             
-                            # 👇 AQUI ESTÁ LA MAGIA DE LA RECARGA AUTOMÁTICA 👇
-                            st.success("✅ Equipo vinculado exitosamente. Cargando sistema...")
-                            time.sleep(1.5) # Pausa para asegurar la cookie
-                            st.rerun()      # Actualiza la página automáticamente
+                            # 👇 TRUCO JAVASCRIPT PARA RECARGA AUTOMÁTICA 👇
+                            st.success("✅ Equipo vinculado exitosamente. Redirigiendo al sistema...")
+                            
+                            # Este código invisible espera 1.5 segundos (para asegurar la cookie) 
+                            # y luego hace una recarga completa del navegador.
+                            st.components.v1.html(
+                                "<script>setTimeout(function(){window.parent.location.reload();}, 1500);</script>",
+                                height=0
+                            )
                             # 👆 ------------------------------------------ 👆
                             
                         except Exception as e:
