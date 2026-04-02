@@ -420,7 +420,18 @@ elif opcion == "Insumos":
     with t2:
         if not df.empty:
             cols_base = ["id", "codigo", "Descripcion", "Unidad", "Cantidad", "stock_minimo"]
-            if "ubicacion" in df.columns: cols_base.append("ubicacion")
+            
+            # --- PARCHE ANTIBALAS: Asegurar columnas ---
+            for col in cols_base:
+                if col not in df.columns:
+                    if col.lower() in df.columns:
+                        df.rename(columns={col.lower(): col}, inplace=True)
+                    else:
+                        df[col] = 0.0 if col in ["Cantidad", "stock_minimo"] else ""
+                        
+            if "ubicacion" in df.columns and "ubicacion" not in cols_base: 
+                cols_base.append("ubicacion")
+            # -------------------------------------------
             
             df_view = df[cols_base].copy()
             df_view["🗑️ Eliminar"] = False  
