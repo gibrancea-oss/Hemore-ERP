@@ -100,9 +100,9 @@ def hex_a_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE ---
+# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE (LETRAS GRANDES + INFO EMPRESA) ---
 def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
-    # Tamaño CR80 (Estándar INE / Tarjeta de PVC en alta resolución)
+    # Tamaño CR80 (Estándar INE / Tarjeta de PVC)
     width, height = 1012, 638 
     img = Image.new('RGB', (width, height), color=(245, 245, 250))
     canvas = ImageDraw.Draw(img)
@@ -110,55 +110,72 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     color_1 = hex_a_rgb(c1_hex)
     color_2 = hex_a_rgb(c2_hex)
 
+    # Carga de fuentes (con aumento masivo de tamaño)
     try:
-        f_bold_lg = ImageFont.truetype("arialbd.ttf", 60)
-        f_italic_sm = ImageFont.truetype("arial.ttf", 28)
-        f_bold_md = ImageFont.truetype("arialbd.ttf", 45)
-        f_reg_md = ImageFont.truetype("arial.ttf", 45)
-        f_small = ImageFont.truetype("arial.ttf", 24)
+        f_bold_xl = ImageFont.truetype("arialbd.ttf", 75)   # Título principal (Negritas)
+        f_italic_md = ImageFont.truetype("arial.ttf", 32)   # Subtítulo
+        f_bold_lg = ImageFont.truetype("arialbd.ttf", 45)   # Etiquetas de Datos
+        f_reg_lg = ImageFont.truetype("arial.ttf", 45)      # Valores de Datos
+        f_bold_sm = ImageFont.truetype("arialbd.ttf", 26)   # Etiquetas de Empresa
+        f_reg_sm = ImageFont.truetype("arial.ttf", 26)      # Valores de Empresa
+        f_footer = ImageFont.truetype("arial.ttf", 20)      # Pie de página
     except:
-        f_bold_lg = f_italic_sm = f_bold_md = f_reg_md = f_small = ImageFont.load_default()
+        f_bold_xl = f_italic_md = f_bold_lg = f_reg_lg = f_bold_sm = f_reg_sm = f_footer = ImageFont.load_default()
 
-    # Cabecera (Color Principal)
-    canvas.rectangle([0, 0, width, 155], fill=color_1)
-    # Franja decorativa (Color Secundario)
-    canvas.rectangle([0, 155, width, 170], fill=color_2)
+    # 1. Cabecera (Color Principal) y Franja (Color Secundario)
+    canvas.rectangle([0, 0, width, 170], fill=color_1)
+    canvas.rectangle([0, 170, width, 185], fill=color_2)
 
-    # Logo más grande
+    # 2. Logo de HEMORE (Más grande)
     text_x_offset = 50
     if os.path.exists("logo.png"):
         try:
             logo = Image.open("logo.png").convert("RGBA")
-            logo.thumbnail((140, 140))
+            logo.thumbnail((150, 150))
             img.paste(logo, (40, 10), logo)
-            text_x_offset = 200 
+            text_x_offset = 220 
         except: pass
 
-    # Textos de Cabecera
-    canvas.text((text_x_offset, 35), "ERP HEMORE", font=f_bold_lg, fill=(255, 255, 255))
-    canvas.text((text_x_offset, 105), "Powered by G Solutions", font=f_italic_sm, fill=(200, 220, 255))
+    # 3. Títulos de Cabecera (Letras Gigantes)
+    canvas.text((text_x_offset, 35), "ERP HEMORE", font=f_bold_xl, fill=(255, 255, 255))
+    canvas.text((text_x_offset, 120), "Powered by G Solutions", font=f_italic_md, fill=(200, 220, 255))
 
-    # Cuadro contenedor de los datos
-    try: canvas.rounded_rectangle([40, 210, 972, 530], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
-    except: canvas.rectangle([40, 210, 972, 530], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    # 4. Cuadro contenedor de los datos
+    try: canvas.rounded_rectangle([30, 215, 982, 595], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    except: canvas.rectangle([30, 215, 982, 595], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
 
-    # Datos con letras más grandes y centradas verticalmente
-    canvas.text((80, 240), "Nombre:", font=f_bold_md, fill=(100, 100, 100))
-    canvas.text((330, 240), f"{nombre}", font=f_reg_md, fill=(0, 0, 0))
+    # 5. Datos del usuario
+    col1_x = 70
+    col2_x = 310
     
-    canvas.text((80, 305), "Puesto:", font=f_bold_md, fill=(100, 100, 100))
-    canvas.text((330, 305), f"{puesto}", font=f_reg_md, fill=(80, 80, 80))
+    canvas.text((col1_x, 235), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
+    canvas.text((col2_x, 235), f"{nombre}", font=f_reg_lg, fill=(0, 0, 0))
     
-    canvas.line((80, 375, 932, 375), fill=(230, 230, 230), width=2)
+    canvas.text((col1_x, 295), "Puesto:", font=f_bold_lg, fill=(80, 80, 80))
+    canvas.text((col2_x, 295), f"{puesto}", font=f_reg_lg, fill=(60, 60, 60))
     
-    canvas.text((80, 400), "Usuario:", font=f_bold_md, fill=color_2)
-    canvas.text((330, 400), f"{usuario}", font=f_reg_md, fill=(0, 0, 0))
+    canvas.line((col1_x, 360, 942, 360), fill=(230, 230, 230), width=2)
     
-    canvas.text((80, 465), "Contraseña:", font=f_bold_md, fill=(200, 0, 0))
-    canvas.text((330, 465), f"{pin}", font=f_reg_md, fill=(200, 0, 0))
+    canvas.text((col1_x, 375), "Usuario:", font=f_bold_lg, fill=color_2)
+    canvas.text((col2_x, 375), f"{usuario}", font=f_reg_lg, fill=(0, 0, 0))
+    
+    canvas.text((col1_x, 435), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
+    canvas.text((col2_x, 435), f"{pin}", font=f_reg_lg, fill=(200, 0, 0))
 
-    # Pie
-    canvas.text((40, 565), "Credencial de uso interno y confidencial. Propiedad de HEMORE Industrias.", font=f_small, fill=(130, 130, 130))
+    canvas.line((col1_x, 500, 942, 500), fill=(230, 230, 230), width=2)
+
+    # 6. Información de la Empresa (HEMORE)
+    canvas.text((col1_x, 515), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 135, 515), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
+    
+    canvas.text((col1_x, 550), "Tel:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 55, 550), "2228889858", font=f_reg_sm, fill=(100, 100, 100))
+    
+    canvas.text((col1_x + 280, 550), "Link:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 350, 550), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
+
+    # 7. Pie
+    canvas.text((40, 605), "Credencial de uso interno. Propiedad de HEMORE Industrias.", font=f_footer, fill=(150, 150, 150))
 
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
@@ -461,22 +478,28 @@ if opcion == "Personal":
         st.subheader("Impresión de Credenciales de Acceso")
         st.info("Genera tarjetas en tamaño INE con los datos de acceso para tu equipo.")
         
-        # --- ZONA DE DISEÑO DE COLORES ---
-        colores = cargar_colores()
-        with st.expander("🎨 Personalizar Colores de la Credencial"):
-            st.write("Selecciona los colores institucionales. Estos aplicarán a todas las tarjetas.")
-            col_c1, col_c2, col_btn = st.columns([1, 1, 1])
-            nuevo_c1 = col_c1.color_picker("Color Principal (Fondo de Cabecera)", colores["color_1"])
-            nuevo_c2 = col_c2.color_picker("Color Secundario (Líneas y Textos)", colores["color_2"])
+        # --- ZONA DE DISEÑO DE COLORES CON DEMO ---
+        colores_activos = cargar_colores()
+        with st.expander("🎨 Personalizar Colores de la Credencial", expanded=True):
+            st.write("Selecciona los colores institucionales. Modifica y mira el resultado en tiempo real.")
             
-            st.write("<br>", unsafe_allow_html=True)
-            if col_btn.button("💾 Guardar Diseño", type="primary", use_container_width=True):
+            col_c1, col_c2 = st.columns(2)
+            nuevo_c1 = col_c1.color_picker("Color Principal (Fondo de Cabecera)", colores_activos["color_1"])
+            nuevo_c2 = col_c2.color_picker("Color Secundario (Líneas y Textos)", colores_activos["color_2"])
+            
+            st.markdown("### 👀 Vista Previa (Demo):")
+            # Generamos una tarjeta falsa para que vea los cambios al instante
+            demo_img = generar_credencial_pro(
+                "JUAN PÉREZ GARCÍA", "SUPERVISOR", "jperez", "12345", nuevo_c1, nuevo_c2
+            )
+            st.image(demo_img, use_container_width=True)
+            
+            if st.button("💾 Guardar Diseño para Todos", type="primary", use_container_width=True):
                 guardar_colores(nuevo_c1, nuevo_c2)
                 st.success("¡Diseño guardado exitosamente!")
                 time.sleep(1)
                 st.rerun()
         
-        colores_activos = cargar_colores()
         st.divider()
 
         if not df_personal.empty:
