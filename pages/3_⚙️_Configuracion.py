@@ -112,7 +112,25 @@ def obtener_fuente_segura(size, bold=False):
     try: return ImageFont.truetype(font_name, size)
     except: return ImageFont.load_default()
 
-# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE MEJORADO (PROPORCIONES PERFECTAS) ---
+# --- NUEVA FUNCIÓN INTELIGENTE: SALTO DE LÍNEA AUTOMÁTICO ---
+def envolver_texto(texto, font, max_width):
+    lineas = []
+    palabras = str(texto).split()
+    linea_actual = ""
+    for palabra in palabras:
+        linea_prueba = linea_actual + " " + palabra if linea_actual else palabra
+        try: w = font.getlength(linea_prueba)
+        except: w = font.getsize(linea_prueba)[0]
+        
+        if w <= max_width:
+            linea_actual = linea_prueba
+        else:
+            if linea_actual: lineas.append(linea_actual)
+            linea_actual = palabra
+    if linea_actual: lineas.append(linea_actual)
+    return lineas if lineas else [""]
+
+# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE MEJORADO (CON AUTO-WRAP) ---
 def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     width, height = 1012, 638 
     img = Image.new('RGB', (width, height), color=(245, 245, 250))
@@ -121,19 +139,20 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     color_1 = hex_a_rgb(c1_hex)
     color_2 = hex_a_rgb(c2_hex)
 
-    # Tamaños balanceados para rellenar sin encimar
+    # Letras grandes aseguradas (Tamaño 45 es enorme y legible)
     f_bold_xl = obtener_fuente_segura(85, bold=True)     
     f_italic_md = obtener_fuente_segura(35, bold=False)  
-    f_bold_lg = obtener_fuente_segura(50, bold=True)     
-    f_reg_lg = obtener_fuente_segura(50, bold=False)     
+    f_bold_lg = obtener_fuente_segura(45, bold=True)     
+    f_reg_lg = obtener_fuente_segura(45, bold=False)     
     f_bold_sm = obtener_fuente_segura(22, bold=True)     
     f_reg_sm = obtener_fuente_segura(20, bold=False)     
+    f_footer = obtener_fuente_segura(18, bold=False)
 
-    # 1. Cabecera (Ajustada a 160px para centrar logo) y Franja
+    # 1. Cabecera y Franja
     canvas.rectangle([0, 0, width, 160], fill=color_1)
     canvas.rectangle([0, 160, width, 175], fill=color_2)
 
-    # 2. Logo centrado verticalmente en la cabecera
+    # 2. Logo de HEMORE
     text_x_offset = 50
     if os.path.exists("logo.png"):
         try:
@@ -144,46 +163,58 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
             text_x_offset = 50 + logo.size[0] + 30 
         except: pass
 
-    # 3. Títulos de Cabecera centrados
+    # 3. Títulos de Cabecera
     canvas.text((text_x_offset, 20), "ERP HEMORE", font=f_bold_xl, fill=(255, 255, 255))
     canvas.text((text_x_offset + 5, 110), "Powered by G Solutions", font=f_italic_md, fill=(200, 220, 255))
 
-    # 4. Cuadro contenedor
+    # 4. Cuadro contenedor principal
     margen_x = 35
-    try: canvas.rounded_rectangle([margen_x, 200, width - margen_x, 610], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
-    except: canvas.rectangle([margen_x, 200, width - margen_x, 610], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    try: canvas.rounded_rectangle([margen_x, 195, width - margen_x, 615], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    except: canvas.rectangle([margen_x, 195, width - margen_x, 615], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
 
-    # 5. Distribución perfecta de datos
+    # 5. LÓGICA DINÁMICA: Acomodo de datos sin salirse
     col1_x = 70
-    col2_x = 390  # Recorrido a la derecha para que no choque con "Contraseña:"
+    col2_x = 350
+    max_w_texto = width - col2_x - 50 # Ancho máximo antes de romper la línea
     
-    y_base = 225
-    y_espacio = 65
+    y_actual = 210
+    esp_linea = 48 # Espacio si se rompe en varias líneas
+    
+    # -> Imprimir NOMBRE
+    canvas.text((col1_x, y_actual), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
+    for linea in envolver_texto(nombre, f_reg_lg, max_w_texto):
+        canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(0, 0, 0))
+        y_actual += esp_linea
+    y_actual += 8 # Espacio extra al terminar bloque
+    
+    # -> Imprimir PUESTO
+    canvas.text((col1_x, y_actual), "Puesto:", font=f_bold_lg, fill=(80, 80, 80))
+    for linea in envolver_texto(puesto, f_reg_lg, max_w_texto):
+        canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(60, 60, 60))
+        y_actual += esp_linea
+        
+    y_actual += 5
+    canvas.line((col1_x, y_actual, width - 70, y_actual), fill=(230, 230, 230), width=3)
+    y_actual += 15
 
-    # Fila 1 y 2
-    canvas.text((col1_x, y_base), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
-    canvas.text((col2_x, y_base), f"{nombre}", font=f_reg_lg, fill=(0, 0, 0))
+    # -> Imprimir USUARIO
+    canvas.text((col1_x, y_actual), "Usuario:", font=f_bold_lg, fill=color_2)
+    for linea in envolver_texto(usuario, f_reg_lg, max_w_texto):
+        canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(0, 0, 0))
+        y_actual += esp_linea
+    y_actual += 8
     
-    canvas.text((col1_x, y_base + y_espacio), "Puesto:", font=f_bold_lg, fill=(80, 80, 80))
-    canvas.text((col2_x, y_base + y_espacio), f"{puesto}", font=f_reg_lg, fill=(60, 60, 60))
-    
-    # Línea Divisoria 1
-    y_linea_1 = y_base + y_espacio*2 - 5
-    canvas.line((col1_x, y_linea_1, width - 70, y_linea_1), fill=(230, 230, 230), width=3)
-    
-    # Fila 3 y 4
-    canvas.text((col1_x, y_base + y_espacio*2 + 10), "Usuario:", font=f_bold_lg, fill=color_2)
-    canvas.text((col2_x, y_base + y_espacio*2 + 10), f"{usuario}", font=f_reg_lg, fill=(0, 0, 0))
-    
-    canvas.text((col1_x, y_base + y_espacio*3 + 10), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
-    canvas.text((col2_x, y_base + y_espacio*3 + 10), f"{pin}", font=f_reg_lg, fill=(200, 0, 0))
+    # -> Imprimir CONTRASEÑA
+    canvas.text((col1_x, y_actual), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
+    for linea in envolver_texto(pin, f_reg_lg, max_w_texto):
+        canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(200, 0, 0))
+        y_actual += esp_linea
 
-    # Línea Divisoria 2
-    y_linea_2 = y_base + y_espacio*4 + 5
-    canvas.line((col1_x, y_linea_2, width - 70, y_linea_2), fill=(230, 230, 230), width=2)
+    y_actual += 5
+    canvas.line((col1_x, y_actual, width - 70, y_actual), fill=(230, 230, 230), width=2)
 
-    # 6. Información de la Empresa (HEMORE) bien distribuida
-    y_empresa = y_base + y_espacio*4 + 15
+    # 6. Información de la Empresa (Fija al fondo)
+    y_empresa = max(y_actual + 10, 535) # Evita que se encime si el texto de arriba bajó mucho
     
     canvas.text((col1_x, y_empresa), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
     canvas.text((col1_x + 120, y_empresa + 2), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
@@ -193,6 +224,9 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     
     canvas.text((col1_x + 300, y_empresa + 32), "Link:", font=f_bold_sm, fill=(100, 100, 100))
     canvas.text((col1_x + 360, y_empresa + 34), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
+
+    # 7. Pie (Minúsculo)
+    canvas.text((45, 615), "Credencial de uso interno y confidencial. Propiedad de HEMORE Industrias.", font=f_footer, fill=(180, 180, 180))
 
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
@@ -505,8 +539,9 @@ if opcion == "Personal":
             nuevo_c2 = col_c2.color_picker("Color Secundario (Líneas y Textos)", colores_activos["color_2"])
             
             st.markdown("### 👀 Vista Previa (Demo):")
+            # Generamos una tarjeta falsa y le pasamos un nombre MUY largo para probar el auto-wrap
             demo_img = generar_credencial_pro(
-                "JUAN PÉREZ GARCÍA", "SUPERVISOR", "jperez", "12345", nuevo_c1, nuevo_c2
+                "JUAN PÉREZ GARCÍA", "SUPERVISOR DE CALIDAD Y MANTENIMIENTO", "jperez", "12345", nuevo_c1, nuevo_c2
             )
             st.image(demo_img, use_container_width=True)
             
