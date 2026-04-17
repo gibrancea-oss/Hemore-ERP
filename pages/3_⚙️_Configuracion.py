@@ -81,41 +81,60 @@ def get_qr_data_url(text):
         return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
     except: return None
 
-# --- NUEVA FUNCIÓN: GENERADOR DE TARJETAS PNG ---
-def generar_credencial(nombre, puesto, usuario, pin):
+# --- FUNCIÓN: GENERADOR DE TARJETAS PNG (SIN QR, CENTRADO) ---
+def generar_credencial_pro(nombre, puesto, usuario, pin):
     width, height = 1050, 600
-    img = Image.new('RGB', (width, height), color=(255, 255, 255))
+    img = Image.new('RGB', (width, height), color=(245, 245, 250))
     canvas = ImageDraw.Draw(img)
 
     try:
-        font_title = ImageFont.truetype("arialbd.ttf", 45)
-        font_text = ImageFont.truetype("arial.ttf", 35)
-        font_small = ImageFont.truetype("arial.ttf", 20)
+        f_bold_lg = ImageFont.truetype("arialbd.ttf", 50)
+        f_italic_sm = ImageFont.truetype("arial.ttf", 25)
+        f_bold_md = ImageFont.truetype("arialbd.ttf", 35)
+        f_reg_md = ImageFont.truetype("arial.ttf", 35)
+        f_small = ImageFont.truetype("arial.ttf", 20)
     except:
-        font_title = font_text = font_small = ImageFont.load_default()
+        f_bold_lg = f_italic_sm = f_bold_md = f_reg_md = f_small = ImageFont.load_default()
 
-    canvas.rectangle([0, 0, width, 120], fill=(0, 102, 204))
-    canvas.text((40, 30), "G SOLUTIONS", font=font_title, fill=(255, 255, 255))
-    canvas.text((40, 80), "ACCESO AL SISTEMA ERP", font=font_small, fill=(200, 220, 255))
+    # Cabecera (Gris Oscuro)
+    canvas.rectangle([0, 0, width, 140], fill=(30, 35, 40))
+    # Franja decorativa debajo de la cabecera (Azul)
+    canvas.rectangle([0, 140, width, 150], fill=(0, 102, 204))
 
-    canvas.text((40, 180), f"Nombre: {nombre}", font=font_text, fill=(0, 0, 0))
-    canvas.text((40, 250), f"Puesto: {puesto}", font=font_text, fill=(80, 80, 80))
+    text_x_offset = 50
+    if os.path.exists("logo.png"):
+        try:
+            logo = Image.open("logo.png").convert("RGBA")
+            logo.thumbnail((110, 110))
+            img.paste(logo, (40, 15), logo)
+            text_x_offset = 180 
+        except: pass
+
+    # Textos de Cabecera
+    canvas.text((text_x_offset, 35), "ERP HEMORE", font=f_bold_lg, fill=(255, 255, 255))
+    canvas.text((text_x_offset, 95), "Powered by G Solutions", font=f_italic_sm, fill=(180, 200, 255))
+
+    # Cuadro contenedor para los datos (más ancho ahora que no hay QR)
+    try: canvas.rounded_rectangle([40, 190, 1010, 500], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    except: canvas.rectangle([40, 190, 1010, 500], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+
+    # Datos del usuario (centrando un poco más los valores)
+    canvas.text((100, 220), "Nombre:", font=f_bold_md, fill=(100, 100, 100))
+    canvas.text((350, 220), f"{nombre}", font=f_reg_md, fill=(0, 0, 0))
     
-    canvas.line((40, 320, 700, 320), fill=(200, 200, 200), width=3)
+    canvas.text((100, 280), "Puesto:", font=f_bold_md, fill=(100, 100, 100))
+    canvas.text((350, 280), f"{puesto}", font=f_reg_md, fill=(80, 80, 80))
     
-    canvas.text((40, 360), f"Usuario: {usuario}", font=font_text, fill=(0, 0, 0))
-    canvas.text((40, 430), f"PIN / Pass: {pin}", font=font_text, fill=(200, 0, 0))
-
-    qr = qrcode.QRCode(box_size=8, border=1)
-    qr.add_data(f"USER:{usuario}|PIN:{pin}")
-    qr.make(fit=True)
-    img_qr = qr.make_image(fill_color="black", back_color="white")
+    canvas.line((100, 350, 950, 350), fill=(230, 230, 230), width=2)
     
-    qr_size = 250
-    img_qr = img_qr.resize((qr_size, qr_size))
-    img.paste(img_qr, (750, 180))
+    canvas.text((100, 375), "Usuario:", font=f_bold_md, fill=(0, 102, 204))
+    canvas.text((350, 375), f"{usuario}", font=f_reg_md, fill=(0, 0, 0))
+    
+    canvas.text((100, 435), "Contraseña:", font=f_bold_md, fill=(200, 0, 0))
+    canvas.text((350, 435), f"{pin}", font=f_reg_md, fill=(200, 0, 0))
 
-    canvas.text((40, 540), "Credencial de uso interno y estrictamente confidencial.", font=font_small, fill=(150, 150, 150))
+    # Pie
+    canvas.text((40, 540), "Credencial de uso interno y confidencial. Propiedad de HEMORE Industrias.", font=f_small, fill=(130, 130, 130))
 
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
@@ -414,26 +433,21 @@ if opcion == "Personal":
         else:
             st.info("No hay personal registrado en el sistema aún.")
 
-    # --- NUEVA PESTAÑA DE CREDENCIALES ---
     with t3:
         st.subheader("Impresión de Credenciales de Acceso")
-        st.info("Genera tarjetas en formato PNG con los datos de acceso y un código QR integrado para tu equipo.")
-        
+        st.info("Genera tarjetas en formato PNG con los datos de acceso para tu equipo.")
         if not df_personal.empty:
             activos = df_personal[df_personal['activo'] == True]
             if not activos.empty:
                 for idx, row in activos.iterrows():
                     with st.expander(f"🪪 {row.get('nombre', 'Sin nombre')} - {row.get('puesto', '')}"):
                         c_img, c_btn = st.columns([2, 1])
-                        
-                        # Generar el PNG
-                        img_bytes = generar_credencial(
+                        img_bytes = generar_credencial_pro(
                             row.get('nombre', ''),
                             row.get('puesto', ''),
                             row.get('usuario', ''),
                             row.get('pin', '')
                         )
-                        
                         c_img.image(img_bytes, use_container_width=True)
                         c_btn.download_button(
                             label="📥 Descargar PNG",
@@ -501,7 +515,6 @@ elif opcion == "Insumos":
                 st.rerun()
 
     with t2:
-        # Definimos estrictamente las columnas que se usarán
         cols_bd = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo", "ubicacion"]
         
         if df.empty:
@@ -520,7 +533,7 @@ elif opcion == "Insumos":
             use_container_width=True,
             hide_index=True,
             column_config={
-                "id": None, # Magia: Oculta el ID visualmente, pero lo mantiene en el código para poder editar/eliminar
+                "id": None, 
                 "codigo": "Código",
                 "descripcion": "Descripción",
                 "unidad": "Unidad",
