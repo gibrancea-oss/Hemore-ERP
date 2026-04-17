@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
 import utils 
-import time 
+import time
 import datetime
 import io
 import qrcode
 import os
 import base64
 import json
+import urllib.request
 from fpdf import FPDF
 from PIL import Image, ImageDraw, ImageFont
 
@@ -100,19 +101,22 @@ def hex_a_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-# --- FUNCIÓN PARA BUSCAR FUENTES COMPATIBLES (NUBE/LOCAL) ---
-def obtener_fuente(size, bold=False):
-    # Rutas para Windows y Linux (Streamlit Cloud)
-    rutas_normales = ["arial.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
-    rutas_negritas = ["arialbd.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+# --- SOLUCIÓN DEFINITIVA PARA FUENTES GIGANTES ---
+def obtener_fuente_segura(size, bold=False):
+    # Descarga fuentes Roboto oficiales de Google para asegurar que sí escale el tamaño
+    font_name = "Roboto-Bold.ttf" if bold else "Roboto-Regular.ttf"
+    font_url = f"https://github.com/googlefonts/roboto/raw/main/src/hinted/{font_name}"
     
-    rutas = rutas_negritas if bold else rutas_normales
-    for ruta in rutas:
+    if not os.path.exists(font_name):
         try:
-            return ImageFont.truetype(ruta, size)
+            urllib.request.urlretrieve(font_url, font_name)
         except:
-            continue
-    return ImageFont.load_default()
+            pass # Falla silenciosa si no hay internet
+            
+    try:
+        return ImageFont.truetype(font_name, size)
+    except:
+        return ImageFont.load_default()
 
 # --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE MEJORADO ---
 def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
@@ -123,20 +127,20 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     color_1 = hex_a_rgb(c1_hex)
     color_2 = hex_a_rgb(c2_hex)
 
-    # Fuentes ahora sí GIGANTES y funcionales
-    f_bold_xl = obtener_fuente(85, bold=True)     # Título Principal
-    f_italic_md = obtener_fuente(35, bold=False)  # Subtítulo G Solutions
-    f_bold_lg = obtener_fuente(55, bold=True)     # Etiquetas (Nombre:, Puesto:)
-    f_reg_lg = obtener_fuente(55, bold=False)     # Valores (Gibran, etc)
-    f_bold_sm = obtener_fuente(24, bold=True)     # Etiquetas Empresa
-    f_reg_sm = obtener_fuente(24, bold=False)     # Valores Empresa
-    f_footer = obtener_fuente(18, bold=False)     # Pie de página miniatura
+    # Ahora sí usará fuentes escalables descargadas
+    f_bold_xl = obtener_fuente_segura(85, bold=True)     # Título Principal
+    f_italic_md = obtener_fuente_segura(35, bold=False)  # Subtítulo G Solutions
+    f_bold_lg = obtener_fuente_segura(55, bold=True)     # Etiquetas (Nombre:, Puesto:)
+    f_reg_lg = obtener_fuente_segura(55, bold=False)     # Valores (Gibran, etc)
+    f_bold_sm = obtener_fuente_segura(24, bold=True)     # Etiquetas Empresa
+    f_reg_sm = obtener_fuente_segura(24, bold=False)     # Valores Empresa
+    f_footer = obtener_fuente_segura(18, bold=False)     # Pie de página miniatura
 
     # 1. Cabecera y Franja
     canvas.rectangle([0, 0, width, 170], fill=color_1)
     canvas.rectangle([0, 170, width, 185], fill=color_2)
 
-    # 2. Logo de HEMORE (Aún más grande: 150x150)
+    # 2. Logo de HEMORE (Más grande: 150x150)
     text_x_offset = 50
     if os.path.exists("logo.png"):
         try:
@@ -175,11 +179,9 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     canvas.line((col1_x, 530, 952, 530), fill=(230, 230, 230), width=2)
 
     # 6. Información de la Empresa (HEMORE)
-    # Direccion
     canvas.text((col1_x, 540), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
     canvas.text((col1_x + 130, 540), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
     
-    # Tel y Link en la misma línea
     canvas.text((col1_x, 570), "Tel:", font=f_bold_sm, fill=(100, 100, 100))
     canvas.text((col1_x + 50, 570), "2228889858", font=f_reg_sm, fill=(100, 100, 100))
     
@@ -497,7 +499,6 @@ if opcion == "Personal":
             nuevo_c2 = col_c2.color_picker("Color Secundario (Líneas y Textos)", colores_activos["color_2"])
             
             st.markdown("### 👀 Vista Previa (Demo):")
-            # Generamos una tarjeta falsa para que vea los cambios al instante
             demo_img = generar_credencial_pro(
                 "JUAN PÉREZ GARCÍA", "SUPERVISOR", "jperez", "12345", nuevo_c1, nuevo_c2
             )
