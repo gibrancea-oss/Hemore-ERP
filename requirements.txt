@@ -7,3 +7,4 @@ fpdf
 openpyxl
 qrcode[pil]
 extra-streamlit-components
+pip install Pillow
