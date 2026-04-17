@@ -7,6 +7,7 @@ import io
 import qrcode
 import os
 import base64
+import json
 from fpdf import FPDF
 from PIL import Image, ImageDraw, ImageFont
 
@@ -81,60 +82,83 @@ def get_qr_data_url(text):
         return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
     except: return None
 
-# --- FUNCIÓN: GENERADOR DE TARJETAS PNG (SIN QR, CENTRADO) ---
-def generar_credencial_pro(nombre, puesto, usuario, pin):
-    width, height = 1050, 600
+# --- FUNCIONES PARA COLORES PERSONALIZADOS ---
+CONFIG_FILE = "config_credencial.json"
+
+def cargar_colores():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f: return json.load(f)
+        except: pass
+    return {"color_1": "#1E2328", "color_2": "#0066CC"} # Colores por defecto
+
+def guardar_colores(c1, c2):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump({"color_1": c1, "color_2": c2}, f)
+
+def hex_a_rgb(hex_color):
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE ---
+def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
+    # Tamaño CR80 (Estándar INE / Tarjeta de PVC en alta resolución)
+    width, height = 1012, 638 
     img = Image.new('RGB', (width, height), color=(245, 245, 250))
     canvas = ImageDraw.Draw(img)
 
+    color_1 = hex_a_rgb(c1_hex)
+    color_2 = hex_a_rgb(c2_hex)
+
     try:
-        f_bold_lg = ImageFont.truetype("arialbd.ttf", 50)
-        f_italic_sm = ImageFont.truetype("arial.ttf", 25)
-        f_bold_md = ImageFont.truetype("arialbd.ttf", 35)
-        f_reg_md = ImageFont.truetype("arial.ttf", 35)
-        f_small = ImageFont.truetype("arial.ttf", 20)
+        f_bold_lg = ImageFont.truetype("arialbd.ttf", 60)
+        f_italic_sm = ImageFont.truetype("arial.ttf", 28)
+        f_bold_md = ImageFont.truetype("arialbd.ttf", 45)
+        f_reg_md = ImageFont.truetype("arial.ttf", 45)
+        f_small = ImageFont.truetype("arial.ttf", 24)
     except:
         f_bold_lg = f_italic_sm = f_bold_md = f_reg_md = f_small = ImageFont.load_default()
 
-    # Cabecera (Gris Oscuro)
-    canvas.rectangle([0, 0, width, 140], fill=(30, 35, 40))
-    # Franja decorativa debajo de la cabecera (Azul)
-    canvas.rectangle([0, 140, width, 150], fill=(0, 102, 204))
+    # Cabecera (Color Principal)
+    canvas.rectangle([0, 0, width, 155], fill=color_1)
+    # Franja decorativa (Color Secundario)
+    canvas.rectangle([0, 155, width, 170], fill=color_2)
 
+    # Logo más grande
     text_x_offset = 50
     if os.path.exists("logo.png"):
         try:
             logo = Image.open("logo.png").convert("RGBA")
-            logo.thumbnail((110, 110))
-            img.paste(logo, (40, 15), logo)
-            text_x_offset = 180 
+            logo.thumbnail((140, 140))
+            img.paste(logo, (40, 10), logo)
+            text_x_offset = 200 
         except: pass
 
     # Textos de Cabecera
     canvas.text((text_x_offset, 35), "ERP HEMORE", font=f_bold_lg, fill=(255, 255, 255))
-    canvas.text((text_x_offset, 95), "Powered by G Solutions", font=f_italic_sm, fill=(180, 200, 255))
+    canvas.text((text_x_offset, 105), "Powered by G Solutions", font=f_italic_sm, fill=(200, 220, 255))
 
-    # Cuadro contenedor para los datos (más ancho ahora que no hay QR)
-    try: canvas.rounded_rectangle([40, 190, 1010, 500], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
-    except: canvas.rectangle([40, 190, 1010, 500], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    # Cuadro contenedor de los datos
+    try: canvas.rounded_rectangle([40, 210, 972, 530], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    except: canvas.rectangle([40, 210, 972, 530], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
 
-    # Datos del usuario (centrando un poco más los valores)
-    canvas.text((100, 220), "Nombre:", font=f_bold_md, fill=(100, 100, 100))
-    canvas.text((350, 220), f"{nombre}", font=f_reg_md, fill=(0, 0, 0))
+    # Datos con letras más grandes y centradas verticalmente
+    canvas.text((80, 240), "Nombre:", font=f_bold_md, fill=(100, 100, 100))
+    canvas.text((330, 240), f"{nombre}", font=f_reg_md, fill=(0, 0, 0))
     
-    canvas.text((100, 280), "Puesto:", font=f_bold_md, fill=(100, 100, 100))
-    canvas.text((350, 280), f"{puesto}", font=f_reg_md, fill=(80, 80, 80))
+    canvas.text((80, 305), "Puesto:", font=f_bold_md, fill=(100, 100, 100))
+    canvas.text((330, 305), f"{puesto}", font=f_reg_md, fill=(80, 80, 80))
     
-    canvas.line((100, 350, 950, 350), fill=(230, 230, 230), width=2)
+    canvas.line((80, 375, 932, 375), fill=(230, 230, 230), width=2)
     
-    canvas.text((100, 375), "Usuario:", font=f_bold_md, fill=(0, 102, 204))
-    canvas.text((350, 375), f"{usuario}", font=f_reg_md, fill=(0, 0, 0))
+    canvas.text((80, 400), "Usuario:", font=f_bold_md, fill=color_2)
+    canvas.text((330, 400), f"{usuario}", font=f_reg_md, fill=(0, 0, 0))
     
-    canvas.text((100, 435), "Contraseña:", font=f_bold_md, fill=(200, 0, 0))
-    canvas.text((350, 435), f"{pin}", font=f_reg_md, fill=(200, 0, 0))
+    canvas.text((80, 465), "Contraseña:", font=f_bold_md, fill=(200, 0, 0))
+    canvas.text((330, 465), f"{pin}", font=f_reg_md, fill=(200, 0, 0))
 
     # Pie
-    canvas.text((40, 540), "Credencial de uso interno y confidencial. Propiedad de HEMORE Industrias.", font=f_small, fill=(130, 130, 130))
+    canvas.text((40, 565), "Credencial de uso interno y confidencial. Propiedad de HEMORE Industrias.", font=f_small, fill=(130, 130, 130))
 
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
@@ -435,7 +459,26 @@ if opcion == "Personal":
 
     with t3:
         st.subheader("Impresión de Credenciales de Acceso")
-        st.info("Genera tarjetas en formato PNG con los datos de acceso para tu equipo.")
+        st.info("Genera tarjetas en tamaño INE con los datos de acceso para tu equipo.")
+        
+        # --- ZONA DE DISEÑO DE COLORES ---
+        colores = cargar_colores()
+        with st.expander("🎨 Personalizar Colores de la Credencial"):
+            st.write("Selecciona los colores institucionales. Estos aplicarán a todas las tarjetas.")
+            col_c1, col_c2, col_btn = st.columns([1, 1, 1])
+            nuevo_c1 = col_c1.color_picker("Color Principal (Fondo de Cabecera)", colores["color_1"])
+            nuevo_c2 = col_c2.color_picker("Color Secundario (Líneas y Textos)", colores["color_2"])
+            
+            st.write("<br>", unsafe_allow_html=True)
+            if col_btn.button("💾 Guardar Diseño", type="primary", use_container_width=True):
+                guardar_colores(nuevo_c1, nuevo_c2)
+                st.success("¡Diseño guardado exitosamente!")
+                time.sleep(1)
+                st.rerun()
+        
+        colores_activos = cargar_colores()
+        st.divider()
+
         if not df_personal.empty:
             activos = df_personal[df_personal['activo'] == True]
             if not activos.empty:
@@ -446,11 +489,13 @@ if opcion == "Personal":
                             row.get('nombre', ''),
                             row.get('puesto', ''),
                             row.get('usuario', ''),
-                            row.get('pin', '')
+                            row.get('pin', ''),
+                            colores_activos["color_1"],
+                            colores_activos["color_2"]
                         )
                         c_img.image(img_bytes, use_container_width=True)
                         c_btn.download_button(
-                            label="📥 Descargar PNG",
+                            label="📥 Descargar PNG (Tamaño INE)",
                             data=img_bytes,
                             file_name=f"Credencial_{row.get('usuario', 'user')}.png",
                             mime="image/png",
