@@ -8,6 +8,7 @@ import qrcode
 import os
 import base64
 from fpdf import FPDF
+from PIL import Image, ImageDraw, ImageFont
 
 st.set_page_config(page_title="Configuración Master", page_icon="⚙️", layout="wide")
 
@@ -79,6 +80,47 @@ def get_qr_data_url(text):
         img.save(buffered, format="PNG")
         return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
     except: return None
+
+# --- NUEVA FUNCIÓN: GENERADOR DE TARJETAS PNG ---
+def generar_credencial(nombre, puesto, usuario, pin):
+    width, height = 1050, 600
+    img = Image.new('RGB', (width, height), color=(255, 255, 255))
+    canvas = ImageDraw.Draw(img)
+
+    try:
+        font_title = ImageFont.truetype("arialbd.ttf", 45)
+        font_text = ImageFont.truetype("arial.ttf", 35)
+        font_small = ImageFont.truetype("arial.ttf", 20)
+    except:
+        font_title = font_text = font_small = ImageFont.load_default()
+
+    canvas.rectangle([0, 0, width, 120], fill=(0, 102, 204))
+    canvas.text((40, 30), "G SOLUTIONS", font=font_title, fill=(255, 255, 255))
+    canvas.text((40, 80), "ACCESO AL SISTEMA ERP", font=font_small, fill=(200, 220, 255))
+
+    canvas.text((40, 180), f"Nombre: {nombre}", font=font_text, fill=(0, 0, 0))
+    canvas.text((40, 250), f"Puesto: {puesto}", font=font_text, fill=(80, 80, 80))
+    
+    canvas.line((40, 320, 700, 320), fill=(200, 200, 200), width=3)
+    
+    canvas.text((40, 360), f"Usuario: {usuario}", font=font_text, fill=(0, 0, 0))
+    canvas.text((40, 430), f"PIN / Pass: {pin}", font=font_text, fill=(200, 0, 0))
+
+    qr = qrcode.QRCode(box_size=8, border=1)
+    qr.add_data(f"USER:{usuario}|PIN:{pin}")
+    qr.make(fit=True)
+    img_qr = qr.make_image(fill_color="black", back_color="white")
+    
+    qr_size = 250
+    img_qr = img_qr.resize((qr_size, qr_size))
+    img.paste(img_qr, (750, 180))
+
+    canvas.text((40, 540), "Credencial de uso interno y estrictamente confidencial.", font=font_small, fill=(150, 150, 150))
+
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='PNG')
+    return img_byte_arr.getvalue()
+# ------------------------------------------------
 
 class PDFEtiquetas(FPDF):
     def footer(self):
@@ -226,7 +268,7 @@ if opcion == "Personal":
     if df_personal.empty: 
         df_personal = pd.DataFrame(columns=["id", "nombre", "puesto", "activo", "usuario", "pin", "permisos"])
 
-    t1, t2 = st.tabs(["➕ Alta Personal", "📋 Kardex y Accesos"])
+    t1, t2, t3 = st.tabs(["➕ Alta Personal", "📋 Kardex y Accesos", "🪪 Generar Credenciales"])
     
     with t1:
         if "alta_pers_exito" not in st.session_state:
@@ -369,6 +411,39 @@ if opcion == "Personal":
                 
                 if c5.button("Ver / Editar", key=f"btn_pers_{row['id']}"):
                     editar_empleado(row['id'], df_personal)
+        else:
+            st.info("No hay personal registrado en el sistema aún.")
+
+    # --- NUEVA PESTAÑA DE CREDENCIALES ---
+    with t3:
+        st.subheader("Impresión de Credenciales de Acceso")
+        st.info("Genera tarjetas en formato PNG con los datos de acceso y un código QR integrado para tu equipo.")
+        
+        if not df_personal.empty:
+            activos = df_personal[df_personal['activo'] == True]
+            if not activos.empty:
+                for idx, row in activos.iterrows():
+                    with st.expander(f"🪪 {row.get('nombre', 'Sin nombre')} - {row.get('puesto', '')}"):
+                        c_img, c_btn = st.columns([2, 1])
+                        
+                        # Generar el PNG
+                        img_bytes = generar_credencial(
+                            row.get('nombre', ''),
+                            row.get('puesto', ''),
+                            row.get('usuario', ''),
+                            row.get('pin', '')
+                        )
+                        
+                        c_img.image(img_bytes, use_container_width=True)
+                        c_btn.download_button(
+                            label="📥 Descargar PNG",
+                            data=img_bytes,
+                            file_name=f"Credencial_{row.get('usuario', 'user')}.png",
+                            mime="image/png",
+                            use_container_width=True
+                        )
+            else:
+                st.warning("No hay usuarios activos para generar credenciales en este momento.")
         else:
             st.info("No hay personal registrado en el sistema aún.")
 
