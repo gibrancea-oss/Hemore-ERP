@@ -20,22 +20,16 @@ utils.validar_login()
 supabase = utils.supabase
 
 # ==========================================
-# 🛡️ MOTOR ANTI-DOBLE CLIC Y ACELERADOR
+# 🛡️ MOTOR ANTI-DOBLE CLIC Y VELOCIDAD
 # ==========================================
 def procesar_una_vez(llave):
-    """Bloquea el botón si recibe múltiples clics al mismo tiempo."""
-    if st.session_state.get(f"lock_{llave}", False):
-        return False
+    if st.session_state.get(f"lock_{llave}", False): return False
     st.session_state[f"lock_{llave}"] = True
     return True
 
 def liberar_bloqueo(llave):
-    """Libera el botón automáticamente para su próximo uso legítimo."""
     st.session_state[f"lock_{llave}"] = False
 
-# ==========================================
-# FUNCIONES GENERALES
-# ==========================================
 def tiene_permiso(permiso):
     if st.session_state.get("es_admin", False): return True
     return permiso in st.session_state.get("permisos", [])
@@ -121,9 +115,11 @@ def hex_a_rgb(hex_color):
 def obtener_fuente_segura(size, bold=False):
     font_name = "Roboto-Bold.ttf" if bold else "Roboto-Regular.ttf"
     font_url = f"https://github.com/googlefonts/roboto/raw/main/src/hinted/{font_name}"
+    
     if not os.path.exists(font_name):
         try: urllib.request.urlretrieve(font_url, font_name)
         except: pass 
+            
     try: return ImageFont.truetype(font_name, size)
     except: return ImageFont.load_default()
 
@@ -161,9 +157,11 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     f_reg_sm = obtener_fuente_segura(20, bold=False)     
     f_footer = obtener_fuente_segura(18, bold=False)
 
+    # 1. Cabecera y Franja
     canvas.rectangle([0, 0, width, 160], fill=color_1)
     canvas.rectangle([0, 160, width, 175], fill=color_2)
 
+    # 2. Logo de HEMORE
     text_x_offset = 50
     if os.path.exists("logo.png"):
         try:
@@ -174,13 +172,16 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
             text_x_offset = 50 + logo.size[0] + 30 
         except: pass
 
+    # 3. Títulos de Cabecera
     canvas.text((text_x_offset, 20), "ERP HEMORE", font=f_bold_xl, fill=(255, 255, 255))
     canvas.text((text_x_offset + 5, 110), "Powered by G Solutions", font=f_italic_md, fill=(200, 220, 255))
 
+    # 4. Cuadro contenedor principal
     margen_x = 35
     try: canvas.rounded_rectangle([margen_x, 195, width - margen_x, 615], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
     except: canvas.rectangle([margen_x, 195, width - margen_x, 615], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
 
+    # 5. LÓGICA DINÁMICA: Acomodo de datos sin salirse
     col1_x = 70
     col2_x = 350
     max_w_texto = width - col2_x - 50 
@@ -188,12 +189,14 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     y_actual = 210
     esp_linea = 48 
     
+    # -> Imprimir NOMBRE
     canvas.text((col1_x, y_actual), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
     for linea in envolver_texto(nombre, f_reg_lg, max_w_texto):
         canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(0, 0, 0))
         y_actual += esp_linea
     y_actual += 8 
     
+    # -> Imprimir PUESTO
     canvas.text((col1_x, y_actual), "Puesto:", font=f_bold_lg, fill=(80, 80, 80))
     for linea in envolver_texto(puesto, f_reg_lg, max_w_texto):
         canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(60, 60, 60))
@@ -203,12 +206,14 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     canvas.line((col1_x, y_actual, width - 70, y_actual), fill=(230, 230, 230), width=3)
     y_actual += 15
 
+    # -> Imprimir USUARIO
     canvas.text((col1_x, y_actual), "Usuario:", font=f_bold_lg, fill=color_2)
     for linea in envolver_texto(usuario, f_reg_lg, max_w_texto):
         canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(0, 0, 0))
         y_actual += esp_linea
     y_actual += 8
     
+    # -> Imprimir CONTRASEÑA
     canvas.text((col1_x, y_actual), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
     for linea in envolver_texto(pin, f_reg_lg, max_w_texto):
         canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(200, 0, 0))
@@ -217,7 +222,9 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     y_actual += 5
     canvas.line((col1_x, y_actual, width - 70, y_actual), fill=(230, 230, 230), width=2)
 
+    # 6. Información de la Empresa
     y_empresa = max(y_actual + 10, 535) 
+    
     canvas.text((col1_x, y_empresa), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
     canvas.text((col1_x + 120, y_empresa + 2), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
     
@@ -227,6 +234,7 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     canvas.text((col1_x + 300, y_empresa + 32), "Link:", font=f_bold_sm, fill=(100, 100, 100))
     canvas.text((col1_x + 360, y_empresa + 34), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
 
+    # 7. Pie
     canvas.text((45, 615), "Credencial de uso interno y confidencial. Propiedad de HEMORE Industrias.", font=f_footer, fill=(180, 180, 180))
 
     img_byte_arr = io.BytesIO()
@@ -414,25 +422,26 @@ if opcion == "Personal":
                     placeholder="Elige los permisos..."
                 )
 
-                btn_alta = st.form_submit_button("Guardar Empleado y Accesos", type="primary")
-                if btn_alta:
-                    if procesar_una_vez("alta_personal_form"):
+                if st.form_submit_button("Guardar Empleado y Accesos", type="primary"):
+                    if procesar_una_vez("alta_pers"):
                         if nombre and usuario_login and pin_login:
                             permisos_str = ", ".join(permisos_seleccionados)
+                            
                             datos = {
                                 "nombre": nombre, "puesto": puesto, "anio_nacimiento": nacimiento, 
                                 "domicilio": domicilio, "curp": curp, "rfc": rfc, 
                                 "fecha_ingreso": fecha_ingreso.isoformat(), "activo": True,
-                                "usuario": usuario_login, "pin": pin_login, "permisos": permisos_str
+                                "usuario": usuario_login, "pin": pin_login, 
+                                "permisos": permisos_str
                             }
                             utils.supabase.table("Personal").insert(datos).execute()
                             st.session_state["alta_pers_exito"] = True
                             st.rerun()
                         else:
                             st.error("⚠️ El Nombre, Usuario y Contraseña son obligatorios.")
-                            liberar_bloqueo("alta_personal_form")
-                else:
-                    liberar_bloqueo("alta_personal_form")
+                            liberar_bloqueo("alta_pers")
+                    else:
+                        liberar_bloqueo("alta_pers")
         else:
             st.success("✅ Empleado registrado correctamente con sus permisos asignados.")
             if st.button("➕ Agregar otro Empleado", type="primary"):
@@ -474,39 +483,44 @@ if opcion == "Personal":
             n_user = col_e5.text_input("Usuario", value=emp_data.get('usuario', ''), key=f"usr_{emp_id}")
             n_pin = col_e6.text_input("Contraseña", value=emp_data.get('pin', ''), key=f"pin_{emp_id}")
             
-            n_permisos = st.multiselect("Operaciones permitidas:", options=lista_permisos, default=permisos_validos, key=f"perm_{emp_id}")
+            n_permisos = st.multiselect(
+                "Operaciones permitidas:",
+                options=lista_permisos,
+                default=permisos_validos,
+                key=f"perm_{emp_id}"
+            )
+            
             n_activo = st.checkbox("Empleado Activo (Puede iniciar sesión)", value=bool(emp_data.get('activo', True)), key=f"act_{emp_id}")
             
             st.divider()
             col_g, col_b = st.columns(2)
             
-            btn_g = col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True, key=f"btn_g_{emp_id}")
-            if btn_g:
-                if procesar_una_vez(f"guardar_emp_{emp_id}"):
+            if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True, key=f"btn_g_{emp_id}"):
+                if procesar_una_vez(f"upd_pers_{emp_id}"):
                     if n_nombre and n_user and n_pin:
                         permisos_str_update = ", ".join(n_permisos)
                         datos_update = {
                             "nombre": n_nombre, "puesto": n_puesto, "anio_nacimiento": n_nacimiento,
                             "domicilio": n_domicilio, "fecha_ingreso": n_fecha.isoformat(),
-                            "usuario": n_user, "pin": n_pin, "permisos": permisos_str_update, "activo": n_activo
+                            "usuario": n_user, "pin": n_pin, "permisos": permisos_str_update,
+                            "activo": n_activo
                         }
                         utils.supabase.table("Personal").update(datos_update).eq("id", emp_id).execute()
-                        st.toast("✅ Información actualizada.", icon="✅")
+                        st.toast("✅ Información actualizada correctamente.", icon="✅")
                         st.rerun()
                     else:
                         st.error("Nombre, Usuario y Contraseña no pueden estar vacíos.")
-                        liberar_bloqueo(f"guardar_emp_{emp_id}")
-            else:
-                liberar_bloqueo(f"guardar_emp_{emp_id}")
+                        liberar_bloqueo(f"upd_pers_{emp_id}")
+                else:
+                    liberar_bloqueo(f"upd_pers_{emp_id}")
             
-            btn_d = col_b.button("🗑️ ELIMINAR DEL SISTEMA", type="secondary", use_container_width=True, key=f"btn_d_{emp_id}")
-            if btn_d:
-                if procesar_una_vez(f"del_emp_{emp_id}"):
+            if col_b.button("🗑️ ELIMINAR DEL SISTEMA", type="secondary", use_container_width=True, key=f"btn_d_{emp_id}"):
+                if procesar_una_vez(f"del_pers_{emp_id}"):
                     utils.supabase.table("Personal").delete().eq("id", emp_id).execute()
-                    st.toast("⚠️ Empleado eliminado.", icon="🗑️")
+                    st.toast("⚠️ Empleado eliminado de la base de datos.", icon="🗑️")
                     st.rerun()
-            else:
-                liberar_bloqueo(f"del_emp_{emp_id}")
+                else:
+                    liberar_bloqueo(f"del_pers_{emp_id}")
 
         if not df_personal.empty:
             c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([1, 3, 2, 2, 2])
@@ -533,6 +547,7 @@ if opcion == "Personal":
         st.subheader("Impresión de Credenciales de Acceso")
         st.info("Genera tarjetas en tamaño INE con los datos de acceso para tu equipo.")
         
+        # --- ZONA DE DISEÑO DE COLORES CON DEMO ---
         colores_activos = cargar_colores()
         with st.expander("🎨 Personalizar Colores de la Credencial", expanded=True):
             st.write("Selecciona los colores institucionales. Modifica y mira el resultado en tiempo real.")
@@ -542,17 +557,18 @@ if opcion == "Personal":
             nuevo_c2 = col_c2.color_picker("Color Secundario (Líneas y Textos)", colores_activos["color_2"])
             
             st.markdown("### 👀 Vista Previa (Demo):")
-            demo_img = generar_credencial_pro("JUAN PÉREZ GARCÍA", "SUPERVISOR", "jperez", "12345", nuevo_c1, nuevo_c2)
+            demo_img = generar_credencial_pro(
+                "JUAN PÉREZ GARCÍA", "SUPERVISOR", "jperez", "12345", nuevo_c1, nuevo_c2
+            )
             st.image(demo_img, use_container_width=True)
             
-            btn_save_colores = st.button("💾 Guardar Diseño para Todos", type="primary", use_container_width=True)
-            if btn_save_colores:
-                if procesar_una_vez("save_colores_btn"):
+            if st.button("💾 Guardar Diseño para Todos", type="primary", use_container_width=True):
+                if procesar_una_vez("save_color"):
                     guardar_colores(nuevo_c1, nuevo_c2)
                     st.toast("¡Diseño guardado exitosamente!", icon="🎨")
                     st.rerun()
-            else:
-                liberar_bloqueo("save_colores_btn")
+                else:
+                    liberar_bloqueo("save_color")
         
         st.divider()
 
@@ -563,18 +579,28 @@ if opcion == "Personal":
                     with st.expander(f"🪪 {row.get('nombre', 'Sin nombre')} - {row.get('puesto', '')}"):
                         c_img, c_btn = st.columns([2, 1])
                         img_bytes = generar_credencial_pro(
-                            row.get('nombre', ''), row.get('puesto', ''), row.get('usuario', ''), row.get('pin', ''),
-                            colores_activos["color_1"], colores_activos["color_2"]
+                            row.get('nombre', ''),
+                            row.get('puesto', ''),
+                            row.get('usuario', ''),
+                            row.get('pin', ''),
+                            colores_activos["color_1"],
+                            colores_activos["color_2"]
                         )
                         c_img.image(img_bytes, use_container_width=True)
-                        c_btn.download_button("📥 Descargar PNG (Tamaño INE)", data=img_bytes, file_name=f"Credencial_{row.get('usuario', 'user')}.png", mime="image/png", use_container_width=True)
+                        c_btn.download_button(
+                            label="📥 Descargar PNG (Tamaño INE)",
+                            data=img_bytes,
+                            file_name=f"Credencial_{row.get('usuario', 'user')}.png",
+                            mime="image/png",
+                            use_container_width=True
+                        )
             else:
                 st.warning("No hay usuarios activos para generar credenciales en este momento.")
         else:
             st.info("No hay personal registrado en el sistema aún.")
 
 # ==========================================
-# 2. INSUMOS 
+# 2. INSUMOS (TABLA EXACTA Y LIMPIA)
 # ==========================================
 elif opcion == "Insumos":
     lista_unidades = ["Pzas", "Kg", "Lts", "Mts", "Cajas", "Paquetes", "Rollos", "Juegos", "Botes", "Galones"]
@@ -603,23 +629,30 @@ elif opcion == "Insumos":
                 
                 ubi = st.text_input("Ubicación")
                 
-                btn_insumo = st.form_submit_button("Guardar Insumo", type="primary")
-                if btn_insumo:
-                    if procesar_una_vez("alta_ins"):
+                if st.form_submit_button("Guardar Insumo", type="primary"):
+                    if procesar_una_vez("alta_insumo"):
                         if cod and nom:
-                            datos = {"codigo": str(cod), "descripcion": str(nom), "insumo": str(nom), "unidad": str(uni), "cantidad": float(cant), "stock_minimo": float(mini), "ubicacion": str(ubi)}
+                            datos = {
+                                "codigo": str(cod), 
+                                "descripcion": str(nom), 
+                                "insumo": str(nom), 
+                                "unidad": str(uni), 
+                                "cantidad": float(cant), 
+                                "stock_minimo": float(mini),
+                                "ubicacion": str(ubi)
+                            }
                             try:
                                 utils.supabase.table("Insumos").insert(datos).execute()
                                 st.session_state["alta_insumo_exito"] = True
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al guardar: {e}")
-                                liberar_bloqueo("alta_ins")
+                                liberar_bloqueo("alta_insumo")
                         else:
                             st.warning("Código y Descripción obligatorios.")
-                            liberar_bloqueo("alta_ins")
-                else:
-                    liberar_bloqueo("alta_ins")
+                            liberar_bloqueo("alta_insumo")
+                    else:
+                        liberar_bloqueo("alta_insumo")
         else:
             st.success("✅ Insumo guardado correctamente en la base de datos.")
             if st.button("➕ Agregar otro Insumo", type="primary"):
@@ -628,44 +661,74 @@ elif opcion == "Insumos":
 
     with t2:
         cols_bd = ["id", "codigo", "descripcion", "unidad", "cantidad", "stock_minimo", "ubicacion"]
-        if df.empty: df_view = pd.DataFrame(columns=cols_bd)
+        
+        if df.empty:
+            df_view = pd.DataFrame(columns=cols_bd)
         else:
             for col in cols_bd:
-                if col not in df.columns: df[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
+                if col not in df.columns:
+                    df[col] = 0.0 if col in ["cantidad", "stock_minimo"] else ""
             df_view = df[cols_bd].copy()
             
         df_view["🗑️ Eliminar"] = False  
         
         edited = st.data_editor(
-            df_view, num_rows="dynamic", use_container_width=True, hide_index=True,
-            column_config={"id": None, "codigo": "Código", "descripcion": "Descripción", "unidad": "Unidad", "cantidad": "Cantidad", "stock_minimo": "Stock Mínimo", "ubicacion": "Ubicación", "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)}
+            df_view, 
+            num_rows="dynamic", 
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "id": None, 
+                "codigo": "Código",
+                "descripcion": "Descripción",
+                "unidad": "Unidad",
+                "cantidad": "Cantidad",
+                "stock_minimo": "Stock Mínimo",
+                "ubicacion": "Ubicación",
+                "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+            }
         )
         
-        btn_upd_insumos = st.button("💾 Guardar Cambios", type="primary")
-        if btn_upd_insumos:
-            if procesar_una_vez("upd_ins_btn"):
+        if st.button("💾 Guardar Cambios", type="primary"):
+            if procesar_una_vez("upd_insumos"):
                 try:
                     to_upsert = []
                     to_delete = []
+                    
                     for i, r in edited.iterrows():
                         if r.get("🗑️ Eliminar", False):
-                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": to_delete.append(int(r["id"]))
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                to_delete.append(int(r["id"]))
                         else:
-                            d = {"codigo": str(r.get("codigo", "")), "descripcion": str(r.get("descripcion", "")), "insumo": str(r.get("descripcion", "")), "cantidad": float(r.get("cantidad", 0) if pd.notna(r.get("cantidad")) else 0), "unidad": str(r.get("unidad", "")), "stock_minimo": float(r.get("stock_minimo", 0) if pd.notna(r.get("stock_minimo")) else 0), "ubicacion": str(r.get("ubicacion", ""))}
-                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": d["id"] = int(r["id"])
-                            elif d["codigo"].strip() == "" or d["descripcion"].strip() == "": continue  
+                            d = {
+                                "codigo": str(r.get("codigo", "")),
+                                "descripcion": str(r.get("descripcion", "")),
+                                "insumo": str(r.get("descripcion", "")),
+                                "cantidad": float(r.get("cantidad", 0) if pd.notna(r.get("cantidad")) else 0),
+                                "unidad": str(r.get("unidad", "")),
+                                "stock_minimo": float(r.get("stock_minimo", 0) if pd.notna(r.get("stock_minimo")) else 0),
+                                "ubicacion": str(r.get("ubicacion", ""))
+                            }
+                            
+                            if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                d["id"] = int(r["id"])
+                            elif d["codigo"].strip() == "" or d["descripcion"].strip() == "":
+                                continue  
+                                
                             to_upsert.append(d)
                     
-                    if to_delete: utils.supabase.table("Insumos").delete().in_("id", to_delete).execute()
-                    if to_upsert: utils.supabase.table("Insumos").upsert(to_upsert).execute()
+                    if to_delete:
+                        utils.supabase.table("Insumos").delete().in_("id", to_delete).execute()
+                    if to_upsert:
+                        utils.supabase.table("Insumos").upsert(to_upsert).execute()
                         
-                    st.toast("✅ Inventario actualizado al momento", icon="⚡")
+                    st.toast("✅ Inventario actualizado al momento", icon="✅")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al guardar los cambios: {e}")
-                    liberar_bloqueo("upd_ins_btn")
-        else:
-            liberar_bloqueo("upd_ins_btn")
+                    liberar_bloqueo("upd_insumos")
+            else:
+                liberar_bloqueo("upd_insumos")
 
 # ==========================================
 # 3. HERRAMIENTAS 
@@ -674,6 +737,7 @@ elif opcion == "Herramientas":
     try:
         response = utils.supabase.table("Herramientas").select("*").order("id").execute()
         df = pd.DataFrame(response.data)
+        
         res_pers = utils.supabase.table("Personal").select("nombre").eq("activo", True).execute()
         lista_personal = ["Bodega"] + [p["nombre"] for p in res_pers.data] if res_pers.data else ["Bodega"]
     except: 
@@ -699,19 +763,25 @@ elif opcion == "Herramientas":
                 responsable_h = c5.selectbox("Responsable Inicial", lista_personal, index=0)
                 ubicacion_h = c6.text_input("Ubicación (Ej. Estante A1)")
                 
-                btn_herramienta = st.form_submit_button("Guardar Herramienta", type="primary")
-                if btn_herramienta:
-                    if procesar_una_vez("alta_herr_btn"):
+                if st.form_submit_button("Guardar Herramienta", type="primary"):
+                    if procesar_una_vez("alta_herr"):
                         if sku_id_h and nombre_h:
-                            datos_herramienta = {"codigo": str(sku_id_h), "ID_Herramienta": str(sku_id_h), "Herramienta": str(nombre_h), "Estado": str(estado_h), "Responsable": str(responsable_h), "ubicacion": str(ubicacion_h)}
+                            datos_herramienta = {
+                                "codigo": str(sku_id_h), 
+                                "ID_Herramienta": str(sku_id_h),
+                                "Herramienta": str(nombre_h), 
+                                "Estado": str(estado_h), 
+                                "Responsable": str(responsable_h),
+                                "ubicacion": str(ubicacion_h)
+                            }
                             utils.supabase.table("Herramientas").insert(datos_herramienta).execute()
                             st.session_state["alta_herr_exito"] = True
                             st.rerun()
                         else:
                             st.warning("⚠️ El Código/ID y Nombre son obligatorios.")
-                            liberar_bloqueo("alta_herr_btn")
-                else:
-                    liberar_bloqueo("alta_herr_btn")
+                            liberar_bloqueo("alta_herr")
+                    else:
+                        liberar_bloqueo("alta_herr")
         else:
             st.success("✅ Herramienta registrada con éxito en el catálogo.")
             if st.button("➕ Agregar otra Herramienta", type="primary"):
@@ -723,44 +793,69 @@ elif opcion == "Herramientas":
             cols_base = ["id", "codigo", "Herramienta", "Estado", "Responsable", "ubicacion"]
             for col in cols_base:
                 if col not in df.columns: df[col] = ""
+            
             df_view = df[cols_base].copy()
             df_view.rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"}, inplace=True)
             df_view["🗑️ Eliminar"] = False 
             
-            edited_h = st.data_editor(df_view, num_rows="dynamic", use_container_width=True, hide_index=True, column_config={"🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)})
+            edited_h = st.data_editor(
+                df_view, 
+                num_rows="dynamic", 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                }
+            )
             
-            btn_upd_herr = st.button("💾 Actualizar Catálogo", type="primary")
-            if btn_upd_herr:
-                if procesar_una_vez("upd_herr_btn"):
+            if st.button("💾 Actualizar Catálogo", type="primary"):
+                if procesar_una_vez("upd_herr"):
                     try:
                         to_upsert = []
                         to_delete = []
+                        
                         for i, r in edited_h.iterrows():
                             if r.get("🗑️ Eliminar", False):
-                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": to_delete.append(int(r["id"]))
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    to_delete.append(int(r["id"]))
                             else:
-                                d = {"codigo": str(r.get("Código / ID", "")), "ID_Herramienta": str(r.get("Código / ID", "")), "Herramienta": str(r.get("Herramienta", "")), "Estado": str(r.get("Estado", "")), "Responsable": str(r.get("Responsable", "")), "ubicacion": str(r.get("Ubicación", ""))}
-                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": d["id"] = int(r["id"])
-                                elif d["codigo"].strip() == "" or d["Herramienta"].strip() == "": continue
+                                d = {
+                                    "codigo": str(r.get("Código / ID", "")),
+                                    "ID_Herramienta": str(r.get("Código / ID", "")), 
+                                    "Herramienta": str(r.get("Herramienta", "")),
+                                    "Estado": str(r.get("Estado", "")),
+                                    "Responsable": str(r.get("Responsable", "")),
+                                    "ubicacion": str(r.get("Ubicación", ""))
+                                }
+                                
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    d["id"] = int(r["id"])
+                                elif d["codigo"].strip() == "" or d["Herramienta"].strip() == "":
+                                    continue
+
                                 to_upsert.append(d)
                         
-                        if to_delete: utils.supabase.table("Herramientas").delete().in_("id", to_delete).execute()
-                        if to_upsert: utils.supabase.table("Herramientas").upsert(to_upsert).execute()
+                        if to_delete:
+                            utils.supabase.table("Herramientas").delete().in_("id", to_delete).execute()
+                        if to_upsert:
+                            utils.supabase.table("Herramientas").upsert(to_upsert).execute()
                             
-                        st.toast("✅ Catálogo sincronizado al momento.", icon="⚡")
+                        st.toast("✅ Catálogo sincronizado al momento.", icon="✅")
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ Error al actualizar: {e}")
-                        liberar_bloqueo("upd_herr_btn")
-            else:
-                liberar_bloqueo("upd_herr_btn")
+                        liberar_bloqueo("upd_herr")
+                else:
+                    liberar_bloqueo("upd_herr")
 
 # ==========================================
 # 4. CLIENTES
 # ==========================================
 elif opcion == "Clientes":
-    try: df = pd.DataFrame(utils.supabase.table("Clientes").select("*").order("id").execute().data)
-    except: df = pd.DataFrame()
+    try: 
+        df = pd.DataFrame(utils.supabase.table("Clientes").select("*").order("id").execute().data)
+    except: 
+        df = pd.DataFrame()
 
     t1, t2 = st.tabs(["➕ Alta Cliente", "📋 Lista de Clientes"])
     with t1:
@@ -772,28 +867,33 @@ elif opcion == "Clientes":
                 c1, c2 = st.columns(2)
                 nombre_cli = c1.text_input("Nombre / Empresa")
                 rfc_cli = c2.text_input("RFC")
+                
                 c3, c4 = st.columns(2)
                 telefono_cli = c3.text_input("Teléfono")
                 email_cli = c4.text_input("E-mail")
+                
                 direccion_cli = st.text_input("Dirección (Calle y Número)")
+                
                 c5, c6, c7 = st.columns(3)
                 colonia_cli = c5.text_input("Colonia")
                 cp_cli = c6.text_input("Código Postal")
                 estado_cli = c7.text_input("Estado (Provincia)")
                 
-                btn_cli = st.form_submit_button("Guardar Cliente", type="primary")
-                if btn_cli:
-                    if procesar_una_vez("alta_cli_btn"):
+                if st.form_submit_button("Guardar Cliente", type="primary"):
+                    if procesar_una_vez("alta_cli"):
                         if nombre_cli:
-                            datos_cli = {"nombre": str(nombre_cli), "rfc": str(rfc_cli), "telefono": str(telefono_cli), "email": str(email_cli), "direccion": str(direccion_cli), "colonia": str(colonia_cli), "codigo_postal": str(cp_cli), "estado": str(estado_cli)}
+                            datos_cli = {
+                                "nombre": str(nombre_cli), "rfc": str(rfc_cli), "telefono": str(telefono_cli), "email": str(email_cli),
+                                "direccion": str(direccion_cli), "colonia": str(colonia_cli), "codigo_postal": str(cp_cli), "estado": str(estado_cli)
+                            }
                             utils.supabase.table("Clientes").insert(datos_cli).execute()
                             st.session_state["alta_cli_exito"] = True
                             st.rerun()
                         else:
                             st.warning("⚠️ El nombre del cliente es obligatorio.")
-                            liberar_bloqueo("alta_cli_btn")
-                else:
-                    liberar_bloqueo("alta_cli_btn")
+                            liberar_bloqueo("alta_cli")
+                    else:
+                        liberar_bloqueo("alta_cli")
         else:
             st.success("✅ Cliente registrado correctamente en el directorio.")
             if st.button("➕ Agregar otro Cliente", type="primary"):
@@ -804,40 +904,57 @@ elif opcion == "Clientes":
         df_cli_view = df.copy()
         if not df_cli_view.empty:
             df_cli_view["🗑️ Eliminar"] = False
-            edited_c = st.data_editor(df_cli_view, num_rows="dynamic", use_container_width=True, column_config={"🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)})
             
-            btn_upd_cli = st.button("💾 Actualizar Clientes", type="primary")
-            if btn_upd_cli:
-                if procesar_una_vez("upd_cli_btn"):
+            edited_c = st.data_editor(
+                df_cli_view, 
+                num_rows="dynamic", 
+                use_container_width=True,
+                column_config={
+                    "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                }
+            )
+            
+            if st.button("💾 Actualizar Clientes", type="primary"):
+                if procesar_una_vez("upd_cli"):
                     try:
                         to_upsert = []
                         to_delete = []
+                        
                         for i, r in edited_c.iterrows():
                             if r.get("🗑️ Eliminar", False):
-                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": to_delete.append(int(r["id"]))
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    to_delete.append(int(r["id"]))
                             else:
                                 d = {k: str(v) for k, v in r.items() if k not in ['id', '🗑️ Eliminar', 'created_at'] and pd.notna(v)}
-                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": d["id"] = int(r["id"])
-                                elif d.get("nombre", "").strip() == "": continue
+                                
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    d["id"] = int(r["id"])
+                                elif d.get("nombre", "").strip() == "":
+                                    continue
+                                    
                                 to_upsert.append(d)
                         
-                        if to_delete: utils.supabase.table("Clientes").delete().in_("id", to_delete).execute()
-                        if to_upsert: utils.supabase.table("Clientes").upsert(to_upsert).execute()
+                        if to_delete:
+                            utils.supabase.table("Clientes").delete().in_("id", to_delete).execute()
+                        if to_upsert:
+                            utils.supabase.table("Clientes").upsert(to_upsert).execute()
                             
-                        st.toast("✅ Clientes actualizados al momento.", icon="⚡")
+                        st.toast("✅ Clientes actualizados al momento.", icon="✅")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al actualizar: {e}")
-                        liberar_bloqueo("upd_cli_btn")
-            else:
-                liberar_bloqueo("upd_cli_btn")
+                        liberar_bloqueo("upd_cli")
+                else:
+                    liberar_bloqueo("upd_cli")
 
 # ==========================================
 # 5. PROVEEDORES
 # ==========================================
 elif opcion == "Proveedores":
-    try: df = pd.DataFrame(utils.supabase.table("Proveedores").select("*").order("id").execute().data)
-    except: df = pd.DataFrame()
+    try: 
+        df = pd.DataFrame(utils.supabase.table("Proveedores").select("*").order("id").execute().data)
+    except: 
+        df = pd.DataFrame()
 
     t1, t2 = st.tabs(["➕ Alta Proveedor", "📋 Lista de Proveedores"])
     with t1:
@@ -849,27 +966,32 @@ elif opcion == "Proveedores":
                 c1, c2 = st.columns(2)
                 nombre_prov = c1.text_input("Nombre / Empresa")
                 rfc_prov = c2.text_input("RFC")
+                
                 c3, c4 = st.columns(2)
                 contacto_prov = c3.text_input("Persona de Contacto")
                 telefono_prov = c4.text_input("Teléfono")
+                
                 domicilio_prov = st.text_input("Calle y Número")
+                
                 c5, c6 = st.columns(2)
                 colonia_prov = c5.text_input("Colonia")
                 cp_prov = c6.text_input("Código Postal")
                 
-                btn_prov = st.form_submit_button("Guardar Proveedor", type="primary")
-                if btn_prov:
-                    if procesar_una_vez("alta_prov_btn"):
+                if st.form_submit_button("Guardar Proveedor", type="primary"):
+                    if procesar_una_vez("alta_prov"):
                         if nombre_prov:
-                            datos_prov = {"nombre": str(nombre_prov), "empresa": str(nombre_prov), "rfc": str(rfc_prov), "contacto": str(contacto_prov), "telefono": str(telefono_prov), "domicilio": str(domicilio_prov), "colonia": str(colonia_prov), "codigo_postal": str(cp_prov)}
+                            datos_prov = {
+                                "nombre": str(nombre_prov), "empresa": str(nombre_prov), "rfc": str(rfc_prov), "contacto": str(contacto_prov),
+                                "telefono": str(telefono_prov), "domicilio": str(domicilio_prov), "colonia": str(colonia_prov), "codigo_postal": str(cp_prov)
+                            }
                             utils.supabase.table("Proveedores").insert(datos_prov).execute()
                             st.session_state["alta_prov_exito"] = True
                             st.rerun()
                         else:
                             st.warning("⚠️ El nombre de la empresa es obligatorio.")
-                            liberar_bloqueo("alta_prov_btn")
-                else:
-                    liberar_bloqueo("alta_prov_btn")
+                            liberar_bloqueo("alta_prov")
+                    else:
+                        liberar_bloqueo("alta_prov")
         else:
             st.success("✅ Proveedor registrado correctamente en el directorio.")
             if st.button("➕ Agregar otro Proveedor", type="primary"):
@@ -880,34 +1002,49 @@ elif opcion == "Proveedores":
         df_prov_view = df.copy()
         if not df_prov_view.empty:
             df_prov_view["🗑️ Eliminar"] = False
-            edited_p = st.data_editor(df_prov_view, num_rows="dynamic", use_container_width=True, column_config={"🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)})
             
-            btn_upd_prov = st.button("💾 Actualizar Proveedores", type="primary")
-            if btn_upd_prov:
-                if procesar_una_vez("upd_prov_btn"):
+            edited_p = st.data_editor(
+                df_prov_view, 
+                num_rows="dynamic", 
+                use_container_width=True,
+                column_config={
+                    "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️ Eliminar", default=False)
+                }
+            )
+            
+            if st.button("💾 Actualizar Proveedores", type="primary"):
+                if procesar_una_vez("upd_prov"):
                     try:
                         to_upsert = []
                         to_delete = []
+                        
                         for i, r in edited_p.iterrows():
                             if r.get("🗑️ Eliminar", False):
-                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": to_delete.append(int(r["id"]))
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    to_delete.append(int(r["id"]))
                             else:
                                 d = {k: str(v) for k, v in r.items() if k not in ['id', '🗑️ Eliminar', 'created_at'] and pd.notna(v)}
                                 d["empresa"] = d.get("nombre", "")
-                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": d["id"] = int(r["id"])
-                                elif d.get("nombre", "").strip() == "": continue
+                                
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
+                                    d["id"] = int(r["id"])
+                                elif d.get("nombre", "").strip() == "":
+                                    continue
+                                    
                                 to_upsert.append(d)
                                 
-                        if to_delete: utils.supabase.table("Proveedores").delete().in_("id", to_delete).execute()
-                        if to_upsert: utils.supabase.table("Proveedores").upsert(to_upsert).execute()
+                        if to_delete:
+                            utils.supabase.table("Proveedores").delete().in_("id", to_delete).execute()
+                        if to_upsert:
+                            utils.supabase.table("Proveedores").upsert(to_upsert).execute()
                             
-                        st.toast("✅ Proveedores actualizados al momento.", icon="⚡")
+                        st.toast("✅ Proveedores actualizados al momento.", icon="✅")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al actualizar: {e}")
-                        liberar_bloqueo("upd_prov_btn")
-            else:
-                liberar_bloqueo("upd_prov_btn")
+                        liberar_bloqueo("upd_prov")
+                else:
+                    liberar_bloqueo("upd_prov")
 
 # ==========================================
 # 6. CATÁLOGOS & ETIQUETAS QR
@@ -925,10 +1062,14 @@ elif opcion == "📂 Catálogos & Etiquetas QR":
                 df_ins["Seleccionar"] = False
                 edited_ins = st.data_editor(df_ins[["Seleccionar", "QR_Img", "codigo", "descripcion"]], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
                 if st.button("🖨️ Generar PDF Insumos"):
-                    sel = edited_ins[edited_ins["Seleccionar"] == True]
-                    if not sel.empty: 
-                        pdf = generar_pdf_etiquetas_qr(sel, "Insumos")
-                        st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Insumos.pdf")
+                    if procesar_una_vez("pdf_ins"):
+                        sel = edited_ins[edited_ins["Seleccionar"] == True]
+                        if not sel.empty: 
+                            pdf = generar_pdf_etiquetas_qr(sel, "Insumos")
+                            st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Insumos.pdf")
+                            liberar_bloqueo("pdf_ins")
+                        else: liberar_bloqueo("pdf_ins")
+                    else: liberar_bloqueo("pdf_ins")
         except: st.error("Error cargando datos")
     
     with tab_her:
@@ -940,12 +1081,28 @@ elif opcion == "📂 Catálogos & Etiquetas QR":
                 df_her_clean["QR_Img"] = df_her_clean["codigo"].apply(get_qr_data_url)
                 df_her_clean["Seleccionar"] = False
                 df_her_tag = df_her_clean.rename(columns={"Herramienta": "descripcion"})
-                edited_her = st.data_editor(df_her_tag[["Seleccionar", "QR_Img", "codigo", "descripcion"]], column_config={"QR_Img": st.column_config.ImageColumn("QR"), "codigo": "Código / ID", "descripcion": "Descripción (Herramienta)"}, use_container_width=True, hide_index=True, key="editor_herramientas_qr")
+                
+                edited_her = st.data_editor(
+                    df_her_tag[["Seleccionar", "QR_Img", "codigo", "descripcion"]], 
+                    column_config={
+                        "QR_Img": st.column_config.ImageColumn("QR"),
+                        "codigo": "Código / ID",
+                        "descripcion": "Descripción (Herramienta)"
+                    }, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    key="editor_herramientas_qr"
+                )
+                
                 if st.button("🖨️ Generar PDF Herramientas"):
-                    sel = edited_her[edited_her["Seleccionar"] == True]
-                    if not sel.empty: 
-                        pdf = generar_pdf_etiquetas_qr(sel, "Herramientas")
-                        st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Herramientas.pdf")
+                    if procesar_una_vez("pdf_herr"):
+                        sel = edited_her[edited_her["Seleccionar"] == True]
+                        if not sel.empty: 
+                            pdf = generar_pdf_etiquetas_qr(sel, "Herramientas")
+                            st.download_button("📥 Descargar PDF", pdf, "Etiquetas_Herramientas.pdf")
+                            liberar_bloqueo("pdf_herr")
+                        else: liberar_bloqueo("pdf_herr")
+                    else: liberar_bloqueo("pdf_herr")
         except Exception as e: 
             st.error(f"Error cargando datos: {e}")
 
@@ -953,7 +1110,8 @@ elif opcion == "📂 Catálogos & Etiquetas QR":
 # 7. EQUIPOS AUTORIZADOS
 # ==========================================
 elif opcion == "💻 Equipos Autorizados":
-    st.markdown("Gestión de seguridad: Aquí puedes ver qué dispositivos físicos tienen acceso al ERP.")
+    st.markdown("Gestión de seguridad: Aquí puedes ver qué dispositivos físicos tienen acceso al ERP. Si un equipo se daña o se extravía, revoca su acceso inmediatamente.")
+    
     try:
         res_dev = utils.supabase.table("Dispositivos_Autorizados").select("*").order("id", desc=True).execute()
         df_dev = pd.DataFrame(res_dev.data)
@@ -962,34 +1120,49 @@ elif opcion == "💻 Equipos Autorizados":
         st.error(f"Error cargando base de datos: {e}")
         
     if not df_dev.empty:
-        if 'created_at' in df_dev.columns: df_dev['Fecha de Vinculación'] = pd.to_datetime(df_dev['created_at']).dt.strftime('%d/%m/%Y %H:%M')
+        if 'created_at' in df_dev.columns:
+            df_dev['Fecha de Vinculación'] = pd.to_datetime(df_dev['created_at']).dt.strftime('%d/%m/%Y %H:%M')
+        
         df_view = df_dev[["id", "descripcion", "Fecha de Vinculación"]].copy()
         df_view.rename(columns={"descripcion": "Nombre del Equipo / Ubicación"}, inplace=True)
+        
         df_view["🚫 Revocar Acceso"] = False
         
-        st.warning("⚠️ Al marcar 'Revocar Acceso' y guardar, el equipo será expulsado del sistema al instante.")
-        edited_dev = st.data_editor(df_view, hide_index=True, use_container_width=True, disabled=["id", "Fecha de Vinculación"], column_config={"🚫 Revocar Acceso": st.column_config.CheckboxColumn("🚫 Revocar Acceso", default=False)})
+        st.warning("⚠️ Al marcar 'Revocar Acceso' y guardar, el equipo será expulsado del sistema al instante. Tendrá que ser vinculado físicamente de nuevo con la Contraseña Maestra.")
         
-        btn_equipos = st.button("💾 Guardar Cambios de Seguridad", type="primary")
-        if btn_equipos:
-            if procesar_una_vez("seguridad_btn"):
+        edited_dev = st.data_editor(
+            df_view,
+            hide_index=True,
+            use_container_width=True,
+            disabled=["id", "Fecha de Vinculación"],
+            column_config={
+                "🚫 Revocar Acceso": st.column_config.CheckboxColumn("🚫 Revocar Acceso", default=False)
+            }
+        )
+        
+        if st.button("💾 Guardar Cambios de Seguridad", type="primary"):
+            if procesar_una_vez("upd_equipos"):
                 try:
                     to_delete = []
                     for i, r in edited_dev.iterrows():
-                        if r.get("🚫 Revocar Acceso", False): to_delete.append(int(r["id"]))
-                        else: utils.supabase.table("Dispositivos_Autorizados").update({"descripcion": str(r["Nombre del Equipo / Ubicación"])}).eq("id", int(r["id"])).execute()
+                        if r.get("🚫 Revocar Acceso", False):
+                            to_delete.append(int(r["id"]))
+                        else:
+                            utils.supabase.table("Dispositivos_Autorizados").update({
+                                "descripcion": str(r["Nombre del Equipo / Ubicación"])
+                            }).eq("id", int(r["id"])).execute()
                             
                     if to_delete:
                         utils.supabase.table("Dispositivos_Autorizados").delete().in_("id", to_delete).execute()
-                        st.toast("🚨 Accesos revocados con éxito.", icon="🚨")
+                        st.toast("🚨 Accesos revocados con éxito. Los equipos han sido bloqueados.", icon="🚨")
                     else:
-                        st.toast("✅ Nombres de los equipos actualizados.", icon="⚡")
+                        st.toast("✅ Nombres de los equipos actualizados.", icon="✅")
                         
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al actualizar la seguridad: {e}")
-                    liberar_bloqueo("seguridad_btn")
-        else:
-            liberar_bloqueo("seguridad_btn")
+                    liberar_bloqueo("upd_equipos")
+            else:
+                liberar_bloqueo("upd_equipos")
     else:
         st.info("No hay ningún equipo vinculado al sistema en este momento.")
