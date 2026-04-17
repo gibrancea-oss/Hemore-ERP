@@ -90,7 +90,7 @@ def cargar_colores():
         try:
             with open(CONFIG_FILE, "r") as f: return json.load(f)
         except: pass
-    return {"color_1": "#1E2328", "color_2": "#0066CC"} # Colores por defecto
+    return {"color_1": "#1E2328", "color_2": "#0066CC"}
 
 def guardar_colores(c1, c2):
     with open(CONFIG_FILE, "w") as f:
@@ -100,9 +100,22 @@ def hex_a_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE (LETRAS GRANDES + INFO EMPRESA) ---
+# --- FUNCIÓN PARA BUSCAR FUENTES COMPATIBLES (NUBE/LOCAL) ---
+def obtener_fuente(size, bold=False):
+    # Rutas para Windows y Linux (Streamlit Cloud)
+    rutas_normales = ["arial.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
+    rutas_negritas = ["arialbd.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+    
+    rutas = rutas_negritas if bold else rutas_normales
+    for ruta in rutas:
+        try:
+            return ImageFont.truetype(ruta, size)
+        except:
+            continue
+    return ImageFont.load_default()
+
+# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE MEJORADO ---
 def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
-    # Tamaño CR80 (Estándar INE / Tarjeta de PVC)
     width, height = 1012, 638 
     img = Image.new('RGB', (width, height), color=(245, 245, 250))
     canvas = ImageDraw.Draw(img)
@@ -110,23 +123,20 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     color_1 = hex_a_rgb(c1_hex)
     color_2 = hex_a_rgb(c2_hex)
 
-    # Carga de fuentes (con aumento masivo de tamaño)
-    try:
-        f_bold_xl = ImageFont.truetype("arialbd.ttf", 75)   # Título principal (Negritas)
-        f_italic_md = ImageFont.truetype("arial.ttf", 32)   # Subtítulo
-        f_bold_lg = ImageFont.truetype("arialbd.ttf", 45)   # Etiquetas de Datos
-        f_reg_lg = ImageFont.truetype("arial.ttf", 45)      # Valores de Datos
-        f_bold_sm = ImageFont.truetype("arialbd.ttf", 26)   # Etiquetas de Empresa
-        f_reg_sm = ImageFont.truetype("arial.ttf", 26)      # Valores de Empresa
-        f_footer = ImageFont.truetype("arial.ttf", 20)      # Pie de página
-    except:
-        f_bold_xl = f_italic_md = f_bold_lg = f_reg_lg = f_bold_sm = f_reg_sm = f_footer = ImageFont.load_default()
+    # Fuentes ahora sí GIGANTES y funcionales
+    f_bold_xl = obtener_fuente(85, bold=True)     # Título Principal
+    f_italic_md = obtener_fuente(35, bold=False)  # Subtítulo G Solutions
+    f_bold_lg = obtener_fuente(55, bold=True)     # Etiquetas (Nombre:, Puesto:)
+    f_reg_lg = obtener_fuente(55, bold=False)     # Valores (Gibran, etc)
+    f_bold_sm = obtener_fuente(24, bold=True)     # Etiquetas Empresa
+    f_reg_sm = obtener_fuente(24, bold=False)     # Valores Empresa
+    f_footer = obtener_fuente(18, bold=False)     # Pie de página miniatura
 
-    # 1. Cabecera (Color Principal) y Franja (Color Secundario)
+    # 1. Cabecera y Franja
     canvas.rectangle([0, 0, width, 170], fill=color_1)
     canvas.rectangle([0, 170, width, 185], fill=color_2)
 
-    # 2. Logo de HEMORE (Más grande)
+    # 2. Logo de HEMORE (Aún más grande: 150x150)
     text_x_offset = 50
     if os.path.exists("logo.png"):
         try:
@@ -136,46 +146,45 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
             text_x_offset = 220 
         except: pass
 
-    # 3. Títulos de Cabecera (Letras Gigantes)
-    canvas.text((text_x_offset, 35), "ERP HEMORE", font=f_bold_xl, fill=(255, 255, 255))
-    canvas.text((text_x_offset, 120), "Powered by G Solutions", font=f_italic_md, fill=(200, 220, 255))
+    # 3. Títulos de Cabecera
+    canvas.text((text_x_offset, 25), "ERP HEMORE", font=f_bold_xl, fill=(255, 255, 255))
+    canvas.text((text_x_offset + 5, 115), "Powered by G Solutions", font=f_italic_md, fill=(200, 220, 255))
 
-    # 4. Cuadro contenedor de los datos
-    try: canvas.rounded_rectangle([30, 215, 982, 595], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
-    except: canvas.rectangle([30, 215, 982, 595], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    # 4. Cuadro contenedor
+    try: canvas.rounded_rectangle([25, 205, 987, 615], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    except: canvas.rectangle([25, 205, 987, 615], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
 
-    # 5. Datos del usuario
-    col1_x = 70
-    col2_x = 310
+    # 5. Datos GIGANTES
+    col1_x = 60
+    col2_x = 360
     
-    canvas.text((col1_x, 235), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
-    canvas.text((col2_x, 235), f"{nombre}", font=f_reg_lg, fill=(0, 0, 0))
+    canvas.text((col1_x, 225), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
+    canvas.text((col2_x, 225), f"{nombre}", font=f_reg_lg, fill=(0, 0, 0))
     
     canvas.text((col1_x, 295), "Puesto:", font=f_bold_lg, fill=(80, 80, 80))
     canvas.text((col2_x, 295), f"{puesto}", font=f_reg_lg, fill=(60, 60, 60))
     
-    canvas.line((col1_x, 360, 942, 360), fill=(230, 230, 230), width=2)
+    canvas.line((col1_x, 365, 952, 365), fill=(230, 230, 230), width=3)
     
-    canvas.text((col1_x, 375), "Usuario:", font=f_bold_lg, fill=color_2)
-    canvas.text((col2_x, 375), f"{usuario}", font=f_reg_lg, fill=(0, 0, 0))
+    canvas.text((col1_x, 385), "Usuario:", font=f_bold_lg, fill=color_2)
+    canvas.text((col2_x, 385), f"{usuario}", font=f_reg_lg, fill=(0, 0, 0))
     
-    canvas.text((col1_x, 435), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
-    canvas.text((col2_x, 435), f"{pin}", font=f_reg_lg, fill=(200, 0, 0))
+    canvas.text((col1_x, 460), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
+    canvas.text((col2_x, 460), f"{pin}", font=f_reg_lg, fill=(200, 0, 0))
 
-    canvas.line((col1_x, 500, 942, 500), fill=(230, 230, 230), width=2)
+    canvas.line((col1_x, 530, 952, 530), fill=(230, 230, 230), width=2)
 
     # 6. Información de la Empresa (HEMORE)
-    canvas.text((col1_x, 515), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 135, 515), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
+    # Direccion
+    canvas.text((col1_x, 540), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 130, 540), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
     
-    canvas.text((col1_x, 550), "Tel:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 55, 550), "2228889858", font=f_reg_sm, fill=(100, 100, 100))
+    # Tel y Link en la misma línea
+    canvas.text((col1_x, 570), "Tel:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 50, 570), "2228889858", font=f_reg_sm, fill=(100, 100, 100))
     
-    canvas.text((col1_x + 280, 550), "Link:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 350, 550), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
-
-    # 7. Pie
-    canvas.text((40, 605), "Credencial de uso interno. Propiedad de HEMORE Industrias.", font=f_footer, fill=(150, 150, 150))
+    canvas.text((col1_x + 280, 570), "Link:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 350, 570), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
 
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
