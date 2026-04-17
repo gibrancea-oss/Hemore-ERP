@@ -101,24 +101,18 @@ def hex_a_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-# --- SOLUCIÓN DEFINITIVA PARA FUENTES GIGANTES ---
 def obtener_fuente_segura(size, bold=False):
-    # Descarga fuentes Roboto oficiales de Google para asegurar que sí escale el tamaño
     font_name = "Roboto-Bold.ttf" if bold else "Roboto-Regular.ttf"
     font_url = f"https://github.com/googlefonts/roboto/raw/main/src/hinted/{font_name}"
     
     if not os.path.exists(font_name):
-        try:
-            urllib.request.urlretrieve(font_url, font_name)
-        except:
-            pass # Falla silenciosa si no hay internet
+        try: urllib.request.urlretrieve(font_url, font_name)
+        except: pass 
             
-    try:
-        return ImageFont.truetype(font_name, size)
-    except:
-        return ImageFont.load_default()
+    try: return ImageFont.truetype(font_name, size)
+    except: return ImageFont.load_default()
 
-# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE MEJORADO ---
+# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE MEJORADO (PROPORCIONES PERFECTAS) ---
 def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     width, height = 1012, 638 
     img = Image.new('RGB', (width, height), color=(245, 245, 250))
@@ -127,66 +121,78 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     color_1 = hex_a_rgb(c1_hex)
     color_2 = hex_a_rgb(c2_hex)
 
-    # Ahora sí usará fuentes escalables descargadas
-    f_bold_xl = obtener_fuente_segura(85, bold=True)     # Título Principal
-    f_italic_md = obtener_fuente_segura(35, bold=False)  # Subtítulo G Solutions
-    f_bold_lg = obtener_fuente_segura(55, bold=True)     # Etiquetas (Nombre:, Puesto:)
-    f_reg_lg = obtener_fuente_segura(55, bold=False)     # Valores (Gibran, etc)
-    f_bold_sm = obtener_fuente_segura(24, bold=True)     # Etiquetas Empresa
-    f_reg_sm = obtener_fuente_segura(24, bold=False)     # Valores Empresa
-    f_footer = obtener_fuente_segura(18, bold=False)     # Pie de página miniatura
+    # Tamaños balanceados para rellenar sin encimar
+    f_bold_xl = obtener_fuente_segura(85, bold=True)     
+    f_italic_md = obtener_fuente_segura(35, bold=False)  
+    f_bold_lg = obtener_fuente_segura(50, bold=True)     
+    f_reg_lg = obtener_fuente_segura(50, bold=False)     
+    f_bold_sm = obtener_fuente_segura(22, bold=True)     
+    f_reg_sm = obtener_fuente_segura(20, bold=False)     
 
-    # 1. Cabecera y Franja
-    canvas.rectangle([0, 0, width, 170], fill=color_1)
-    canvas.rectangle([0, 170, width, 185], fill=color_2)
+    # 1. Cabecera (Ajustada a 160px para centrar logo) y Franja
+    canvas.rectangle([0, 0, width, 160], fill=color_1)
+    canvas.rectangle([0, 160, width, 175], fill=color_2)
 
-    # 2. Logo de HEMORE (Más grande: 150x150)
+    # 2. Logo centrado verticalmente en la cabecera
     text_x_offset = 50
     if os.path.exists("logo.png"):
         try:
             logo = Image.open("logo.png").convert("RGBA")
-            logo.thumbnail((150, 150))
-            img.paste(logo, (40, 10), logo)
-            text_x_offset = 220 
+            logo.thumbnail((140, 140))
+            y_logo = (160 - logo.size[1]) // 2
+            img.paste(logo, (40, y_logo), logo)
+            text_x_offset = 50 + logo.size[0] + 30 
         except: pass
 
-    # 3. Títulos de Cabecera
-    canvas.text((text_x_offset, 25), "ERP HEMORE", font=f_bold_xl, fill=(255, 255, 255))
-    canvas.text((text_x_offset + 5, 115), "Powered by G Solutions", font=f_italic_md, fill=(200, 220, 255))
+    # 3. Títulos de Cabecera centrados
+    canvas.text((text_x_offset, 20), "ERP HEMORE", font=f_bold_xl, fill=(255, 255, 255))
+    canvas.text((text_x_offset + 5, 110), "Powered by G Solutions", font=f_italic_md, fill=(200, 220, 255))
 
     # 4. Cuadro contenedor
-    try: canvas.rounded_rectangle([25, 205, 987, 615], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
-    except: canvas.rectangle([25, 205, 987, 615], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    margen_x = 35
+    try: canvas.rounded_rectangle([margen_x, 200, width - margen_x, 610], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
+    except: canvas.rectangle([margen_x, 200, width - margen_x, 610], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
 
-    # 5. Datos GIGANTES
-    col1_x = 60
-    col2_x = 360
+    # 5. Distribución perfecta de datos
+    col1_x = 70
+    col2_x = 390  # Recorrido a la derecha para que no choque con "Contraseña:"
     
-    canvas.text((col1_x, 225), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
-    canvas.text((col2_x, 225), f"{nombre}", font=f_reg_lg, fill=(0, 0, 0))
-    
-    canvas.text((col1_x, 295), "Puesto:", font=f_bold_lg, fill=(80, 80, 80))
-    canvas.text((col2_x, 295), f"{puesto}", font=f_reg_lg, fill=(60, 60, 60))
-    
-    canvas.line((col1_x, 365, 952, 365), fill=(230, 230, 230), width=3)
-    
-    canvas.text((col1_x, 385), "Usuario:", font=f_bold_lg, fill=color_2)
-    canvas.text((col2_x, 385), f"{usuario}", font=f_reg_lg, fill=(0, 0, 0))
-    
-    canvas.text((col1_x, 460), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
-    canvas.text((col2_x, 460), f"{pin}", font=f_reg_lg, fill=(200, 0, 0))
+    y_base = 225
+    y_espacio = 65
 
-    canvas.line((col1_x, 530, 952, 530), fill=(230, 230, 230), width=2)
+    # Fila 1 y 2
+    canvas.text((col1_x, y_base), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
+    canvas.text((col2_x, y_base), f"{nombre}", font=f_reg_lg, fill=(0, 0, 0))
+    
+    canvas.text((col1_x, y_base + y_espacio), "Puesto:", font=f_bold_lg, fill=(80, 80, 80))
+    canvas.text((col2_x, y_base + y_espacio), f"{puesto}", font=f_reg_lg, fill=(60, 60, 60))
+    
+    # Línea Divisoria 1
+    y_linea_1 = y_base + y_espacio*2 - 5
+    canvas.line((col1_x, y_linea_1, width - 70, y_linea_1), fill=(230, 230, 230), width=3)
+    
+    # Fila 3 y 4
+    canvas.text((col1_x, y_base + y_espacio*2 + 10), "Usuario:", font=f_bold_lg, fill=color_2)
+    canvas.text((col2_x, y_base + y_espacio*2 + 10), f"{usuario}", font=f_reg_lg, fill=(0, 0, 0))
+    
+    canvas.text((col1_x, y_base + y_espacio*3 + 10), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
+    canvas.text((col2_x, y_base + y_espacio*3 + 10), f"{pin}", font=f_reg_lg, fill=(200, 0, 0))
 
-    # 6. Información de la Empresa (HEMORE)
-    canvas.text((col1_x, 540), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 130, 540), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
+    # Línea Divisoria 2
+    y_linea_2 = y_base + y_espacio*4 + 5
+    canvas.line((col1_x, y_linea_2, width - 70, y_linea_2), fill=(230, 230, 230), width=2)
+
+    # 6. Información de la Empresa (HEMORE) bien distribuida
+    y_empresa = y_base + y_espacio*4 + 15
     
-    canvas.text((col1_x, 570), "Tel:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 50, 570), "2228889858", font=f_reg_sm, fill=(100, 100, 100))
+    canvas.text((col1_x, y_empresa), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 120, y_empresa + 2), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
     
-    canvas.text((col1_x + 280, 570), "Link:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 350, 570), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
+    canvas.text((col1_x, y_empresa + 32), "Tel:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 45, y_empresa + 34), "2228889858", font=f_reg_sm, fill=(100, 100, 100))
+    
+    canvas.text((col1_x + 300, y_empresa + 32), "Link:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((col1_x + 360, y_empresa + 34), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
 
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
