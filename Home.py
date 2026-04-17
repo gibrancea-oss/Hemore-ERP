@@ -15,17 +15,6 @@ if "bypass_device" not in st.session_state:
     st.session_state["bypass_device"] = False
 
 # ==========================================
-# 🛡️ MOTOR ANTI-DOBLE CLIC Y VELOCIDAD
-# ==========================================
-def procesar_una_vez(llave):
-    if st.session_state.get(f"lock_{llave}", False): return False
-    st.session_state[f"lock_{llave}"] = True
-    return True
-
-def liberar_bloqueo(llave):
-    st.session_state[f"lock_{llave}"] = False
-
-# ==========================================
 # 🛡️ BARRERA 1: DISPOSITIVO DE CONFIANZA
 # ==========================================
 cookie_manager = stx.CookieManager(key="cookie_manager_hemore")
@@ -57,26 +46,22 @@ if not dispositivo_valido:
             nombre_equipo = st.text_input("Nombre de este equipo (Ej. Computadora Almacén)", key="auth_name")
             
             if st.button("Vincular Equipo Físico", type="primary", use_container_width=True):
-                if procesar_una_vez("vincular_equipo"):
-                    if admin_pass_link == st.secrets["admin_password"]:
-                        if nombre_equipo:
-                            nuevo_token = str(uuid.uuid4())
-                            try:
-                                utils.supabase.table("Dispositivos_Autorizados").insert({"token": nuevo_token, "descripcion": nombre_equipo}).execute()
-                                vencimiento = datetime.datetime.now() + datetime.timedelta(days=1825)
-                                cookie_manager.set("hemore_device_token", nuevo_token, expires_at=vencimiento)
-                                st.session_state["bypass_device"] = True
-                                st.toast("✅ Equipo vinculado exitosamente", icon="✅")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error al conectar: {e}")
-                                liberar_bloqueo("vincular_equipo")
-                        else:
-                            st.warning("Escribe un nombre para identificar este equipo.")
-                            liberar_bloqueo("vincular_equipo")
+                if admin_pass_link == st.secrets["admin_password"]:
+                    if nombre_equipo:
+                        nuevo_token = str(uuid.uuid4())
+                        try:
+                            utils.supabase.table("Dispositivos_Autorizados").insert({"token": nuevo_token, "descripcion": nombre_equipo}).execute()
+                            vencimiento = datetime.datetime.now() + datetime.timedelta(days=1825)
+                            cookie_manager.set("hemore_device_token", nuevo_token, expires_at=vencimiento)
+                            st.session_state["bypass_device"] = True
+                            st.toast("✅ Equipo vinculado exitosamente", icon="✅")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al conectar: {e}")
                     else:
-                        st.error("Contraseña incorrecta.")
-                        liberar_bloqueo("vincular_equipo")
+                        st.warning("Escribe un nombre para identificar este equipo.")
+                else:
+                    st.error("Contraseña incorrecta.")
     st.stop() 
 
 # ==========================================
@@ -109,37 +94,34 @@ if not st.session_state["authenticated"]:
         password_input = st.text_input("Contraseña", type="password")
         
         st.write("<br>", unsafe_allow_html=True) 
+        
         if st.button("Ingresar al Sistema", type="primary", use_container_width=True):
-            if procesar_una_vez("login_sys"):
-                if not usuario_input or not password_input:
-                    st.warning("⚠️ Ingresa usuario y contraseña.")
-                    liberar_bloqueo("login_sys")
+            if not usuario_input or not password_input:
+                st.warning("⚠️ Ingresa usuario y contraseña.")
+            else:
+                if usuario_input == st.secrets["admin_user"] and password_input == st.secrets["admin_password"]: 
+                    st.session_state["authenticated"] = True
+                    st.session_state["usuario_actual"] = "Administrador Master"
+                    st.session_state["es_admin"] = True
+                    st.session_state["permisos"] = ["TODO"]
+                    st.toast("✅ Acceso Concedido", icon="🔓")
+                    st.rerun()
                 else:
-                    if usuario_input == st.secrets["admin_user"] and password_input == st.secrets["admin_password"]: 
-                        st.session_state["authenticated"] = True
-                        st.session_state["usuario_actual"] = "Administrador Master"
-                        st.session_state["es_admin"] = True
-                        st.session_state["permisos"] = ["TODO"]
-                        st.toast("✅ Acceso Concedido", icon="🔓")
-                        st.rerun()
-                    else:
-                        try:
-                            res = utils.supabase.table("Personal").select("*").eq("usuario", usuario_input).eq("pin", password_input).eq("activo", True).execute()
-                            if len(res.data) > 0:
-                                usuario_db = res.data[0]
-                                st.session_state["authenticated"] = True
-                                st.session_state["usuario_actual"] = usuario_db["nombre"]
-                                st.session_state["es_admin"] = False
-                                permisos_str = usuario_db.get("permisos", "")
-                                st.session_state["permisos"] = [p.strip() for p in permisos_str.split(",")] if permisos_str else []
-                                st.toast(f"✅ Bienvenido {usuario_db['nombre']}", icon="🔓")
-                                st.rerun()
-                            else:
-                                st.error("⛔ Usuario o contraseña incorrectos")
-                                liberar_bloqueo("login_sys")
-                        except Exception as e:
-                            st.error(f"Error de conexión: {e}")
-                            liberar_bloqueo("login_sys")
+                    try:
+                        res = utils.supabase.table("Personal").select("*").eq("usuario", usuario_input).eq("pin", password_input).eq("activo", True).execute()
+                        if len(res.data) > 0:
+                            usuario_db = res.data[0]
+                            st.session_state["authenticated"] = True
+                            st.session_state["usuario_actual"] = usuario_db["nombre"]
+                            st.session_state["es_admin"] = False
+                            permisos_str = usuario_db.get("permisos", "")
+                            st.session_state["permisos"] = [p.strip() for p in permisos_str.split(",")] if permisos_str else []
+                            st.toast(f"✅ Bienvenido {usuario_db['nombre']}", icon="🔓")
+                            st.rerun()
+                        else:
+                            st.error("⛔ Usuario o contraseña incorrectos")
+                    except Exception as e:
+                        st.error(f"Error de conexión: {e}")
     st.stop() 
 
 # ==========================================
@@ -154,13 +136,14 @@ with col_t1:
 
 with col_t2:
     st.write("") 
-    if st.button("🚪 Cerrar Sesión", use_container_width=True):
-        if procesar_una_vez("logout_sys"):
-            st.session_state["authenticated"] = False
-            st.session_state["usuario_actual"] = ""
-            st.session_state["es_admin"] = False
-            st.session_state["permisos"] = []
-            st.rerun()
+    
+    def cerrar_sesion():
+        st.session_state["authenticated"] = False
+        st.session_state["usuario_actual"] = ""
+        st.session_state["es_admin"] = False
+        st.session_state["permisos"] = []
+        
+    st.button("🚪 Cerrar Sesión", use_container_width=True, on_click=cerrar_sesion)
 
 if st.session_state["es_admin"]:
     st.success(f"👤 Sesión Activa: **{st.session_state['usuario_actual']}** | 👑 Acceso Total Habilitado")
