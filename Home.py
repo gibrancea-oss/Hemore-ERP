@@ -4,6 +4,7 @@ import utils
 import os
 import uuid
 import datetime
+import base64
 
 # ==========================================
 # 1. CONFIGURACIÓN INICIAL · HEMORE EXECUTIVE UI
@@ -12,8 +13,22 @@ import datetime
 st.set_page_config(page_title="Inicio | ERP Hemore", page_icon="", layout="wide")
 utils.aplicar_estilo_movil()
 
-# Sistema visual: acabado editorial corporativo, superficies precisas,
-# jerarquía tipográfica y controles nativos de Streamlit estilizados.
+# Función auxiliar para convertir imagen local a Base64 si existe
+def _img_local_b64(ruta):
+    if os.path.exists(ruta):
+        with open(ruta, "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+# Función auxiliar para obtener las iniciales elegantes del usuario
+def _obtener_iniciales(nombre):
+    partes = [p for p in str(nombre).strip().split() if p]
+    if not partes:
+        return "HM"
+    if len(partes) == 1:
+        return partes[0][:2].upper()
+    return (partes[0][0] + partes[1][0]).upper()
+
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
@@ -365,7 +380,7 @@ st.markdown("""
     }
 
     /* ===================================================
-       PANEL: cabecera ejecutiva, estado y accesos
+       PANEL: cabecera ejecutiva, AVATAR DE PERFIL y accesos
        =================================================== */
     .hm-dashboard-kicker {
         margin: 2px 0 9px;
@@ -407,7 +422,7 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         gap: 18px;
-        padding: 24px 28px;
+        padding: 22px 28px;
         margin: 5px 0 24px;
         border: 1px solid #E3E9F2;
         border-radius: 17px;
@@ -425,11 +440,63 @@ st.markdown("""
         border-radius: 0 3px 3px 0;
     }
     .hm-session-card--limited::before {background: #22B78B;}
+    
+    /* Contenedor de identidad con Foto de Usuario */
+    .hm-session-identity {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+    }
+    .hm-avatar-wrap {
+        position: relative;
+        width: 62px;
+        height: 62px;
+        flex: 0 0 62px;
+        border-radius: 50%;
+        padding: 3px;
+        background: linear-gradient(135deg, #2D62D9 0%, #75D5BC 100%);
+        box-shadow: 0 8px 20px rgba(45, 98, 217, .18);
+    }
+    .hm-avatar-img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #FFFFFF;
+        display: block;
+        background: #0B1933;
+    }
+    .hm-avatar-fallback {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        border: 2px solid #FFFFFF;
+        background: linear-gradient(135deg, #0B1933 0%, #1C3564 100%);
+        color: #FFFFFF;
+        font-family: 'Manrope', sans-serif;
+        font-weight: 800;
+        font-size: 20px;
+        letter-spacing: -.04em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .hm-avatar-status {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: #23BD8B;
+        border: 2.5px solid #FFFFFF;
+    }
+
     .hm-session-label {
         display: flex;
         align-items: center;
         gap: 9px;
-        margin-bottom: 7px;
+        margin-bottom: 5px;
         color: #7C899D;
         text-transform: uppercase;
         font-size: 10px;
@@ -447,10 +514,18 @@ st.markdown("""
     .hm-session-user {
         color: #19273E;
         font-family: 'Manrope', sans-serif;
-        font-size: 18px;
+        font-size: 19px;
         font-weight: 800;
         letter-spacing: -.025em;
         overflow-wrap: anywhere;
+        display: block;
+    }
+    .hm-session-role {
+        color: #758198;
+        font-size: 12.5px;
+        font-weight: 600;
+        margin-top: 2px;
+        display: block;
     }
     .hm-access-badge {
         flex-shrink: 0;
@@ -698,6 +773,10 @@ if "es_admin" not in st.session_state:
     st.session_state["es_admin"] = False
 if "permisos" not in st.session_state:
     st.session_state["permisos"] = []
+if "foto_usuario" not in st.session_state:
+    st.session_state["foto_usuario"] = ""
+if "puesto_usuario" not in st.session_state:
+    st.session_state["puesto_usuario"] = ""
 
 if not st.session_state["authenticated"]:
     col_logo, col_login = st.columns([1.2, 1.5], gap="large")
@@ -749,6 +828,8 @@ if not st.session_state["authenticated"]:
                     st.session_state["usuario_actual"] = "Administrador Master"
                     st.session_state["es_admin"] = True
                     st.session_state["permisos"] = ["TODO"]
+                    st.session_state["puesto_usuario"] = "Dirección General"
+                    st.session_state["foto_usuario"] = _img_local_b64("admin_avatar.png")
                     st.toast("✅ Acceso Concedido", icon="🔓")
                     st.rerun()
                 else:
@@ -761,6 +842,8 @@ if not st.session_state["authenticated"]:
                             st.session_state["es_admin"] = False
                             permisos_str = usuario_db.get("permisos", "")
                             st.session_state["permisos"] = [p.strip() for p in permisos_str.split(",")] if permisos_str else []
+                            st.session_state["puesto_usuario"] = usuario_db.get("puesto", "Operativo")
+                            st.session_state["foto_usuario"] = usuario_db.get("foto_url", "") or ""
                             st.toast(f"✅ Bienvenido {usuario_db['nombre']}", icon="🔓")
                             st.rerun()
                         else:
@@ -792,18 +875,34 @@ with col_t2:
         st.session_state["usuario_actual"] = ""
         st.session_state["es_admin"] = False
         st.session_state["permisos"] = []
+        st.session_state["foto_usuario"] = ""
+        st.session_state["puesto_usuario"] = ""
 
     st.button("🚪 Cerrar Sesión", use_container_width=True, on_click=cerrar_sesion)
 
 st.write("<br>", unsafe_allow_html=True)
 
-# Estado de sesión (la autorización y el usuario se toman de la misma sesión).
+# Renderizado del Avatar del Usuario (Foto real o Iniciales Ejecutivas)
+foto_actual = st.session_state.get("foto_usuario", "")
+iniciales_usr = _obtener_iniciales(st.session_state["usuario_actual"])
+puesto_usr = st.session_state.get("puesto_usuario", "")
+
+if foto_actual:
+    avatar_html = f'<div class="hm-avatar-wrap"><img src="{foto_actual}" class="hm-avatar-img" alt="Perfil"><span class="hm-avatar-status"></span></div>'
+else:
+    avatar_html = f'<div class="hm-avatar-wrap"><div class="hm-avatar-fallback">{iniciales_usr}</div><span class="hm-avatar-status"></span></div>'
+
+# Estado de sesión con Foto de Perfil integrada
 if st.session_state["es_admin"]:
     st.markdown(f"""
         <div class="hm-session-card hm-session-card--admin">
-            <div>
-                <div class="hm-session-label"><span class="apple-dot"></span>Sesión Activa</div>
-                <strong class="hm-session-user">{st.session_state['usuario_actual']}</strong>
+            <div class="hm-session-identity">
+                {avatar_html}
+                <div>
+                    <div class="hm-session-label"><span class="apple-dot"></span>Sesión Activa</div>
+                    <strong class="hm-session-user">{st.session_state['usuario_actual']}</strong>
+                    <span class="hm-session-role">{puesto_usr}</span>
+                </div>
             </div>
             <span class="hm-access-badge">👑 Acceso Total Habilitado</span>
         </div>
@@ -811,9 +910,13 @@ if st.session_state["es_admin"]:
 else:
     st.markdown(f"""
         <div class="hm-session-card hm-session-card--limited">
-            <div>
-                <div class="hm-session-label"><span class="apple-dot"></span>Sesión Activa</div>
-                <strong class="hm-session-user">{st.session_state['usuario_actual']}</strong>
+            <div class="hm-session-identity">
+                {avatar_html}
+                <div>
+                    <div class="hm-session-label"><span class="apple-dot"></span>Sesión Activa</div>
+                    <strong class="hm-session-user">{st.session_state['usuario_actual']}</strong>
+                    <span class="hm-session-role">{puesto_usr}</span>
+                </div>
             </div>
             <span class="hm-access-badge hm-access-badge--limited">🔒 Accesos Restringidos</span>
         </div>
