@@ -20,7 +20,7 @@ utils.validar_login()
 supabase = utils.supabase
 
 # ==========================================
-# 🎨 ESTética EJECUTIVA HEMORE (IGUAL A HOME.PY)
+# 🎨 ESTÉTICA EJECUTIVA HEMORE (IGUAL A HOME.PY)
 # ==========================================
 st.markdown("""
 <style>
@@ -298,8 +298,23 @@ def envolver_texto(texto, font, max_width):
     if linea_actual: lineas.append(linea_actual)
     return lineas if lineas else [""]
 
-# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE MEJORADO ---
-def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
+def _cargar_imagen_credencial(foto_str):
+    """Convierte el string Base64 o ruta de la foto en un objeto PIL Image."""
+    if not foto_str or pd.isna(foto_str) or str(foto_str).strip() == "":
+        return None
+    try:
+        s = str(foto_str).strip()
+        if s.startswith("data:image"):
+            b64_data = s.split(",", 1)[1]
+            return Image.open(io.BytesIO(base64.b64decode(b64_data))).convert("RGB")
+        elif os.path.exists(s):
+            return Image.open(s).convert("RGB")
+    except Exception:
+        return None
+    return None
+
+# --- FUNCIÓN: GENERADOR DE TARJETAS TAMAÑO INE CON FOTOGRAFÍA DE OPERADOR ---
+def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex, foto_b64=""):
     width, height = 1012, 638 
     img = Image.new('RGB', (width, height), color=(245, 245, 250))
     canvas = ImageDraw.Draw(img)
@@ -309,11 +324,13 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
 
     f_bold_xl = obtener_fuente_segura(85, bold=True)     
     f_italic_md = obtener_fuente_segura(35, bold=False)  
-    f_bold_lg = obtener_fuente_segura(45, bold=True)     
-    f_reg_lg = obtener_fuente_segura(45, bold=False)     
-    f_bold_sm = obtener_fuente_segura(22, bold=True)     
-    f_reg_sm = obtener_fuente_segura(20, bold=False)     
+    f_bold_lg = obtener_fuente_segura(38, bold=True)     
+    f_reg_lg = obtener_fuente_segura(38, bold=False)     
+    f_bold_sm = obtener_fuente_segura(20, bold=True)     
+    f_reg_sm = obtener_fuente_segura(19, bold=False)     
     f_footer = obtener_fuente_segura(18, bold=False)
+    f_ini = obtener_fuente_segura(78, bold=True)
+    f_badge = obtener_fuente_segura(20, bold=True)
 
     # 1. Cabecera y Franja
     canvas.rectangle([0, 0, width, 160], fill=color_1)
@@ -339,20 +356,66 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
     try: canvas.rounded_rectangle([margen_x, 195, width - margen_x, 615], radius=15, fill=(255, 255, 255), outline=(200, 200, 200), width=2)
     except: canvas.rectangle([margen_x, 195, width - margen_x, 615], fill=(255, 255, 255), outline=(200, 200, 200), width=2)
 
-    # 5. LÓGICA DINÁMICA: Acomodo de datos sin salirse
-    col1_x = 70
-    col2_x = 350
+    # 5. FOTOGRAFÍA DEL OPERADOR (Lado Izquierdo de la Credencial)
+    foto_x, foto_y = 60, 220
+    foto_w, foto_h = 220, 255
+
+    # Marco decorativo con el color secundario
+    try:
+        canvas.rounded_rectangle([foto_x - 4, foto_y - 4, foto_x + foto_w + 4, foto_y + foto_h + 4], radius=18, fill=color_2)
+    except:
+        canvas.rectangle([foto_x - 4, foto_y - 4, foto_x + foto_w + 4, foto_y + foto_h + 4], fill=color_2)
+
+    foto_pil = _cargar_imagen_credencial(foto_b64)
+    if foto_pil is not None:
+        foto_recortada = ImageOps.fit(foto_pil, (foto_w, foto_h), Image.Resampling.LANCZOS)
+        mascara = Image.new("L", (foto_w, foto_h), 0)
+        draw_mask = ImageDraw.Draw(mascara)
+        try:
+            draw_mask.rounded_rectangle([0, 0, foto_w, foto_h], radius=14, fill=255)
+        except:
+            draw_mask.rectangle([0, 0, foto_w, foto_h], fill=255)
+        img.paste(foto_recortada, (foto_x, foto_y), mascara)
+    else:
+        # Escudo ejecutivo con iniciales si el operador aún no tiene foto cargada
+        try:
+            canvas.rounded_rectangle([foto_x, foto_y, foto_x + foto_w, foto_y + foto_h], radius=14, fill=color_1)
+        except:
+            canvas.rectangle([foto_x, foto_y, foto_x + foto_w, foto_y + foto_h], fill=color_1)
+        partes_nom = [p for p in str(nombre).strip().split() if p]
+        iniciales = (partes_nom[0][0] + (partes_nom[1][0] if len(partes_nom) > 1 else "")).upper() if partes_nom else "HM"
+        try:
+            w_ini = f_ini.getlength(iniciales)
+        except:
+            w_ini = 95
+        canvas.text((foto_x + (foto_w - w_ini) / 2, foto_y + 75), iniciales, font=f_ini, fill=(255, 255, 255))
+
+    # Insignia inferior bajo la foto
+    try:
+        canvas.rounded_rectangle([foto_x, foto_y + foto_h + 10, foto_x + foto_w, foto_y + foto_h + 42], radius=8, fill=(238, 242, 249))
+    except:
+        canvas.rectangle([foto_x, foto_y + foto_h + 10, foto_x + foto_w, foto_y + foto_h + 42], fill=(238, 242, 249))
+    txt_id = "PERSONAL AUTORIZADO"
+    try:
+        w_badge = f_badge.getlength(txt_id)
+    except:
+        w_badge = 180
+    canvas.text((foto_x + (foto_w - w_badge) / 2, foto_y + foto_h + 15), txt_id, font=f_badge, fill=color_1)
+
+    # 6. LÓGICA DINÁMICA: Acomodo de datos a la derecha de la foto sin salirse
+    col1_x = 305
+    col2_x = 525
     max_w_texto = width - col2_x - 50 
     
-    y_actual = 210
-    esp_linea = 48 
+    y_actual = 215
+    esp_linea = 42 
     
     # -> Imprimir NOMBRE
     canvas.text((col1_x, y_actual), "Nombre:", font=f_bold_lg, fill=(80, 80, 80))
     for linea in envolver_texto(nombre, f_reg_lg, max_w_texto):
         canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(0, 0, 0))
         y_actual += esp_linea
-    y_actual += 8 
+    y_actual += 6 
     
     # -> Imprimir PUESTO
     canvas.text((col1_x, y_actual), "Puesto:", font=f_bold_lg, fill=(80, 80, 80))
@@ -361,15 +424,15 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
         y_actual += esp_linea
         
     y_actual += 5
-    canvas.line((col1_x, y_actual, width - 70, y_actual), fill=(230, 230, 230), width=3)
-    y_actual += 15
+    canvas.line((col1_x, y_actual, width - 60, y_actual), fill=(230, 230, 230), width=3)
+    y_actual += 12
 
     # -> Imprimir USUARIO
     canvas.text((col1_x, y_actual), "Usuario:", font=f_bold_lg, fill=color_2)
     for linea in envolver_texto(usuario, f_reg_lg, max_w_texto):
         canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(0, 0, 0))
         y_actual += esp_linea
-    y_actual += 8
+    y_actual += 6
     
     # -> Imprimir CONTRASEÑA
     canvas.text((col1_x, y_actual), "Contraseña:", font=f_bold_lg, fill=(200, 0, 0))
@@ -377,22 +440,23 @@ def generar_credencial_pro(nombre, puesto, usuario, pin, c1_hex, c2_hex):
         canvas.text((col2_x, y_actual), linea, font=f_reg_lg, fill=(200, 0, 0))
         y_actual += esp_linea
 
-    y_actual += 5
-    canvas.line((col1_x, y_actual, width - 70, y_actual), fill=(230, 230, 230), width=2)
+    # Línea divisoria inferior de lado a lado
+    y_div_inf = max(y_actual + 8, 528)
+    canvas.line((60, y_div_inf, width - 60, y_div_inf), fill=(230, 230, 230), width=2)
 
-    # 6. Información de la Empresa
-    y_empresa = max(y_actual + 10, 535) 
+    # 7. Información de la Empresa
+    y_empresa = y_div_inf + 10
     
-    canvas.text((col1_x, y_empresa), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 120, y_empresa + 2), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
+    canvas.text((60, y_empresa), "Dirección:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((170, y_empresa + 1), "De Las Americas 3621, América Sur, 72340 Heroica Puebla de Zaragoza, Pue", font=f_reg_sm, fill=(100, 100, 100))
     
-    canvas.text((col1_x, y_empresa + 32), "Tel:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 45, y_empresa + 34), "2228889858", font=f_reg_sm, fill=(100, 100, 100))
+    canvas.text((60, y_empresa + 30), "Tel:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((105, y_empresa + 31), "2228889858", font=f_reg_sm, fill=(100, 100, 100))
     
-    canvas.text((col1_x + 300, y_empresa + 32), "Link:", font=f_bold_sm, fill=(100, 100, 100))
-    canvas.text((col1_x + 360, y_empresa + 34), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
+    canvas.text((350, y_empresa + 30), "Link:", font=f_bold_sm, fill=(100, 100, 100))
+    canvas.text((405, y_empresa + 31), "https://industriashemore.com/", font=f_reg_sm, fill=color_2)
 
-    # 7. Pie
+    # 8. Pie
     canvas.text((45, 615), "Credencial de uso interno y confidencial. Propiedad de HEMORE Industrias.", font=f_footer, fill=(180, 180, 180))
 
     img_byte_arr = io.BytesIO()
@@ -603,7 +667,6 @@ if opcion == "Personal":
                             try:
                                 utils.supabase.table("Personal").insert(datos).execute()
                             except Exception:
-                                # Respaldo en caso de que aún no hayas creado la columna foto_url en Supabase
                                 datos.pop("foto_url", None)
                                 utils.supabase.table("Personal").insert(datos).execute()
 
@@ -687,7 +750,6 @@ if opcion == "Personal":
                             foto_b64_upd = convertir_foto_a_b64(nueva_foto)
                             if foto_b64_upd:
                                 datos_update["foto_url"] = foto_b64_upd
-                                # Si el empleado editado es quien tiene sesión abierta, actualiza su foto en vivo
                                 if st.session_state.get("usuario_actual") == n_nombre:
                                     st.session_state["foto_usuario"] = foto_b64_upd
 
@@ -744,7 +806,7 @@ if opcion == "Personal":
 
     with t3:
         st.subheader("Impresión de Credenciales de Acceso")
-        st.info("Genera tarjetas en tamaño INE con los datos de acceso para tu equipo.")
+        st.info("Genera tarjetas en tamaño INE con la fotografía y los datos de acceso para tu equipo.")
         
         # --- ZONA DE DISEÑO DE COLORES CON DEMO ---
         colores_activos = cargar_colores()
@@ -757,7 +819,7 @@ if opcion == "Personal":
             
             st.markdown("### 👀 Vista Previa (Demo):")
             demo_img = generar_credencial_pro(
-                "JUAN PÉREZ GARCÍA", "SUPERVISOR", "jperez", "12345", nuevo_c1, nuevo_c2
+                "JUAN PÉREZ GARCÍA", "SUPERVISOR", "jperez", "12345", nuevo_c1, nuevo_c2, ""
             )
             st.image(demo_img, use_container_width=True)
             
@@ -783,7 +845,8 @@ if opcion == "Personal":
                             row.get('usuario', ''),
                             row.get('pin', ''),
                             colores_activos["color_1"],
-                            colores_activos["color_2"]
+                            colores_activos["color_2"],
+                            row.get('foto_url', '')
                         )
                         c_img.image(img_bytes, use_container_width=True)
                         c_btn.download_button(
