@@ -6,45 +6,47 @@ import uuid
 import datetime
 
 # ==========================================
-# 1. CONFIGURACIÓN INICIAL & ESTILO "LUXURY CORPORATE"
+# 1. CONFIGURACIÓN INICIAL & ESTILO "SILICON VALLEY LUXURY"
 # ==========================================
 st.set_page_config(page_title="Inicio | ERP Hemore", page_icon="💼", layout="wide")
 utils.aplicar_estilo_movil()
 
-# Inyección de Estilos CSS de Alta Gama (Modo Claro Ejecutivo / Estilo 3 Millones de Pesos)
+# Inyección de Estilos CSS Maestros (Light Mode High-End Corporate)
 st.markdown("""
     <style>
-        /* Fondo general ultra limpio y tipografía de alta gama */
+        /* Fondo general platino/perla ultra limpio */
         .stApp {
             background-color: #f8fafc;
             color: #0f172a;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         
-        /* Ocultar elementos predeterminados de Streamlit que ensucian la vista */
+        /* Ocultar elementos predeterminados de Streamlit */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         
-        /* Tarjetas Ejecutivas Premium (Efecto Elevado / Neomercantilismo Suave) */
+        /* Tarjetas Ejecutivas Supremas con Borde de Luz Superior */
         .executive-card {
             background: #ffffff;
             border: 1px solid #e2e8f0;
+            border-top: 3px solid #2563eb;
             border-radius: 16px;
-            padding: 32px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            padding: 30px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
             margin-bottom: 24px;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .executive-card:hover {
-            box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 20px 35px -10px rgba(37, 99, 235, 0.08);
             border-color: #cbd5e1;
+            transform: translateY(-2px);
         }
         
-        /* Tipografía de títulos corporativos con peso ejecutivo */
+        /* Tipografía corporativa con tracking optimizado */
         h1, h2, h3 {
             font-family: inherit;
             font-weight: 700;
-            letter-spacing: -0.025em;
+            letter-spacing: -0.03em;
             color: #0f172a;
         }
         
@@ -56,15 +58,15 @@ st.markdown("""
             border-radius: 10px;
             padding: 12px 16px;
             font-size: 14px;
-            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
             transition: all 0.2s ease;
         }
         .stTextInput>div>div>input:focus {
             border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
         }
         
-        /* Botones Principales (Efecto Gradiente Ejecutivo & Smooth Feedback) */
+        /* Botones Principales con Gradiente Ejecutivo */
         .stButton>button {
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
             color: #ffffff;
@@ -73,19 +75,35 @@ st.markdown("""
             font-weight: 600;
             padding: 12px 24px;
             letter-spacing: 0.025em;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
             transition: all 0.2s ease;
         }
         .stButton>button:hover {
             background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.22);
             transform: translateY(-1px);
         }
         
         /* Divisores elegantes */
         hr {
             border-color: #e2e8f0;
-            margin: 30px 0;
+            margin: 28px 0;
+        }
+        
+        /* Animación sutil de pulso para el indicador en vivo */
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .live-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            margin-right: 6px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -118,12 +136,12 @@ if not dispositivo_valido:
     
     with col2:
         st.markdown("""
-            <div style="background: #ffffff; border: 1px solid #fecaca; border-radius: 16px; padding: 36px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05);">
+            <div style="background: #ffffff; border: 1px solid #fecaca; border-top: 4px solid #dc2626; border-radius: 16px; padding: 36px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.04);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                    <span style="font-size: 24px;">⛔</span>
-                    <h3 style='color: #dc2626; margin: 0; font-size: 20px;'>Acceso Restringido</h3>
+                    <span style="font-size: 24px;">🛡️</span>
+                    <h3 style='color: #dc2626; margin: 0; font-size: 20px;'>Terminal No Autorizada</h3>
                 </div>
-                <p style='color: #64748b; font-size: 14px; line-height: 1.6; margin-bottom: 0;'>Este equipo no se encuentra vinculado a la red central de la fábrica. Por protocolos de seguridad, la terminal de acceso permanece bloqueada.</p>
+                <p style='color: #64748b; font-size: 14px; line-height: 1.6; margin-bottom: 0;'>Este equipo no está vinculado a la red central de la fábrica. Por protocolos de seguridad, el sistema permanece bloqueado para este dispositivo.</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -174,20 +192,20 @@ if not st.session_state["authenticated"]:
         if os.path.exists("logo.png"):
             st.image("logo.png", use_container_width=True)
         else:
-            st.markdown("<h1 style='color: #0f172a; font-size: 3rem; font-weight: 800;'>HEMORE</h1><p style='color: #64748b; font-size: 16px; font-weight: 500;'>Enterprise Resource Planning System</p>", unsafe_allow_html=True)
+            st.markdown("<h1 style='color: #0f172a; font-size: 3.2rem; font-weight: 800; letter-spacing: -0.04em;'>HEMORE</h1><p style='color: #64748b; font-size: 15px; font-weight: 500;'>Enterprise Resource Planning System</p>", unsafe_allow_html=True)
             
     with col_login:
         st.markdown("""
-            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 40px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);">
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-top: 4px solid #2563eb; border-radius: 20px; padding: 40px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.06);">
                 <div style="margin-bottom: 24px;">
-                    <span style="background: #f1f5f9; color: #334155; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Seguridad Corporativa</span>
-                    <h2 style='color: #0f172a; margin-top: 12px; margin-bottom: 6px; font-size: 26px;'>Iniciar Sesión</h2>
+                    <span style="background: #eff6ff; color: #1d4ed8; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">Autenticación Segura</span>
+                    <h2 style='color: #0f172a; margin-top: 14px; margin-bottom: 6px; font-size: 26px;'>Iniciar Sesión</h2>
                     <p style='color: #64748b; font-size: 14px; margin: 0;'>Introduce tus credenciales operativas autorizadas.</p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # Superposición de inputs y botón dentro del flujo visual limpio
+        # Superposición limpia de inputs y botón
         with st.container():
             st.markdown("<div style='margin-top: -300px; padding: 24px;'>", unsafe_allow_html=True)
             usuario_input = st.text_input("Usuario", placeholder="ej. jPerez")
@@ -227,7 +245,7 @@ if not st.session_state["authenticated"]:
     st.stop() 
 
 # ==========================================
-# 🏠 PANTALLA PRINCIPAL EJECUTIVA ("LUXURY DASHBOARD")
+# 🏠 PANTALLA PRINCIPAL EJECUTIVA ("MILLION-DOLLAR DASHBOARD")
 # ==========================================
 if os.path.exists("logo.png"):
     st.sidebar.image("logo.png", use_container_width=True)
@@ -235,7 +253,7 @@ if os.path.exists("logo.png"):
 col_t1, col_t2 = st.columns([8, 2])
 with col_t1:
     st.title("Panel de Control")
-    st.markdown("<p style='color: #64748b; font-size: 15px; margin-top: -10px;'>Sistema Centralizado de Operaciones y Manufactura — Industrias Hemore</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64748b; font-size: 15px; margin-top: -8px; font-weight: 400;'>Sistema Centralizado de Operaciones y Manufactura — Industrias Hemore</p>", unsafe_allow_html=True)
 
 with col_t2:
     st.write("") 
@@ -250,13 +268,16 @@ with col_t2:
 
 st.write("<br>", unsafe_allow_html=True)
 
-# Tarjeta de Estado de Sesión Estilizada (Estilo Red Social / Perfil Corporativo Activo)
+# Tarjeta de Estado de Sesión Estilizada (Estilo Perfil Corporativo Activo con Indicador Live)
 if st.session_state["es_admin"]:
     st.markdown(f"""
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #2563eb; padding: 20px 24px; border-radius: 0 14px 14px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #2563eb; padding: 22px 28px; border-radius: 0 16px 16px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;">
             <div>
-                <span style='color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;'>Perfil Activo</span><br>
-                <strong style='color: #0f172a; font-size: 18px; font-weight: 700;'>{st.session_state['usuario_actual']}</strong>
+                <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                    <span class="live-dot"></span>
+                    <span style='color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;'>Sesión Activa Cloud</span>
+                </div>
+                <strong style='color: #0f172a; font-size: 19px; font-weight: 700;'>{st.session_state['usuario_actual']}</strong>
             </div>
             <div>
                 <span style="background: #eff6ff; color: #1d4ed8; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;">👑 Acceso Total Habilitado</span>
@@ -265,10 +286,13 @@ if st.session_state["es_admin"]:
     """, unsafe_allow_html=True)
 else:
     st.markdown(f"""
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #0ea5e9; padding: 20px 24px; border-radius: 0 14px 14px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #0ea5e9; padding: 22px 28px; border-radius: 0 16px 16px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;">
             <div>
-                <span style='color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;'>Perfil Activo</span><br>
-                <strong style='color: #0f172a; font-size: 18px; font-weight: 700;'>{st.session_state['usuario_actual']}</strong>
+                <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                    <span class="live-dot"></span>
+                    <span style='color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;'>Sesión Activa Cloud</span>
+                </div>
+                <strong style='color: #0f172a; font-size: 19px; font-weight: 700;'>{st.session_state['usuario_actual']}</strong>
             </div>
             <div>
                 <span style="background: #f0f9ff; color: #0369a1; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;">🔒 Accesos Restringidos</span>
@@ -282,19 +306,19 @@ col_info1, col_info2 = st.columns(2, gap="large")
 
 with col_info1:
     st.markdown("### 🚀 Accesos Directos")
-    st.markdown("<p style='color: #64748b; font-size: 14px; margin-bottom: 16px;'>Selecciona una opción en el menú lateral izquierdo:</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64748b; font-size: 14px; margin-bottom: 18px;'>Selecciona una opción en el menú lateral izquierdo para operar:</p>", unsafe_allow_html=True)
     
     st.markdown("""
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 20px; border-radius: 14px; margin-bottom: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-                <span style="font-size: 18px;">📦</span>
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 22px; border-radius: 16px; margin-bottom: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="font-size: 20px;">📦</span>
                 <strong style='color: #0f172a; font-size: 16px;'>Almacén Central</strong>
             </div>
             <p style='color: #64748b; font-size: 13px; margin: 0; line-height: 1.5;'>Control integral de inventarios, entradas, salidas, recibos oficiales y trazabilidad de préstamos.</p>
         </div>
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 20px; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-                <span style="font-size: 18px;">⚙️</span>
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 22px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="font-size: 20px;">⚙️</span>
                 <strong style='color: #0f172a; font-size: 16px;'>Configuración Master</strong>
             </div>
             <p style='color: #64748b; font-size: 13px; margin: 0; line-height: 1.5;'>Alta y administración de productos, directorio de clientes, proveedores, personal y catálogos QR.</p>
@@ -305,9 +329,8 @@ with col_info2:
     if st.session_state["es_admin"]:
         st.markdown("### 🛡️ Nivel de Acceso")
         st.markdown("""
-            <div style="background: #ffffff; border: 1px solid #a7f3d0; padding: 24px; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
+            <div style="background: #ffffff; border: 1px solid #a7f3d0; border-top: 3px solid #059669; padding: 24px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span style="display: inline-block; width: 8px; height: 8px; background: #059669; border-radius: 50%;"></span>
                     <span style='color: #065f46; font-weight: 700; font-size: 15px;'>Administrador del Sistema</span>
                 </div>
                 <p style='color: #475569; font-size: 13px; margin: 0; line-height: 1.6;'>Posees privilegios absolutos para gestionar la infraestructura de datos, seguridad perimetral de equipos y control total sobre los submódulos de Almacén y Configuración de Industrias Hemore.</p>
@@ -318,13 +341,13 @@ with col_info2:
         if st.session_state["permisos"]:
             permisos_html = "".join([f"<span style='background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; display: inline-block; margin: 4px;'>✅ {p}</span>" for p in st.session_state["permisos"]])
             st.markdown(f"""
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 24px; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01); line-height: 2;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 24px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01); line-height: 2;">
                     {permisos_html}
                 </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
-                <div style="background: #ffffff; border: 1px solid #fecaca; padding: 24px; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
+                <div style="background: #ffffff; border: 1px solid #fecaca; padding: 24px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
                     <p style='color: #dc2626; font-weight: 700; font-size: 15px; margin-bottom: 4px;'>Sin privilegios activos</p>
                     <p style='color: #64748b; font-size: 13px; margin: 0;'>Tu cuenta no tiene permisos operativos asignados actualmente en el sistema.</p>
                 </div>
