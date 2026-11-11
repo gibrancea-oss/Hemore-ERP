@@ -6,60 +6,86 @@ import uuid
 import datetime
 
 # ==========================================
-# 1. CONFIGURACIÓN INICIAL & ESTILO "PREMIUM"
+# 1. CONFIGURACIÓN INICIAL & ESTILO "LUXURY CORPORATE"
 # ==========================================
 st.set_page_config(page_title="Inicio | ERP Hemore", page_icon="💼", layout="wide")
 utils.aplicar_estilo_movil()
 
-# Inyección de Estilos CSS Ejecutivos (Look & Feel "Carro / High-End Corporate")
+# Inyección de Estilos CSS de Alta Gama (Modo Claro Ejecutivo / Estilo 3 Millones de Pesos)
 st.markdown("""
     <style>
-        /* Fondo general y tipografía limpia */
+        /* Fondo general ultra limpio y tipografía de alta gama */
         .stApp {
-            background-color: #0f1117;
-            color: #f8fafc;
-        }
-        
-        /* Contenedores tipo tarjeta ejecutiva (Cards) */
-        .executive-card {
-            background: linear-gradient(135deg, #1e222b 0%, #161922 100%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            margin-bottom: 20px;
-        }
-        
-        /* Tipografía de títulos corporativos */
-        h1, h2, h3 {
+            background-color: #f8fafc;
+            color: #0f172a;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            letter-spacing: -0.5px;
         }
         
-        /* Estilizar inputs de texto para que luzcan modernos */
-        .stTextInput>div>div>input {
-            background-color: #161922;
-            color: #ffffff;
-            border: 1px solid #2d3748;
-            border-radius: 8px;
-            padding: 10px 14px;
-        }
-        .stTextInput>div>div>input:focus {
-            border-color: #0066cc;
-            box-shadow: 0 0 0 1px #0066cc;
-        }
+        /* Ocultar elementos predeterminados de Streamlit que ensucian la vista */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
         
-        /* Botones ejecutivos primarios */
-        .stButton>button {
-            border-radius: 8px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
+        /* Tarjetas Ejecutivas Premium (Efecto Elevado / Neomercantilismo Suave) */
+        .executive-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 24px;
             transition: all 0.3s ease;
         }
+        .executive-card:hover {
+            box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.08);
+            border-color: #cbd5e1;
+        }
         
-        /* Métricas y divisores sutiles */
+        /* Tipografía de títulos corporativos con peso ejecutivo */
+        h1, h2, h3 {
+            font-family: inherit;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            color: #0f172a;
+        }
+        
+        /* Campos de Texto (Inputs) de Lujo */
+        .stTextInput>div>div>input {
+            background-color: #ffffff;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-size: 14px;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+        }
+        .stTextInput>div>div>input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        
+        /* Botones Principales (Efecto Gradiente Ejecutivo & Smooth Feedback) */
+        .stButton>button {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            padding: 12px 24px;
+            letter-spacing: 0.025em;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+            transition: all 0.2s ease;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+            transform: translateY(-1px);
+        }
+        
+        /* Divisores elegantes */
         hr {
-            border-color: rgba(255, 255, 255, 0.08);
+            border-color: #e2e8f0;
+            margin: 30px 0;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -92,9 +118,12 @@ if not dispositivo_valido:
     
     with col2:
         st.markdown("""
-            <div style="background: linear-gradient(135deg, #1e222b 0%, #161922 100%); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.4);">
-                <h3 style='color: #ef4444; margin-top: 0;'>⛔ Acceso Denegado</h3>
-                <p style='color: #94a3b8; font-size: 15px; line-height: 1.5;'>Este equipo no está vinculado a la red de la fábrica. Por seguridad, no puedes visualizar la pantalla de inicio de sesión.</p>
+            <div style="background: #ffffff; border: 1px solid #fecaca; border-radius: 16px; padding: 36px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.05);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <span style="font-size: 24px;">⛔</span>
+                    <h3 style='color: #dc2626; margin: 0; font-size: 20px;'>Acceso Restringido</h3>
+                </div>
+                <p style='color: #64748b; font-size: 14px; line-height: 1.6; margin-bottom: 0;'>Este equipo no se encuentra vinculado a la red central de la fábrica. Por protocolos de seguridad, la terminal de acceso permanece bloqueada.</p>
             </div>
         """, unsafe_allow_html=True)
         
@@ -145,21 +174,24 @@ if not st.session_state["authenticated"]:
         if os.path.exists("logo.png"):
             st.image("logo.png", use_container_width=True)
         else:
-            st.markdown("<h1 style='color: #0066cc; font-size: 3rem;'>HEMORE</h1><p style='color: #64748b;'>Enterprise Resource Planning</p>", unsafe_allow_html=True)
+            st.markdown("<h1 style='color: #0f172a; font-size: 3rem; font-weight: 800;'>HEMORE</h1><p style='color: #64748b; font-size: 16px; font-weight: 500;'>Enterprise Resource Planning System</p>", unsafe_allow_html=True)
             
     with col_login:
         st.markdown("""
-            <div style="background: linear-gradient(135deg, #1e222b 0%, #161922 100%); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 35px; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
-                <h2 style='color: #f8fafc; margin-top: 0; margin-bottom: 5px; font-size: 24px;'>Acceso al Sistema</h2>
-                <p style='color: #94a3b8; font-size: 14px; margin-bottom: 25px;'>Ingresa tus credenciales operativas autorizadas.</p>
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 40px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);">
+                <div style="margin-bottom: 24px;">
+                    <span style="background: #f1f5f9; color: #334155; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Seguridad Corporativa</span>
+                    <h2 style='color: #0f172a; margin-top: 12px; margin-bottom: 6px; font-size: 26px;'>Iniciar Sesión</h2>
+                    <p style='color: #64748b; font-size: 14px; margin: 0;'>Introduce tus credenciales operativas autorizadas.</p>
+                </div>
             </div>
         """, unsafe_allow_html=True)
         
-        # Superposición de los inputs y botones dentro del flujo visual limpio de Streamlit
+        # Superposición de inputs y botón dentro del flujo visual limpio
         with st.container():
-            st.markdown("<div style='margin-top: -330px; padding: 20px;'>", unsafe_allow_html=True)
-            usuario_input = st.text_input("Usuario", placeholder="Ingresa tu usuario")
-            password_input = st.text_input("Contraseña / PIN", type="password", placeholder="••••••••")
+            st.markdown("<div style='margin-top: -300px; padding: 24px;'>", unsafe_allow_html=True)
+            usuario_input = st.text_input("Usuario", placeholder="ej. jPerez")
+            password_input = st.text_input("Contraseña", type="password", placeholder="••••••••")
             
             st.write("<br>", unsafe_allow_html=True) 
             
@@ -195,7 +227,7 @@ if not st.session_state["authenticated"]:
     st.stop() 
 
 # ==========================================
-# 🏠 PANTALLA PRINCIPAL COMPACTA & EJECUTIVA
+# 🏠 PANTALLA PRINCIPAL EJECUTIVA ("LUXURY DASHBOARD")
 # ==========================================
 if os.path.exists("logo.png"):
     st.sidebar.image("logo.png", use_container_width=True)
@@ -203,7 +235,7 @@ if os.path.exists("logo.png"):
 col_t1, col_t2 = st.columns([8, 2])
 with col_t1:
     st.title("Panel de Control")
-    st.caption("Sistema Centralizado de Operaciones y Manufactura — Industrias Hemore")
+    st.markdown("<p style='color: #64748b; font-size: 15px; margin-top: -10px;'>Sistema Centralizado de Operaciones y Manufactura — Industrias Hemore</p>", unsafe_allow_html=True)
 
 with col_t2:
     st.write("") 
@@ -218,19 +250,29 @@ with col_t2:
 
 st.write("<br>", unsafe_allow_html=True)
 
-# Tarjeta de Estado de Sesión Estilizada
+# Tarjeta de Estado de Sesión Estilizada (Estilo Red Social / Perfil Corporativo Activo)
 if st.session_state["es_admin"]:
     st.markdown(f"""
-        <div style="background: rgba(0, 102, 204, 0.1); border-left: 4px solid #0066cc; padding: 14px 20px; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
-            <span style='color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;'>Sesión Activa</span><br>
-            <strong style='color: #f8fafc; font-size: 16px;'>{st.session_state['usuario_actual']}</strong> &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #60a5fa;'>👑 Acceso Total Habilitado</span>
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #2563eb; padding: 20px 24px; border-radius: 0 14px 14px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <div>
+                <span style='color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;'>Perfil Activo</span><br>
+                <strong style='color: #0f172a; font-size: 18px; font-weight: 700;'>{st.session_state['usuario_actual']}</strong>
+            </div>
+            <div>
+                <span style="background: #eff6ff; color: #1d4ed8; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;">👑 Acceso Total Habilitado</span>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 else:
     st.markdown(f"""
-        <div style="background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; padding: 14px 20px; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
-            <span style='color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;'>Sesión Activa</span><br>
-            <strong style='color: #f8fafc; font-size: 16px;'>{st.session_state['usuario_actual']}</strong> &nbsp;&nbsp;|&nbsp;&nbsp; <span style='color: #93c5fd;'>🔒 Accesos Restringidos</span>
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #0ea5e9; padding: 20px 24px; border-radius: 0 14px 14px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <div>
+                <span style='color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;'>Perfil Activo</span><br>
+                <strong style='color: #0f172a; font-size: 18px; font-weight: 700;'>{st.session_state['usuario_actual']}</strong>
+            </div>
+            <div>
+                <span style="background: #f0f9ff; color: #0369a1; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;">🔒 Accesos Restringidos</span>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
@@ -240,16 +282,22 @@ col_info1, col_info2 = st.columns(2, gap="large")
 
 with col_info1:
     st.markdown("### 🚀 Accesos Directos")
-    st.markdown("<p style='color: #94a3b8; font-size: 14px;'>Selecciona una opción en el menú de la izquierda para comenzar:</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64748b; font-size: 14px; margin-bottom: 16px;'>Selecciona una opción en el menú lateral izquierdo:</p>", unsafe_allow_html=True)
     
     st.markdown("""
-        <div style="background: #161922; border: 1px solid rgba(255,255,255,0.06); padding: 16px; border-radius: 10px; margin-bottom: 12px;">
-            <strong style='color: #f8fafc; font-size: 15px;'>📦 Almacén</strong>
-            <p style='color: #94a3b8; font-size: 13px; margin: 4px 0 0 0;'>Control de inventarios, entradas, salidas, recibos y préstamos.</p>
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 20px; border-radius: 14px; margin-bottom: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                <span style="font-size: 18px;">📦</span>
+                <strong style='color: #0f172a; font-size: 16px;'>Almacén Central</strong>
+            </div>
+            <p style='color: #64748b; font-size: 13px; margin: 0; line-height: 1.5;'>Control integral de inventarios, entradas, salidas, recibos oficiales y trazabilidad de préstamos.</p>
         </div>
-        <div style="background: #161922; border: 1px solid rgba(255,255,255,0.06); padding: 16px; border-radius: 10px;'>
-            <strong style='color: #f8fafc; font-size: 15px;'>⚙️ Configuración</strong>
-            <p style='color: #94a3b8; font-size: 13px; margin: 4px 0 0 0;'>Alta de productos, clientes, proveedores, personal y catálogos QR.</p>
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 20px; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                <span style="font-size: 18px;">⚙️</span>
+                <strong style='color: #0f172a; font-size: 16px;'>Configuración Master</strong>
+            </div>
+            <p style='color: #64748b; font-size: 13px; margin: 0; line-height: 1.5;'>Alta y administración de productos, directorio de clientes, proveedores, personal y catálogos QR.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -257,24 +305,27 @@ with col_info2:
     if st.session_state["es_admin"]:
         st.markdown("### 🛡️ Nivel de Acceso")
         st.markdown("""
-            <div style="background: #161922; border: 1px solid rgba(16, 185, 129, 0.2); padding: 20px; border-radius: 10px;">
-                <p style='color: #10b981; font-weight: 600; margin-bottom: 8px;'>Administrador del Sistema</p>
-                <p style='color: #94a3b8; font-size: 13px; margin: 0;'>Tienes control absoluto y total sobre los módulos operativos de Almacén y Configuración de Industrias Hemore.</p>
+            <div style="background: #ffffff; border: 1px solid #a7f3d0; padding: 24px; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: #059669; border-radius: 50%;"></span>
+                    <span style='color: #065f46; font-weight: 700; font-size: 15px;'>Administrador del Sistema</span>
+                </div>
+                <p style='color: #475569; font-size: 13px; margin: 0; line-height: 1.6;'>Posees privilegios absolutos para gestionar la infraestructura de datos, seguridad perimetral de equipos y control total sobre los submódulos de Almacén y Configuración de Industrias Hemore.</p>
             </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown("### 🛡️ Tus permisos habilitados:")
         if st.session_state["permisos"]:
-            permisos_html = "".join([f"<span style='background: rgba(59, 130, 246, 0.15); color: #93c5fd; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-block; margin: 3px;'>✅ {p}</span>" for p in st.session_state["permisos"]])
+            permisos_html = "".join([f"<span style='background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; display: inline-block; margin: 4px;'>✅ {p}</span>" for p in st.session_state["permisos"]])
             st.markdown(f"""
-                <div style="background: #161922; border: 1px solid rgba(255,255,255,0.06); padding: 20px; border-radius: 10px; line-height: 1.8;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 24px; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01); line-height: 2;">
                     {permisos_html}
                 </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
-                <div style="background: #161922; border: 1px solid rgba(239, 68, 68, 0.2); padding: 20px; border-radius: 10px;">
-                    <p style='color: #ef4444; font-weight: 600; margin-bottom: 4px;'>Sin privilegios activos</p>
-                    <p style='color: #94a3b8; font-size: 13px; margin: 0;'>No tienes permisos asignados actualmente en el sistema.</p>
+                <div style="background: #ffffff; border: 1px solid #fecaca; padding: 24px; border-radius: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.01);">
+                    <p style='color: #dc2626; font-weight: 700; font-size: 15px; margin-bottom: 4px;'>Sin privilegios activos</p>
+                    <p style='color: #64748b; font-size: 13px; margin: 0;'>Tu cuenta no tiene permisos operativos asignados actualmente en el sistema.</p>
                 </div>
             """, unsafe_allow_html=True)
