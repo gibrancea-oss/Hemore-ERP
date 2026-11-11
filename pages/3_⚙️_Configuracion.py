@@ -10,7 +10,7 @@ import base64
 import json
 import urllib.request
 from fpdf import FPDF
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 st.set_page_config(page_title="Configuración Master", page_icon="⚙️", layout="wide")
 
@@ -18,6 +18,164 @@ utils.aplicar_estilo_movil()
 utils.validar_login()
 
 supabase = utils.supabase
+
+# ==========================================
+# 🎨 ESTética EJECUTIVA HEMORE (IGUAL A HOME.PY)
+# ==========================================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+    :root {
+        --hm-ink: #142038;
+        --hm-navy: #0B1830;
+        --hm-royal: #2D62D9;
+        --hm-muted: #758198;
+        --hm-line: #E4EAF2;
+        --hm-surface: #FFFFFF;
+        --hm-bg: #F4F7FB;
+        --hm-success: #12A67B;
+        --hm-danger: #CE4252;
+        --hm-shadow: 0 25px 75px rgba(18, 36, 70, .08);
+    }
+
+    html, body, .stApp, [data-testid="stAppViewContainer"] {
+        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: var(--hm-ink);
+        background: var(--hm-bg);
+    }
+    [data-testid="stAppViewContainer"] {
+        background-image:
+            radial-gradient(ellipse 48% 38% at 96% 4%, rgba(214,225,247,.43), transparent 76%),
+            radial-gradient(ellipse 37% 37% at 0% 94%, rgba(229,236,248,.47), transparent 77%);
+    }
+    #MainMenu, footer, [data-testid="stToolbar"] {visibility: hidden;}
+    header[data-testid="stHeader"] {background: transparent !important;}
+    [data-testid="stDecoration"] {display: none;}
+    [data-testid="stMainBlockContainer"], .block-container {
+        max-width: 1310px;
+        padding-top: 2.5rem;
+        padding-bottom: 4rem;
+    }
+    h1, h2, h3, h4, h5 {
+        font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        letter-spacing: -.045em;
+        color: var(--hm-ink);
+    }
+    h1 {font-weight: 800 !important;}
+    h3 {font-weight: 750 !important;}
+    hr {
+        margin: 1.8rem 0 !important;
+        border: none !important;
+        border-top: 1px solid var(--hm-line) !important;
+    }
+
+    [data-testid="stForm"] {
+        background: #FFFFFF;
+        border: 1px solid #E2E9F3;
+        border-radius: 18px;
+        padding: 28px;
+        box-shadow: 0 12px 34px rgba(18, 36, 70, .04);
+    }
+    [data-testid="stExpander"] {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F1;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 4px 14px rgba(18, 36, 70, .025);
+    }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: #EAF0F8;
+        padding: 6px;
+        border-radius: 13px;
+    }
+    [data-testid="stTabs"] [data-baseweb="tab"] {
+        border-radius: 9px;
+        padding: 8px 16px;
+        font-weight: 700;
+        font-size: 13px;
+        color: #53647F;
+    }
+    [data-testid="stTabs"] [aria-selected="true"] {
+        background: #FFFFFF !important;
+        color: #142038 !important;
+        box-shadow: 0 3px 10px rgba(18,36,70,.06);
+    }
+    [data-testid="stButton"] > button,
+    [data-testid="stFormSubmitButton"] > button,
+    [data-testid="stDownloadButton"] > button {
+        min-height: 45px;
+        background: #2D62D9;
+        color: #FFFFFF;
+        border: 1px solid #2D62D9;
+        border-radius: 11px;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        box-shadow: 0 6px 18px rgba(42,95,207,.16);
+        transition: all .2s ease;
+    }
+    [data-testid="stButton"] > button:hover,
+    [data-testid="stFormSubmitButton"] > button:hover,
+    [data-testid="stDownloadButton"] > button:hover {
+        background: #2455C7;
+        color: #FFFFFF;
+        border-color: #2455C7;
+        box-shadow: 0 10px 25px rgba(42,95,207,.23);
+        transform: translateY(-1px);
+    }
+    [data-testid="stSidebar"] {
+        background: #101E36;
+        border-right: 1px solid #1D2D4B;
+    }
+    [data-testid="stSidebar"] * {color: #D5E0F1;}
+
+    .hm-emp-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #E2E9F3;
+        vertical-align: middle;
+        margin-right: 10px;
+    }
+    .hm-emp-avatar-fallback {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #0B1933;
+        color: #FFFFFF;
+        font-family: 'Manrope', sans-serif;
+        font-size: 13px;
+        font-weight: 800;
+        vertical-align: middle;
+        margin-right: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# 📸 PROCESADOR DE FOTOS DE PERFIL (LIGERO Y SEGURO)
+# ==========================================
+def convertir_foto_a_b64(archivo_subido):
+    """Recorta la foto a cuadrado 240x240px y la comprime en Base64 (~10KB)."""
+    if not archivo_subido:
+        return ""
+    if hasattr(utils, "procesar_foto_perfil"):
+        return utils.procesar_foto_perfil(archivo_subido)
+    try:
+        img = Image.open(archivo_subido).convert("RGB")
+        img = ImageOps.fit(img, (240, 240), Image.Resampling.LANCZOS)
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=82, optimize=True)
+        b64_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        return f"data:image/jpeg;base64,{b64_str}"
+    except Exception:
+        return ""
 
 # ==========================================
 # 🛡️ MOTOR ANTI-DOBLE CLIC Y VELOCIDAD
@@ -386,7 +544,7 @@ if opcion == "Personal":
     except: df_personal = pd.DataFrame()
     
     if df_personal.empty: 
-        df_personal = pd.DataFrame(columns=["id", "nombre", "puesto", "activo", "usuario", "pin", "permisos"])
+        df_personal = pd.DataFrame(columns=["id", "nombre", "puesto", "activo", "usuario", "pin", "permisos", "foto_url"])
 
     t1, t2, t3 = st.tabs(["➕ Alta Personal", "📋 Kardex y Accesos", "🪪 Generar Credenciales"])
     
@@ -408,7 +566,10 @@ if opcion == "Personal":
                 c5, c6 = st.columns(2)
                 curp = c5.text_input("CURP")
                 rfc = c6.text_input("RFC")
-                fecha_ingreso = st.date_input("Fecha de Ingreso", value=datetime.date.today())
+                
+                c_fec, c_fot = st.columns(2)
+                fecha_ingreso = c_fec.date_input("Fecha de Ingreso", value=datetime.date.today())
+                foto_subida = c_fot.file_uploader("📸 Fotografía de Perfil (Opcional)", type=["jpg", "jpeg", "png"])
                 
                 st.divider()
                 st.subheader("2. Credenciales y Permisos")
@@ -434,7 +595,18 @@ if opcion == "Personal":
                                 "usuario": usuario_login, "pin": pin_login, 
                                 "permisos": permisos_str
                             }
-                            utils.supabase.table("Personal").insert(datos).execute()
+                            if foto_subida is not None:
+                                foto_b64 = convertir_foto_a_b64(foto_subida)
+                                if foto_b64:
+                                    datos["foto_url"] = foto_b64
+
+                            try:
+                                utils.supabase.table("Personal").insert(datos).execute()
+                            except Exception:
+                                # Respaldo en caso de que aún no hayas creado la columna foto_url en Supabase
+                                datos.pop("foto_url", None)
+                                utils.supabase.table("Personal").insert(datos).execute()
+
                             st.session_state["alta_pers_exito"] = True
                             st.rerun()
                         else:
@@ -475,7 +647,13 @@ if opcion == "Personal":
             n_nacimiento = col_e3.text_input("Año Nacimiento", value=emp_data.get('anio_nacimiento', ''), key=f"nac_{emp_id}")
             n_domicilio = col_e4.text_input("Domicilio", value=emp_data.get('domicilio', ''), key=f"dom_{emp_id}")
             
-            n_fecha = st.date_input("Fecha Ingreso", value=fecha_dt, key=f"fec_{emp_id}")
+            col_f1, col_f2 = st.columns(2)
+            n_fecha = col_f1.date_input("Fecha Ingreso", value=fecha_dt, key=f"fec_{emp_id}")
+            nueva_foto = col_f2.file_uploader("📸 Actualizar Fotografía (Opcional)", type=["jpg", "jpeg", "png"], key=f"foto_{emp_id}")
+
+            foto_existente = emp_data.get('foto_url', '')
+            if pd.notna(foto_existente) and str(foto_existente).strip() != "":
+                st.markdown(f'<div style="margin: 6px 0;"><img src="{foto_existente}" class="hm-emp-avatar"><span style="font-size:12px; color:#758198; font-weight:600;">Fotografía actual registrada</span></div>', unsafe_allow_html=True)
             
             st.divider()
             st.write("**Control de Accesos**")
@@ -505,7 +683,20 @@ if opcion == "Personal":
                             "usuario": n_user, "pin": n_pin, "permisos": permisos_str_update,
                             "activo": n_activo
                         }
-                        utils.supabase.table("Personal").update(datos_update).eq("id", emp_id).execute()
+                        if nueva_foto is not None:
+                            foto_b64_upd = convertir_foto_a_b64(nueva_foto)
+                            if foto_b64_upd:
+                                datos_update["foto_url"] = foto_b64_upd
+                                # Si el empleado editado es quien tiene sesión abierta, actualiza su foto en vivo
+                                if st.session_state.get("usuario_actual") == n_nombre:
+                                    st.session_state["foto_usuario"] = foto_b64_upd
+
+                        try:
+                            utils.supabase.table("Personal").update(datos_update).eq("id", emp_id).execute()
+                        except Exception:
+                            datos_update.pop("foto_url", None)
+                            utils.supabase.table("Personal").update(datos_update).eq("id", emp_id).execute()
+
                         st.toast("✅ Información actualizada correctamente.", icon="✅")
                         st.rerun()
                     else:
@@ -534,7 +725,15 @@ if opcion == "Personal":
                 estado_texto = "🔴" if not row.get('activo', True) else "🟢"
                 c1, c2, c3, c4, c5 = st.columns([1, 3, 2, 2, 2])
                 c1.write(str(row.get('id', '')))
-                c2.write(f"{estado_texto} {row.get('nombre', '')}")
+                
+                foto_fila = row.get('foto_url', '')
+                nombre_fila = str(row.get('nombre', ''))
+                if pd.notna(foto_fila) and str(foto_fila).strip() != "":
+                    c2.markdown(f'<img src="{foto_fila}" class="hm-emp-avatar"> {estado_texto} <strong>{nombre_fila}</strong>', unsafe_allow_html=True)
+                else:
+                    ini = "".join([p[0] for p in nombre_fila.split()[:2]]).upper() if nombre_fila else "HM"
+                    c2.markdown(f'<span class="hm-emp-avatar-fallback">{ini}</span> {estado_texto} <strong>{nombre_fila}</strong>', unsafe_allow_html=True)
+
                 c3.write(row.get('puesto', ''))
                 c4.write(row.get('usuario', 'S/N'))
                 
