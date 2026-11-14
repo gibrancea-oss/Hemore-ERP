@@ -1,10 +1,26 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, timezone, date
+import math
 import utils 
 
 supabase = utils.supabase 
 tz_cdmx = timezone(timedelta(hours=-6))
+
+def _limpiar_texto(val):
+    if val is None or pd.isna(val):
+        return ""
+    s = str(val).strip()
+    return "" if s.lower() == "nan" else s
+
+def _limpiar_numero(val):
+    if val is None or pd.isna(val):
+        return 0.0
+    try:
+        num = float(val)
+        return 0.0 if (math.isnan(num) or math.isinf(num)) else num
+    except:
+        return 0.0
 
 def renderizar(tiene_permiso, _formatear_datos_contacto, generar_pdf_entrega):
     try:
@@ -41,7 +57,14 @@ def renderizar(tiene_permiso, _formatear_datos_contacto, generar_pdf_entrega):
                     quien_entrega_input = st.selectbox("Quien entrega:", lista_personal, key="new_ro_usr")
                     
                     if st.button("💾 Guardar y PDF", type="primary"):
-                        items = edited_df[edited_df["Código"].astype(str).str.strip() != ""]
+                        df_clean = edited_df.copy()
+                        df_clean["Código"] = df_clean["Código"].apply(_limpiar_texto)
+                        df_clean["Descripción"] = df_clean["Descripción"].apply(_limpiar_texto)
+                        df_clean["Color"] = df_clean["Color"].apply(_limpiar_texto)
+                        df_clean["Cantidad"] = df_clean["Cantidad"].apply(_limpiar_numero)
+                        
+                        items = df_clean[df_clean["Código"] != ""].copy()
+                        
                         errores = []
                         if not oc_input: errores.append("- **Falta O.C.**")
                         if not prov_input: errores.append("- **Falta Proveedor**")
@@ -51,17 +74,22 @@ def renderizar(tiene_permiso, _formatear_datos_contacto, generar_pdf_entrega):
                         if errores:
                             st.error("⚠️ **No se pudo guardar:**\n\n" + "\n".join(errores))
                         else:
+                            fecha_str = fecha_input.isoformat() if hasattr(fecha_input, "isoformat") else str(fecha_input)
+                            
                             for _, row in items.iterrows():
-                                val_cant = row.get("Cantidad", 0)
-                                try: cant_f = float(val_cant) if val_cant is not None else 0.0
-                                except: cant_f = 0.0
+                                cant_f = _limpiar_numero(row.get("Cantidad", 0))
 
                                 data_to_insert = {
-                                    "fecha": str(fecha_input.isoformat()), "oc": str(oc_input), 
-                                    "cliente": str(cliente_input), "proveedor": str(prov_input), 
-                                    "codigo": str(row["Código"]), "descripcion": str(row["Descripción"]), 
-                                    "color": str(row["Color"]), "cantidad": cant_f, 
-                                    "usuario": str(quien_entrega_input), "observaciones": str(observaciones)
+                                    "fecha": str(fecha_str), 
+                                    "oc": _limpiar_texto(oc_input), 
+                                    "cliente": _limpiar_texto(cliente_input), 
+                                    "proveedor": _limpiar_texto(prov_input), 
+                                    "codigo": _limpiar_texto(row["Código"]), 
+                                    "descripcion": _limpiar_texto(row["Descripción"]), 
+                                    "color": _limpiar_texto(row["Color"]), 
+                                    "cantidad": float(cant_f), 
+                                    "usuario": _limpiar_texto(quien_entrega_input), 
+                                    "observaciones": _limpiar_texto(observaciones)
                                 }
                                 supabase.table("Recibos_OC").insert(data_to_insert).execute()
                             
@@ -71,7 +99,7 @@ def renderizar(tiene_permiso, _formatear_datos_contacto, generar_pdf_entrega):
                                 last_id = supabase.table("Recibos_OC").select("id").order("id", desc=True).limit(1).execute().data[0]['id']
                                 prov_text = _formatear_datos_contacto(prov_input, prov_data)
                                 cli_text = _formatear_datos_contacto(cliente_input, cli_data)
-                                datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": observaciones, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": quien_entrega_input}
+                                datos_pdf = {"oc": oc_input, "fecha": fecha_input.strftime("%d/%m/%Y"), "observaciones": _limpiar_texto(observaciones), "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": _limpiar_texto(quien_entrega_input)}
                                 pdf_bytes = generar_pdf_entrega(datos_pdf, items, last_id)
                                 
                                 st.session_state["recibo_pdf"] = pdf_bytes
@@ -113,7 +141,7 @@ def renderizar(tiene_permiso, _formatear_datos_contacto, generar_pdf_entrega):
                 n_prov = c3.selectbox("Proveedor", lista_nombres_prov, index=idx_prov, key="d_prov")
                 n_entrega = c4.selectbox("Quien entrega", lista_personal, index=idx_usr, key="d_usr")
                 
-                n_obs = st.text_area("Observaciones", value=row_info.get('observaciones', ''), key="d_obs")
+                n_obs = st.text_area("Observaciones", value=_limpiar_texto(row_info.get('observaciones', '')), key="d_obs")
                 
                 st.divider()
                 st.write("**Productos:**")
@@ -128,24 +156,35 @@ def renderizar(tiene_permiso, _formatear_datos_contacto, generar_pdf_entrega):
                 if tiene_permiso("Almacén: Editar/Eliminar Recibos OC"):
                     if col_g.button("💾 Guardar Cambios", type="primary", use_container_width=True):
                         to_delete = []
+                        n_fecha_str = n_fecha.isoformat() if hasattr(n_fecha, "isoformat") else str(n_fecha)
+                        
                         for _, r in edited_prods.iterrows():
-                            if r.get("🗑️ Eliminar", False):
-                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": to_delete.append(int(r["id"]))
+                            eliminar_flag = bool(r.get("🗑️ Eliminar", False)) if pd.notna(r.get("🗑️ Eliminar", False)) else False
+                            if eliminar_flag:
+                                if pd.notna(r.get("id")) and str(r.get("id")).strip() != "": 
+                                    to_delete.append(int(float(r["id"])))
                             else:
-                                val_cant = r.get("Cantidad", 0)
-                                try: cant_f = float(val_cant) if pd.notna(val_cant) else 0.0
-                                except: cant_f = 0.0
+                                cant_f = _limpiar_numero(r.get("Cantidad", 0))
+                                cod_limpio = _limpiar_texto(r.get("Código", ""))
                                 
                                 datos_update = {
-                                    "fecha": str(n_fecha.isoformat()), "cliente": str(n_cli), "proveedor": str(n_prov),
-                                    "observaciones": str(n_obs), "codigo": str(r.get("Código", "")), "descripcion": str(r.get("Descripción", "")),
-                                    "color": str(r.get("Color", "")), "cantidad": cant_f, "usuario": str(n_entrega), "oc": str(oc_seleccionada) 
+                                    "fecha": str(n_fecha_str), 
+                                    "cliente": _limpiar_texto(n_cli), 
+                                    "proveedor": _limpiar_texto(n_prov),
+                                    "observaciones": _limpiar_texto(n_obs), 
+                                    "codigo": cod_limpio, 
+                                    "descripcion": _limpiar_texto(r.get("Descripción", "")),
+                                    "color": _limpiar_texto(r.get("Color", "")), 
+                                    "cantidad": float(cant_f), 
+                                    "usuario": _limpiar_texto(n_entrega), 
+                                    "oc": _limpiar_texto(oc_seleccionada) 
                                 }
                                 
                                 if pd.notna(r.get("id")) and str(r.get("id")).strip() != "":
-                                    supabase.table("Recibos_OC").update(datos_update).eq("id", r["id"]).execute()
+                                    supabase.table("Recibos_OC").update(datos_update).eq("id", int(float(r["id"]))).execute()
                                 else:
-                                    if str(r.get("Código", "")).strip() != "": supabase.table("Recibos_OC").insert(datos_update).execute()
+                                    if cod_limpio != "": 
+                                        supabase.table("Recibos_OC").insert(datos_update).execute()
                         
                         if to_delete: supabase.table("Recibos_OC").delete().in_("id", to_delete).execute()
                         st.toast("✅ Cambios Guardados", icon="💾"); st.rerun()
@@ -159,8 +198,13 @@ def renderizar(tiene_permiso, _formatear_datos_contacto, generar_pdf_entrega):
                         prov_text = _formatear_datos_contacto(n_prov, prov_data)
                         cli_text = _formatear_datos_contacto(n_cli, cli_data)
                         
-                        df_pdf = edited_prods[~edited_prods["🗑️ Eliminar"]]
-                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": n_obs, "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": n_entrega}
+                        df_pdf = edited_prods[~edited_prods["🗑️ Eliminar"].fillna(False)].copy()
+                        df_pdf["Código"] = df_pdf["Código"].apply(_limpiar_texto)
+                        df_pdf["Descripción"] = df_pdf["Descripción"].apply(_limpiar_texto)
+                        df_pdf["Color"] = df_pdf["Color"].apply(_limpiar_texto)
+                        df_pdf["Cantidad"] = df_pdf["Cantidad"].apply(_limpiar_numero)
+                        
+                        datos_pdf = {"oc": oc_seleccionada, "fecha": n_fecha.strftime("%d/%m/%Y"), "observaciones": _limpiar_texto(n_obs), "prov_texto": prov_text, "cli_texto": cli_text, "quien_entrega": _limpiar_texto(n_entrega)}
                         pdf_bytes = generar_pdf_entrega(datos_pdf, df_pdf, row_info['id'])
                         col_p.download_button("🖨️ Reimprimir PDF", pdf_bytes, f"Recibo_{oc_seleccionada}.pdf", "application/pdf", use_container_width=True)
                     except: col_p.error("Error PDF")
