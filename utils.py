@@ -73,17 +73,25 @@ def aplicar_estilo_movil():
                 radial-gradient(ellipse 37% 37% at 0% 94%, rgba(229,236,248,.47), transparent 77%);
         }
         #MainMenu, footer, [data-testid="stToolbar"] {visibility: hidden;}
-        header[data-testid="stHeader"] {background: transparent !important;}
         [data-testid="stDecoration"] {display: none;}
         
         /* ===================================================
            MEJORAS CSS: MENÚ Y OCULTAR BOTONES DE STREAMLIT CLOUD
            =================================================== */
-        [data-testid="collapsedControl"] {
-            visibility: visible !important;
-            z-index: 1000000 !important;
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+            z-index: 999990 !important; /* Obliga al encabezado a estar por encima de todo */
         }
-        [data-testid="collapsedControl"] svg {
+        
+        [data-testid="collapsedControl"], 
+        [data-testid="stHeader"] button {
+            visibility: visible !important;
+            display: flex !important;
+            opacity: 1 !important;
+        }
+        
+        [data-testid="collapsedControl"] svg, 
+        [data-testid="stHeader"] svg {
             color: var(--hm-ink) !important;
             fill: var(--hm-ink) !important;
         }
