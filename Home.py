@@ -10,7 +10,7 @@ import base64
 # 1. CONFIGURACIÓN INICIAL · HEMORE EXECUTIVE UI
 #  Rediseño visual: la lógica operativa se conserva.
 # ==========================================
-st.set_page_config(page_title="Inicio | ERP Hemore", page_icon="", layout="wide")
+st.set_page_config(page_title="Inicio | ERP Hemore", page_icon="", layout="wide", initial_sidebar_state="expanded")
 utils.aplicar_estilo_movil()
 
 # Función auxiliar para convertir imagen local a Base64 si existe
@@ -57,17 +57,25 @@ st.markdown("""
             radial-gradient(ellipse 37% 37% at 0% 94%, rgba(229,236,248,.47), transparent 77%);
     }
     #MainMenu, footer, [data-testid="stToolbar"] {visibility: hidden;}
-    header[data-testid="stHeader"] {background: transparent !important;}
     [data-testid="stDecoration"] {display: none;}
     
     /* ===================================================
        MEJORAS CSS: MENÚ Y OCULTAR BOTONES DE STREAMLIT CLOUD
        =================================================== */
-    [data-testid="collapsedControl"] {
-        visibility: visible !important;
-        z-index: 1000000 !important;
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        z-index: 999990 !important; /* Obliga al encabezado a estar por encima de todo */
     }
-    [data-testid="collapsedControl"] svg {
+    
+    [data-testid="collapsedControl"], 
+    [data-testid="stHeader"] button {
+        visibility: visible !important;
+        display: flex !important;
+        opacity: 1 !important;
+    }
+    
+    [data-testid="collapsedControl"] svg, 
+    [data-testid="stHeader"] svg {
         color: var(--hm-ink) !important;
         fill: var(--hm-ink) !important;
     }
