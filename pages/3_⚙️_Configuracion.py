@@ -683,6 +683,7 @@ if opcion == "Personal":
                                 utils.supabase.table("Personal").insert(datos).execute()
 
                             st.session_state["alta_pers_exito"] = True
+                            liberar_bloqueo("alta_pers") # ¡FIX APLICADO AQUI!
                             st.rerun()
                         else:
                             st.error("⚠️ El Nombre, Usuario y Contraseña son obligatorios.")
@@ -929,6 +930,7 @@ elif opcion == "Insumos":
                             try:
                                 utils.supabase.table("Insumos").insert(datos).execute()
                                 st.session_state["alta_insumo_exito"] = True
+                                liberar_bloqueo("alta_insumo") # ¡FIX APLICADO AQUI!
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al guardar: {e}")
@@ -1071,6 +1073,7 @@ elif opcion == "Herramientas":
                             }
                             utils.supabase.table("Herramientas").insert(datos_herramienta).execute()
                             st.session_state["alta_herr_exito"] = True
+                            liberar_bloqueo("alta_herr") # ¡FIX APLICADO AQUI!
                             st.rerun()
                         else:
                             st.warning("⚠️ El Código/ID y Nombre son obligatorios.")
@@ -1193,6 +1196,7 @@ elif opcion == "Clientes":
                             }
                             utils.supabase.table("Clientes").insert(datos_cli).execute()
                             st.session_state["alta_cli_exito"] = True
+                            liberar_bloqueo("alta_cli") # ¡FIX APLICADO AQUI!
                             st.rerun()
                         else:
                             st.warning("⚠️ El nombre del cliente es obligatorio.")
@@ -1301,6 +1305,7 @@ elif opcion == "Proveedores":
                             }
                             utils.supabase.table("Proveedores").insert(datos_prov).execute()
                             st.session_state["alta_prov_exito"] = True
+                            liberar_bloqueo("alta_prov") # ¡FIX APLICADO AQUI!
                             st.rerun()
                         else:
                             st.warning("⚠️ El nombre de la empresa es obligatorio.")
