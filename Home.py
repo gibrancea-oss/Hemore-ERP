@@ -8,7 +8,7 @@ import base64
 
 # ==========================================
 # 1. CONFIGURACIÓN INICIAL · HEMORE EXECUTIVE UI
-#    Rediseño visual: la lógica operativa se conserva.
+#  Rediseño visual: la lógica operativa se conserva.
 # ==========================================
 st.set_page_config(page_title="Inicio | ERP Hemore", page_icon="", layout="wide")
 utils.aplicar_estilo_movil()
@@ -59,6 +59,28 @@ st.markdown("""
     #MainMenu, footer, [data-testid="stToolbar"] {visibility: hidden;}
     header[data-testid="stHeader"] {background: transparent !important;}
     [data-testid="stDecoration"] {display: none;}
+    
+    /* ===================================================
+       MEJORAS CSS: MENÚ Y OCULTAR BOTONES DE STREAMLIT CLOUD
+       =================================================== */
+    [data-testid="collapsedControl"] {
+        visibility: visible !important;
+        z-index: 1000000 !important;
+    }
+    [data-testid="collapsedControl"] svg {
+        color: var(--hm-ink) !important;
+        fill: var(--hm-ink) !important;
+    }
+    
+    .viewerBadge_container, 
+    .viewerBadge_link, 
+    [data-testid="stAppDeployButton"], 
+    #st-deploy-button {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    /* =================================================== */
+
     [data-testid="stMainBlockContainer"], .block-container {
         max-width: 1310px;
         padding-top: 3.3rem;
