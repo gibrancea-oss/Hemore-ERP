@@ -159,8 +159,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 📸 PROCESADOR DE FOTOS DE PERFIL (LIGERO Y SEGURO)
+# 📥 GENERADOR DE EXCEL Y FOTOS
 # ==========================================
+def obtener_datos_descarga(df):
+    """Convierte el DataFrame a Excel de forma segura para su descarga."""
+    output = io.BytesIO()
+    try:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Datos')
+        return output.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"
+    except Exception:
+        # Fallback seguro a CSV si no está instalado openpyxl en el servidor
+        csv_data = df.to_csv(index=False, encoding='utf-8-sig')
+        return csv_data.encode('utf-8-sig'), "text/csv", ".csv"
+
 def convertir_foto_a_b64(archivo_subido):
     """Recorta la foto a cuadrado 240x240px y la comprime en Base64 (~10KB)."""
     if not archivo_subido:
@@ -776,6 +788,17 @@ if opcion == "Personal":
                     liberar_bloqueo(f"del_pers_{emp_id}")
 
         if not df_personal.empty:
+            c_dl, _ = st.columns([3, 7])
+            datos_archivo, mime_type, ext = obtener_datos_descarga(df_personal.drop(columns=["foto_url"], errors='ignore'))
+            c_dl.download_button(
+                label="📥 Exportar Personal a Excel",
+                data=datos_archivo,
+                file_name=f"Personal_Hemore{ext}",
+                mime=mime_type,
+                use_container_width=True
+            )
+            st.divider()
+
             c_h1, c_h2, c_h3, c_h4, c_h5 = st.columns([1, 3, 2, 2, 2])
             c_h1.markdown("**ID**")
             c_h2.markdown("**Nombre**")
@@ -934,6 +957,16 @@ elif opcion == "Insumos":
             
         df_view["🗑️ Eliminar"] = False  
         
+        c_dl, _ = st.columns([3, 7])
+        datos_archivo, mime_type, ext = obtener_datos_descarga(df_view.drop(columns=["🗑️ Eliminar"], errors='ignore'))
+        c_dl.download_button(
+            label="📥 Exportar Insumos a Excel",
+            data=datos_archivo,
+            file_name=f"Insumos_Hemore{ext}",
+            mime=mime_type,
+            use_container_width=True
+        )
+
         edited = st.data_editor(
             df_view, 
             num_rows="dynamic", 
@@ -1060,6 +1093,16 @@ elif opcion == "Herramientas":
             df_view.rename(columns={"codigo": "Código / ID", "ubicacion": "Ubicación"}, inplace=True)
             df_view["🗑️ Eliminar"] = False 
             
+            c_dl, _ = st.columns([3, 7])
+            datos_archivo, mime_type, ext = obtener_datos_descarga(df_view.drop(columns=["🗑️ Eliminar"], errors='ignore'))
+            c_dl.download_button(
+                label="📥 Exportar Herramientas a Excel",
+                data=datos_archivo,
+                file_name=f"Herramientas_Hemore{ext}",
+                mime=mime_type,
+                use_container_width=True
+            )
+
             edited_h = st.data_editor(
                 df_view, 
                 num_rows="dynamic", 
@@ -1167,6 +1210,16 @@ elif opcion == "Clientes":
         if not df_cli_view.empty:
             df_cli_view["🗑️ Eliminar"] = False
             
+            c_dl, _ = st.columns([3, 7])
+            datos_archivo, mime_type, ext = obtener_datos_descarga(df_cli_view.drop(columns=["🗑️ Eliminar"], errors='ignore'))
+            c_dl.download_button(
+                label="📥 Exportar Clientes a Excel",
+                data=datos_archivo,
+                file_name=f"Clientes_Hemore{ext}",
+                mime=mime_type,
+                use_container_width=True
+            )
+
             edited_c = st.data_editor(
                 df_cli_view, 
                 num_rows="dynamic", 
@@ -1265,6 +1318,16 @@ elif opcion == "Proveedores":
         if not df_prov_view.empty:
             df_prov_view["🗑️ Eliminar"] = False
             
+            c_dl, _ = st.columns([3, 7])
+            datos_archivo, mime_type, ext = obtener_datos_descarga(df_prov_view.drop(columns=["🗑️ Eliminar"], errors='ignore'))
+            c_dl.download_button(
+                label="📥 Exportar Proveedores a Excel",
+                data=datos_archivo,
+                file_name=f"Proveedores_Hemore{ext}",
+                mime=mime_type,
+                use_container_width=True
+            )
+
             edited_p = st.data_editor(
                 df_prov_view, 
                 num_rows="dynamic", 
@@ -1322,6 +1385,17 @@ elif opcion == "📂 Catálogos & Etiquetas QR":
                 df_ins.columns = df_ins.columns.str.lower()
                 df_ins["QR_Img"] = df_ins["codigo"].apply(get_qr_data_url)
                 df_ins["Seleccionar"] = False
+                
+                c_dl, _ = st.columns([3, 7])
+                datos_archivo, mime_type, ext = obtener_datos_descarga(df_ins.drop(columns=["QR_Img", "Seleccionar"], errors='ignore'))
+                c_dl.download_button(
+                    label="📥 Exportar Catálogo Insumos a Excel",
+                    data=datos_archivo,
+                    file_name=f"Catalogo_Insumos_Hemore{ext}",
+                    mime=mime_type,
+                    use_container_width=True
+                )
+
                 edited_ins = st.data_editor(df_ins[["Seleccionar", "QR_Img", "codigo", "descripcion"]], column_config={"QR_Img": st.column_config.ImageColumn("QR")}, use_container_width=True, hide_index=True)
                 if st.button("🖨️ Generar PDF Insumos"):
                     if procesar_una_vez("pdf_ins"):
@@ -1344,6 +1418,16 @@ elif opcion == "📂 Catálogos & Etiquetas QR":
                 df_her_clean["Seleccionar"] = False
                 df_her_tag = df_her_clean.rename(columns={"Herramienta": "descripcion"})
                 
+                c_dl, _ = st.columns([3, 7])
+                datos_archivo, mime_type, ext = obtener_datos_descarga(df_her.drop(columns=["QR_Img", "Seleccionar"], errors='ignore'))
+                c_dl.download_button(
+                    label="📥 Exportar Catálogo Herramientas a Excel",
+                    data=datos_archivo,
+                    file_name=f"Catalogo_Herramientas_Hemore{ext}",
+                    mime=mime_type,
+                    use_container_width=True
+                )
+
                 edited_her = st.data_editor(
                     df_her_tag[["Seleccionar", "QR_Img", "codigo", "descripcion"]], 
                     column_config={
